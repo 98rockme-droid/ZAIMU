@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Palette, PlusCircle } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
 const firebaseConfig = {
@@ -39,19 +39,6 @@ const NavButton = ({ active, onClick, icon }) => (
   </button>
 );
 
-// カラーパレット定義
-const COLOR_PALETTE = [
-  { bg: 'bg-red-500', text: 'text-red-500' },
-  { bg: 'bg-orange-500', text: 'text-orange-500' },
-  { bg: 'bg-amber-500', text: 'text-amber-500' },
-  { bg: 'bg-emerald-500', text: 'text-emerald-500' },
-  { bg: 'bg-cyan-500', text: 'text-cyan-500' },
-  { bg: 'bg-blue-500', text: 'text-blue-500' },
-  { bg: 'bg-violet-500', text: 'text-violet-500' },
-  { bg: 'bg-pink-500', text: 'text-pink-500' },
-  { bg: 'bg-zinc-500', text: 'text-zinc-500' },
-];
-
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
@@ -65,15 +52,15 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Config初期値 (マイグレーション対応: categoriesをオブジェクト配列に)
+  // Config初期値
   const [config, setConfig] = useState({ 
     categories: [
-      { name: '食費', icon: '🍔', color: 'bg-orange-500' },
-      { name: '日用品', icon: '🧻', color: 'bg-blue-500' },
-      { name: '交通費', icon: '🚃', color: 'bg-emerald-500' },
-      { name: '交際費', icon: '🍻', color: 'bg-pink-500' },
-      { name: '趣味', icon: '🎮', color: 'bg-violet-500' },
-      { name: 'その他', icon: '📦', color: 'bg-zinc-500' }
+      { name: '食費', icon: '🍔' },
+      { name: '日用品', icon: '🧻' },
+      { name: '交通費', icon: '🚃' },
+      { name: '交際費', icon: '🍻' },
+      { name: '趣味', icon: '🎮' },
+      { name: 'その他', icon: '📦' }
     ],
     paymentMethods: ['現金', '三井住友', '楽天', 'PayPay'],
     templates: [
@@ -88,16 +75,14 @@ export default function App() {
   const [searchText, setSearchText] = useState('');
 
   // カテゴリ情報取得ヘルパー
-  const getCategoryStyle = (catName) => {
-    // 以前の文字列配列データとの互換性チェック
-    if (!config.categories) return { icon: '🏷', color: 'bg-zinc-500' };
+  const getCategoryIcon = (catName) => {
+    if (!config.categories) return '🏷';
     const cat = config.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
-    if (!cat) return { icon: '🏷', color: 'bg-zinc-500' };
-    if (typeof cat === 'string') return { icon: '🏷', color: 'bg-zinc-500' }; // 旧データ
-    return { icon: cat.icon, color: cat.color };
+    if (!cat) return '🏷';
+    if (typeof cat === 'string') return '🏷';
+    return cat.icon || '🏷';
   };
 
-  // カテゴリ名リスト取得ヘルパー
   const getCategoryNames = () => {
     return config.categories.map(c => typeof c === 'string' ? c : c.name);
   };
@@ -136,9 +121,8 @@ export default function App() {
     const unsubConfig = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'), (s) => {
       if (s.exists()) {
         const data = s.data();
-        // カテゴリデータのマイグレーション（文字列配列 -> オブジェクト配列）
         if (data.categories && typeof data.categories[0] === 'string') {
-           data.categories = data.categories.map(name => ({ name, icon: '🏷', color: 'bg-zinc-500' }));
+           data.categories = data.categories.map(name => ({ name, icon: '🏷' }));
         }
         setConfig(data);
       }
@@ -371,17 +355,17 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-3">
                   {config.categories.filter(c => monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)]).map(c => {
                     const catName = typeof c === 'string' ? c : c.name;
-                    const style = getCategoryStyle(catName);
+                    const icon = getCategoryIcon(catName);
                     const spent = summary.catTotals[catName] || 0;
                     const budget = monthlyData.catBudgets[catName];
                     const per = Math.max(Math.round(((budget - spent) / budget) * 100), 0);
                     return (
                       <SimpleCard key={catName} className="p-3 space-y-2">
                         <div className="flex justify-between items-center text-[9px] font-bold">
-                          <div className="flex items-center gap-1.5"><span className="text-base">{style.icon}</span><span className="text-zinc-400">{catName}</span></div>
+                          <div className="flex items-center gap-1.5"><span className="text-sm">{icon}</span><span className="text-zinc-400">{catName}</span></div>
                           <span className="text-zinc-500">{per}%</span>
                         </div>
-                        <div className="h-0.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full ${per < 15 ? 'bg-red-500' : style.color}`} style={{ width: `${per}%` }} /></div>
+                        <div className="h-0.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full ${per < 15 ? 'bg-red-500' : 'bg-zinc-500'}`} style={{ width: `${per}%` }} /></div>
                       </SimpleCard>
                     );
                   })}
@@ -412,11 +396,11 @@ export default function App() {
             {logView === 'list' && (
               <div className="space-y-3">
                 {filteredTransactions.length === 0 ? <p className="text-center text-zinc-600 text-xs py-10">履歴が見つかりません</p> : filteredTransactions.map(t => {
-                  const style = getCategoryStyle(t.category);
+                  const icon = getCategoryIcon(t.category);
                   return (
                     <SimpleCard key={t.id} className="p-4 flex justify-between items-center font-bold">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl bg-black/30 border border-white/5`}>{style.icon}</div>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base bg-black/30 border border-white/5`}>{icon}</div>
                         <div className="text-left"><div className="text-sm text-white truncate w-32">{t.title}</div><div className="text-[9px] text-zinc-500 uppercase">{t.category} • {t.date.split('T')[0]}</div></div>
                       </div>
                       <div className="flex items-center gap-3 pl-2">
@@ -480,17 +464,17 @@ export default function App() {
               <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カテゴリ別 比較</p>
               <div className="space-y-6">
                 {getCategoryNames().map(catName => {
-                  const style = getCategoryStyle(catName);
+                  const icon = getCategoryIcon(catName);
                   const current = summary.catTotals[catName] || 0;
                   const last = summary.lastCatTotals[catName] || 0;
                   const max = Math.max(current, last, 1);
                   return (
                     <div key={catName} className="space-y-2">
                       <div className="flex justify-between items-center font-bold">
-                        <div className="flex items-center gap-2"><span className="text-sm">{style.icon}</span><span className="text-xs text-zinc-300">{catName}</span></div>
+                        <div className="flex items-center gap-2"><span className="text-sm">{icon}</span><span className="text-xs text-zinc-300">{catName}</span></div>
                         <div className="flex gap-3 text-[10px] tabular-nums"><span className="text-zinc-500">先月 ¥{last.toLocaleString()}</span><span className="text-white">今月 ¥{current.toLocaleString()}</span></div>
                       </div>
-                      <div className="space-y-1"><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ${style.color}`} style={{ width: `${(current / max) * 100}%` }} /></div><div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400 rounded-full transition-all duration-1000" style={{ width: `${(last / max) * 100}%` }} /></div></div>
+                      <div className="space-y-1"><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 bg-zinc-500`} style={{ width: `${(current / max) * 100}%` }} /></div><div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400 rounded-full transition-all duration-1000" style={{ width: `${(last / max) * 100}%` }} /></div></div>
                     </div>
                   );
                 })}
@@ -553,7 +537,7 @@ export default function App() {
               </SimpleCard>
             )}
 
-            {/* CATEGORY SETTING (ICON & COLOR) */}
+            {/* CATEGORY SETTING */}
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -562,29 +546,24 @@ export default function App() {
                     {config.categories.map((c, idx) => {
                       const cName = typeof c === 'string' ? c : c.name;
                       const cIcon = typeof c === 'string' ? '🏷' : c.icon;
-                      const cColor = typeof c === 'string' ? 'bg-zinc-500' : c.color;
                       return (
                         <div key={idx} className="flex flex-col gap-2 bg-black/20 p-3 rounded border border-white/5">
                           <div className="flex items-center gap-3">
-                            <span className="text-xl">{cIcon}</span>
-                            <span className="text-xs font-bold text-zinc-200 flex-1">{cName}</span>
-                            <button onClick={() => { if(window.confirm('削除しますか？')) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== idx)}); }} className="text-zinc-600 hover:text-red-500"><Trash2 size={14}/></button>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
                             <input type="text" defaultValue={cIcon} onBlur={(e) => {
                               const newCats = [...config.categories];
                               newCats[idx] = { ...newCats[idx], icon: e.target.value };
                               setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
-                            }} className="w-8 h-8 text-center bg-black/40 border border-white/10 rounded text-lg outline-none" />
-                            <div className="flex-1 flex gap-1 overflow-x-auto pb-1">
-                              {COLOR_PALETTE.map((pal) => (
-                                <button key={pal.bg} onClick={() => {
-                                  const newCats = [...config.categories];
-                                  newCats[idx] = { ...newCats[idx], color: pal.bg };
-                                  setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
-                                }} className={`w-6 h-6 rounded-full ${pal.bg} ${cColor === pal.bg ? 'ring-2 ring-white' : 'opacity-50 hover:opacity-100'} transition-all`} />
-                              ))}
-                            </div>
+                            }} className="w-7 h-7 text-center bg-black/40 border border-white/10 rounded text-base outline-none" />
+                            
+                            <input type="text" defaultValue={cName} onBlur={(e) => {
+                              const newCats = [...config.categories];
+                              newCats[idx] = { ...newCats[idx], name: e.target.value };
+                              setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
+                            }} className="flex-1 bg-transparent text-xs font-bold text-zinc-200 outline-none" />
+
+                            <input type="number" placeholder="予算" defaultValue={monthlyData.catBudgets?.[cName] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[cName]:Number(e.target.value)}},{merge:true})} className="w-16 h-7 bg-black/40 border border-white/10 rounded px-2 text-right text-xs text-white outline-none" />
+                            
+                            <button onClick={() => { if(window.confirm('削除しますか？')) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== idx)}); }} className="text-zinc-600 hover:text-red-500"><Trash2 size={14}/></button>
                           </div>
                         </div>
                       );
@@ -592,15 +571,18 @@ export default function App() {
                   </div>
                   <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
                     <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">新規カテゴリ</p>
-                    <div className="flex gap-2">
-                      <input id="new-cat-icon" placeholder="icon" className="w-12 h-10 text-center bg-black/20 border border-white/10 rounded px-1 text-lg text-white outline-none" />
+                    <div className="flex gap-2 relative">
+                      <div className="relative">
+                        <input id="new-cat-icon" className="w-10 h-10 text-center bg-black/20 border border-white/10 rounded px-1 text-lg text-white outline-none" />
+                        <ImageIcon size={14} className="absolute top-3 left-3 text-zinc-600 pointer-events-none opacity-50" />
+                      </div>
                       <input id="new-cat-name" placeholder="カテゴリ名" className="flex-1 h-10 bg-black/20 border border-white/10 rounded px-3 text-xs text-white outline-none" />
                     </div>
                     <button onClick={() => { 
                       const name = document.getElementById('new-cat-name').value;
                       const icon = document.getElementById('new-cat-icon').value || '🏷';
                       if(name) {
-                        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories, {name, icon, color: 'bg-zinc-500'}]});
+                        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories, {name, icon}]});
                         document.getElementById('new-cat-name').value = '';
                         document.getElementById('new-cat-icon').value = '';
                       }
@@ -670,14 +652,12 @@ export default function App() {
               <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
               <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
               <div className="flex flex-row gap-4 w-full box-border">
-                {/* 日付を value で制御し、inputDate を反映 */}
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               </div>
               <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
                 {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
               </div>
-              {/* おすすめテンプレート (ワンタップ入力) */}
               {config.templates && (
                 <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                   {config.templates.map((tpl, i) => (
