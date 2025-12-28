@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar as CalendarIcon, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
 const firebaseConfig = {
@@ -37,7 +37,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
-  const [logView, setLogView] = useState('list'); // 'list' or 'calendar'
+  const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -115,7 +115,7 @@ export default function App() {
     const cardDisposable = cardBudgetTotal - fixedTotal - billTotal;
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
-    const cardRemainingPercent = cardDisposable > 0 ? Math.min(Math.round((cardRemaining / cardDisposable) * 100), 100) : 0; // Fixed: min to avoid over 100 on remaining logic if simple
+    const cardRemainingPercent = cardDisposable > 0 ? Math.min(Math.round((cardRemaining / cardDisposable) * 100), 100) : 0;
 
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
@@ -135,7 +135,6 @@ export default function App() {
     const totalSpent = transactions.reduce((s, t) => s + t.amount, 0);
     const lastTotalSpent = lastMonthTransactions.reduce((s, t) => s + t.amount, 0);
 
-    // 日別集計 (Calendar用)
     const dailyTotals = transactions.reduce((acc, t) => {
       const day = new Date(t.date).getDate();
       acc[day] = (acc[day] || 0) + t.amount;
@@ -190,7 +189,6 @@ export default function App() {
     });
   }, [monthlyData]);
 
-  // 検索・フィルタリング
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const matchSearch = t.title.toLowerCase().includes(searchText.toLowerCase());
@@ -200,14 +198,12 @@ export default function App() {
     });
   }, [transactions, searchText, filter]);
 
-  // カレンダー生成
   const calendarDays = useMemo(() => {
     const d = new Date(month + "-01");
     const year = d.getFullYear();
     const m = d.getMonth();
     const lastDay = new Date(year, m + 1, 0).getDate();
-    const firstDayWeek = new Date(year, m, 1).getDay(); // 0:Sun
-    
+    const firstDayWeek = new Date(year, m, 1).getDay();
     const days = [];
     for (let i = 0; i < firstDayWeek; i++) days.push(null);
     for (let i = 1; i <= lastDay; i++) days.push(i);
@@ -309,7 +305,6 @@ export default function App() {
         {/* LOG TAB */}
         {activeTab === 'log' && (
           <div className="space-y-3">
-            {/* Search & Toggle */}
             <div className="flex gap-2">
               <div className="flex-1 relative">
                 <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="履歴を検索..." className="w-full h-10 bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none font-bold" />
@@ -322,13 +317,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* Filters */}
             <div className="flex gap-2">
               <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全てのカテゴリ</option>{config.categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
               <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
             </div>
 
-            {/* List View */}
             {logView === 'list' && (
               <div className="space-y-3">
                 {filteredTransactions.length === 0 ? <p className="text-center text-zinc-600 text-xs py-10">履歴が見つかりません</p> : filteredTransactions.map(t => (
@@ -347,7 +340,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Calendar View */}
             {logView === 'calendar' && (
               <SimpleCard className="p-4">
                 <div className="grid grid-cols-7 gap-1 text-center mb-2">
@@ -359,7 +351,7 @@ export default function App() {
                     const amt = summary.dailyTotals[day] || 0;
                     const isToday = day === new Date().getDate() && month === getMonthString(new Date());
                     const isFuture = !isToday && (new Date(month + '-' + String(day).padStart(2,'0')) > new Date());
-                    const isNMD = amt === 0 && !isFuture && day < new Date().getDate(); // 過去日で0円ならNMD
+                    const isNMD = amt === 0 && !isFuture && day < new Date().getDate(); 
 
                     return (
                       <div key={i} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}>
@@ -459,7 +451,7 @@ export default function App() {
               <SimpleCard className="p-5 space-y-6">
                 <div>
                   <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">カテゴリと月間予算</p>
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-6">
                     {config.categories.map(c => (
                       <div key={c} className="flex items-center gap-3 bg-black/20 p-2 rounded border border-white/5">
                         <span className="text-xs font-bold text-zinc-300 flex-1 truncate">{c}</span>
@@ -496,9 +488,9 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB & MODAL */}
-      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
-
+      {/* FAB (Integrated into footer) */}
+      
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative max-w-md p-5 space-y-5">
