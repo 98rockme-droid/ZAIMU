@@ -22,7 +22,7 @@ const getTodayString = () => new Date().toISOString().split('T')[0];
 
 /* --- UI COMPONENTS --- */
 const SimpleCard = ({ children, className = "" }) => (
-  <div className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden ${className}`}>
+  <div className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
     {children}
   </div>
 );
@@ -34,35 +34,6 @@ const NavButton = ({ active, onClick, icon, label }) => (
   </button>
 );
 
-/* --- 設定用リスト管理 (左寄せ・8pxルール) --- */
-const ListManager = ({ items, onUpdate, placeholder, idPrefix }) => {
-  const [val, setVal] = useState('');
-  const add = () => { if (val && !items.includes(val)) { onUpdate([...items, val]); setVal(''); } };
-  return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-wrap gap-2 justify-start"> {/* 左寄せに変更 */}
-        {items.map(i => (
-          <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
-            <span className="text-xs text-zinc-300">{i}</span>
-            <button onClick={() => onUpdate(items.filter(x => x !== i))}><Trash2 size={12} className="text-zinc-600" /></button>
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2 h-11 pt-2">
-        <input 
-          id={idPrefix}
-          value={val} 
-          onChange={e => setVal(e.target.value)} 
-          placeholder={placeholder} 
-          className="flex-1 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-left text-white outline-none" 
-        />
-        <button onClick={add} className="bg-zinc-200 text-black px-4 rounded-lg font-bold text-[10px] uppercase tracking-widest">追加</button>
-      </div>
-    </div>
-  );
-};
-
-/* --- MAIN APP --- */
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
@@ -105,14 +76,12 @@ export default function App() {
     const cardDisposable = (monthlyData.budget || 0) - fixed - totalCardBill;
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
-    const cashRemaining = (monthlyData.cashBudget || 0) - spentCash;
+    
     return { 
       cardRemaining: cardDisposable - spentCard, 
-      cashRemaining,
+      cashRemaining: (monthlyData.cashBudget || 0) - spentCash,
       cardBudget: monthlyData.budget || 0,
       cashBudget: monthlyData.cashBudget || 0,
-      cardPercent: cardDisposable > 0 ? Math.min(Math.round((spentCard / cardDisposable) * 100), 100) : 0,
-      cashPercent: monthlyData.cashBudget > 0 ? Math.min(Math.round((spentCash / monthlyData.cashBudget) * 100), 100) : 0
     };
   }, [monthlyData, transactions]);
 
@@ -143,10 +112,11 @@ export default function App() {
   if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold tracking-widest uppercase">Syncing...</div>;
 
   return (
-    <div className="min-h-screen bg-[#121212] text-zinc-200 font-sans pb-24 flex flex-col items-center">
+    <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-24 flex flex-col items-center overflow-x-hidden">
+      
       {/* HEADER */}
-      <header className="sticky top-0 z-40 w-full max-w-md bg-[#121212]/90 backdrop-blur-md border-b border-white/5 px-4 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-black tracking-tighter text-white uppercase">Zaimu</h1>
+      <header className="sticky top-0 z-40 w-full max-w-md bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-between items-center box-border">
+        <h1 className="text-xl font-black tracking-tighter text-white">ZAIMU</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setMonth(getMonthString(new Date()))} className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400">今月</button>
           <div className="flex items-center bg-white/5 rounded-lg px-2 py-1 border border-white/5 font-mono text-xs font-bold">
@@ -157,23 +127,28 @@ export default function App() {
         </div>
       </header>
 
-      <main className="w-full max-w-md p-4 space-y-6">
+      <main className="w-full max-w-md p-4 space-y-4 box-border">
         {activeTab === 'home' && (
           <div className="space-y-4 animate-in fade-in">
-            <div className="grid grid-cols-3 gap-2">
-              <SimpleCard className="py-4 flex flex-col items-center justify-center text-center">
-                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-1">今月の残り</p>
-                <p className={`text-sm font-bold ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <SimpleCard className="p-5 flex flex-col items-center justify-center text-center h-28">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2">カード残り</p>
+                <p className={`text-xl font-bold ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</p>
               </SimpleCard>
-              <SimpleCard className="py-4 flex flex-col items-center justify-center text-center">
-                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-1">軍資金(ｶｰﾄﾞ)</p>
-                <p className="text-sm font-bold text-white">¥{summary.cardBudget.toLocaleString()}</p>
+              <SimpleCard className="p-5 flex flex-col items-center justify-center text-center h-28">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2">カード軍資金</p>
+                <p className="text-xl font-bold text-zinc-400">¥{summary.cardBudget.toLocaleString()}</p>
               </SimpleCard>
-              <SimpleCard className="py-4 flex flex-col items-center justify-center text-center">
-                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest mb-1">軍資金(現金)</p>
-                <p className="text-sm font-bold text-white">¥{summary.cashBudget.toLocaleString()}</p>
+              <SimpleCard className="p-5 flex flex-col items-center justify-center text-center h-28">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2">現金予算残り</p>
+                <p className={`text-xl font-bold ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</p>
+              </SimpleCard>
+              <SimpleCard className="p-5 flex flex-col items-center justify-center text-center h-28">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-2">現金軍資金</p>
+                <p className="text-xl font-bold text-zinc-400">¥{summary.cashBudget.toLocaleString()}</p>
               </SimpleCard>
             </div>
+
             <SimpleCard className="p-8 flex flex-col items-center bg-[#252525]">
               <div className="flex items-center gap-2 text-zinc-400 mb-1">
                 <Wallet size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">現在の現金残高 (財布)</span>
@@ -182,7 +157,7 @@ export default function App() {
               <button onClick={() => {
                 const val = prompt("残高修正", cashBalance);
                 if (val !== null) setDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), { balance: Number(val) });
-              }} className="mt-4 text-[10px] text-zinc-500 font-bold border border-white/10 px-4 py-1.5 rounded-lg">残高を修正</button>
+              }} className="mt-4 text-[10px] text-zinc-500 font-bold border border-white/10 px-4 py-1.5 rounded-lg hover:bg-white/5">残高を修正</button>
             </SimpleCard>
           </div>
         )}
@@ -190,30 +165,28 @@ export default function App() {
         {activeTab === 'log' && (
           <div className="space-y-3 animate-in fade-in">
             <div className="flex gap-2 mb-2 overflow-x-auto no-scrollbar pb-2">
-              <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] outline-none h-9 flex-1 text-left">
+              <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] outline-none h-9 flex-1 text-left text-zinc-300">
                 <option value="ALL">全てのカテゴリ</option>
                 {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] outline-none h-9 flex-1 text-left">
+              <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-[10px] outline-none h-9 flex-1 text-left text-zinc-300">
                 <option value="ALL">全ての支払方法</option>
                 {config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             {transactions.filter(t => (filter.category === 'ALL' || t.category === filter.category) && (filter.method === 'ALL' || t.paymentMethod === filter.method)).map(t => (
-              <div key={t.id} className="flex justify-between items-center bg-[#1E1E1E] p-4 rounded-lg border border-white/5 group">
+              <div key={t.id} className="flex justify-between items-center bg-[#1E1E1E] p-4 rounded-lg border border-white/5">
                 <div className="flex items-center gap-4">
-                  <div className="p-2 bg-white/5 rounded-lg text-zinc-500 group-hover:text-white">{t.paymentMethod === '現金' ? <Wallet size={16}/> : <CreditCard size={16}/>}</div>
-                  <div className="max-w-[120px] overflow-hidden">
+                  <div className="p-2 bg-white/5 rounded-lg text-zinc-500">{t.paymentMethod === '現金' ? <Wallet size={16}/> : <CreditCard size={16}/>}</div>
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-white truncate text-left">{t.title}</div>
-                    <div className="text-[10px] text-zinc-500 font-bold uppercase text-left tracking-tighter">{t.category} • {new Date(t.date).toLocaleDateString('ja-JP')}</div>
+                    <div className="text-[10px] text-zinc-500 font-bold uppercase text-left truncate">{t.category}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold whitespace-nowrap">¥{t.amount.toLocaleString()}</span>
-                  <div className="flex gap-1">
-                    <button onClick={() => { setEditingTx(t); setIsModalOpen(true); }} className="p-1 text-zinc-500 hover:text-white transition-colors"><Edit3 size={16}/></button>
-                    <button onClick={() => { if(window.confirm('削除しますか？')) deleteDoc(doc(db,'users',SHARED_USER_ID,'transactions',t.id)); }} className="p-1 text-zinc-700 hover:text-red-400 transition-colors"><Trash2 size={16}/></button>
-                  </div>
+                <div className="flex items-center gap-3 pl-2">
+                  <span className="font-mono font-bold whitespace-nowrap text-white text-sm">¥{t.amount.toLocaleString()}</span>
+                  <button onClick={() => { setEditingTx(t); setIsModalOpen(true); }} className="p-1 text-zinc-500"><Edit3 size={16}/></button>
+                  <button onClick={() => { if(window.confirm('削除しますか？')) deleteDoc(doc(db,'users',SHARED_USER_ID,'transactions',t.id)); }} className="p-1 text-zinc-700"><Trash2 size={16}/></button>
                 </div>
               </div>
             ))}
@@ -237,7 +210,7 @@ export default function App() {
                   { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> },
                 ].map(item => (
                   <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold">
-                    <div className="flex items-center gap-4 text-zinc-300 tracking-tight">{item.icon} {item.label}</div>
+                    <div className="flex items-center gap-4 text-zinc-300">{item.icon} {item.label}</div>
                     <ChevronRight size={18} className="text-zinc-600"/>
                   </button>
                 ))}
@@ -246,25 +219,25 @@ export default function App() {
 
             {settingTab === 'budget' && (
               <div className="space-y-4">
-                <SimpleCard className="p-8 space-y-6">
+                <SimpleCard className="p-6 space-y-6">
                   <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest">軍資金</h3>
                   <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block uppercase text-left tracking-widest font-bold">カード用</label>
-                      <input type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg p-3 text-left text-white outline-none" placeholder="0" />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-zinc-500 uppercase text-left font-bold tracking-widest">カード用</label>
+                      <input type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-left text-white outline-none box-border" placeholder="0" />
                     </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 mb-1 block uppercase text-left tracking-widest font-bold">現金用</label>
-                      <input type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg p-3 text-left text-white outline-none" placeholder="0" />
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-zinc-500 uppercase text-left font-bold tracking-widest">現金用</label>
+                      <input type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-left text-white outline-none box-border" placeholder="0" />
                     </div>
                   </div>
                 </SimpleCard>
-                <SimpleCard className="p-8 space-y-6">
+                <SimpleCard className="p-6 space-y-6">
                   <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest">カード別請求額</h3>
                   <div className="space-y-4">
                     {config.paymentMethods.filter(m => m !== '現金').map(card => (
-                      <div key={card}>
-                        <label className="text-[10px] text-zinc-500 mb-1 block uppercase text-left tracking-widest font-bold">{card}</label>
+                      <div key={card} className="flex flex-col gap-1">
+                        <label className="text-[10px] text-zinc-500 text-left font-bold">{card}</label>
                         <input 
                           type="number" 
                           defaultValue={monthlyData.cardBills?.[card] || 0} 
@@ -272,8 +245,7 @@ export default function App() {
                             const newBills = { ...(monthlyData.cardBills || {}), [card]: Number(e.target.value) };
                             setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardBills:newBills},{merge:true});
                           }} 
-                          className="w-full h-11 bg-black/20 border border-white/10 rounded-lg p-3 text-left text-white outline-none font-mono" 
-                          placeholder="0"
+                          className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-left text-white outline-none font-mono box-border" 
                         />
                       </div>
                     ))}
@@ -281,14 +253,14 @@ export default function App() {
                 </SimpleCard>
               </div>
             )}
-
+            
             {settingTab === 'fixed' && (
-              <SimpleCard className="p-8 space-y-6">
+              <SimpleCard className="p-6 space-y-6">
                 <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest">固定費管理</h3>
                 <div className="space-y-2">
                   {(monthlyData.fixedCosts || []).map(f => (
                     <div key={f.id} className="flex justify-between items-center bg-white/5 p-4 rounded-lg border border-white/5">
-                      <span className="text-sm font-bold text-zinc-300 text-left">{f.name}</span>
+                      <span className="text-sm font-bold text-zinc-300 text-left truncate flex-1">{f.name}</span>
                       <div className="flex items-center gap-4">
                         <span className="font-mono text-sm text-white">¥{f.amount.toLocaleString()}</span>
                         <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-zinc-700"/></button>
@@ -310,37 +282,61 @@ export default function App() {
             )}
 
             {settingTab === 'category' && (
-              <SimpleCard className="p-8 space-y-6">
+              <SimpleCard className="p-6 space-y-6">
                 <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest">カテゴリ編集</h3>
-                <ListManager 
-                  items={config.categories} 
-                  onUpdate={c => setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:c})} 
-                  placeholder="新カテゴリ" 
-                  idPrefix="new-cat"
-                />
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2 justify-start">
+                    {config.categories.map(c => (
+                      <div key={c} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-xs text-zinc-300">{c}</span>
+                        <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'settings', 'config'),{...config,categories:config.categories.filter(x=>x!==c)})}><Trash2 size={12} className="text-zinc-600" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <input id="new-cat" placeholder="新カテゴリ" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none box-border" />
+                    <button onClick={() => {
+                      const i=document.getElementById('new-cat');
+                      if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories,i.value]});
+                      i.value='';
+                    }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest">追加</button>
+                  </div>
+                </div>
               </SimpleCard>
             )}
 
             {settingTab === 'payment' && (
-              <SimpleCard className="p-8 space-y-6">
-                <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest font-bold">支払方法・カード</h3>
-                <ListManager 
-                  items={config.paymentMethods} 
-                  onUpdate={p => setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:p})} 
-                  placeholder="カード名等" 
-                  idPrefix="new-pay"
-                />
+              <SimpleCard className="p-6 space-y-6">
+                <h3 className="text-xs font-bold text-zinc-400 text-left uppercase tracking-widest">支払方法編集</h3>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2 justify-start">
+                    {config.paymentMethods.map(p => (
+                      <div key={p} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-xs text-zinc-300">{p}</span>
+                        <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'settings', 'config'),{...config,paymentMethods:config.paymentMethods.filter(x=>x!==p)})}><Trash2 size={12} className="text-zinc-600" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <input id="new-pay" placeholder="カード名等" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none box-border" />
+                    <button onClick={() => {
+                      const i=document.getElementById('new-pay');
+                      if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:[...config.paymentMethods,i.value]});
+                      i.value='';
+                    }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest">追加</button>
+                  </div>
+                </div>
               </SimpleCard>
             )}
           </div>
         )}
       </main>
 
-      {/* FAB */}
+      {/* FAB (Round Icon) */}
       <div className="fixed bottom-28 w-full max-w-md pointer-events-none px-6 flex justify-end">
         <button 
           onClick={() => { setEditingTx(null); setIsModalOpen(true); }} 
-          className="w-14 h-14 bg-white text-black rounded-lg flex items-center justify-center shadow-2xl pointer-events-auto active:scale-95 transition-transform"
+          className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center shadow-2xl pointer-events-auto active:scale-95 transition-transform border border-zinc-200"
         >
           <Plus size={28}/>
         </button>
@@ -348,20 +344,29 @@ export default function App() {
 
       {/* MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-          <SimpleCard className="relative w-full max-w-md p-6 space-y-6">
-            <div className="flex justify-between items-center"><h2 className="text-xs font-bold uppercase text-white tracking-widest font-bold">支出入力</h2><button onClick={() => setIsModalOpen(false)}><X size={20}/></button></div>
+          <SimpleCard className="relative w-full max-w-md p-6 space-y-6 box-border">
+            <div className="flex justify-between items-center"><h2 className="text-xs font-bold uppercase text-white tracking-widest">支出入力</h2><button onClick={() => setIsModalOpen(false)}><X size={20}/></button></div>
             <form onSubmit={handleTxSubmit} className="space-y-5">
-              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-16 bg-black/20 border border-white/10 rounded-lg text-3xl font-bold text-left px-4 text-white outline-none" placeholder="0" autoFocus required />
-              <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg p-3 text-sm text-left text-white outline-none" placeholder="タイトル (例: ランチ)" />
-              <div className="grid grid-cols-2 gap-3">
-                <input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : getTodayString()} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs text-left px-3 text-white outline-none" />
-                <select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs text-left px-3 text-white outline-none appearance-none">
-                  {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-16 bg-black/20 border border-white/10 rounded-lg text-3xl font-bold text-left px-4 text-white outline-none box-border" placeholder="0" autoFocus required />
+              <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-left text-white outline-none box-border" placeholder="タイトル (例: ランチ)" />
+              
+              {/* 被り解消：グリッドの隙間を調整 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase pl-1">日付</label>
+                  <input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : getTodayString()} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs text-left px-3 text-white outline-none box-border" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase pl-1">カテゴリ</label>
+                  <select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs text-left px-3 text-white outline-none appearance-none box-border">
+                    {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2 justify-start"> {/* 左寄せに変更 */}
+
+              <div className="flex flex-wrap gap-2 justify-start">
                 {config.paymentMethods.map(m => (
                   <label key={m} className="cursor-pointer">
                     <input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required />
@@ -369,7 +374,7 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-xl">保存する</button>
+              <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-sm shadow-xl mt-2 uppercase tracking-widest">保存する</button>
             </form>
           </SimpleCard>
         </div>
