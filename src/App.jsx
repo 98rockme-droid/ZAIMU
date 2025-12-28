@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
 const firebaseConfig = {
@@ -17,8 +17,19 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const SHARED_USER_ID = "my-private-zaimu-v1";
 
-const getMonthString = (date) => date.toISOString().slice(0, 7);
-const getTodayString = () => new Date().toISOString().split('T')[0];
+// UTCではなくローカルタイムで「YYYY-MM-DD」を取得する関数に修正
+const getMonthString = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+const getTodayString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 /* --- UI COMPONENTS --- */
 const SimpleCard = ({ children, className = "" }) => (
@@ -47,7 +58,13 @@ export default function App() {
   const [cashBalance, setCashBalance] = useState(0);
   const [config, setConfig] = useState({ 
     categories: ['食費', '日用品', '交通費', '交際費', '趣味', 'その他'],
-    paymentMethods: ['現金', '三井住友', '楽天', 'PayPay']
+    paymentMethods: ['現金', '三井住友', '楽天', 'PayPay'],
+    // テンプレート機能用データ（デフォルト）
+    templates: [
+      { title: 'コンビニ', amount: 500, category: '食費', method: 'PayPay' },
+      { title: 'ランチ', amount: 1000, category: '食費', method: 'PayPay' },
+      { title: 'コーヒー', amount: 400, category: '趣味', method: 'PayPay' },
+    ]
   });
   const [editingTx, setEditingTx] = useState(null);
   const [inputDate, setInputDate] = useState(getTodayString()); 
@@ -93,7 +110,6 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
-    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -173,7 +189,6 @@ export default function App() {
     e.preventDefault();
     const method = e.target.method.value;
     const amount = Number(e.target.amount.value);
-    // 日付は state の inputDate を使用
     const data = { 
       title: e.target.title.value || e.target.category.value, 
       amount, 
@@ -194,6 +209,16 @@ export default function App() {
       await setDoc(doc(collection(db, 'users', SHARED_USER_ID, 'transactions')), { ...data, createdAt: serverTimestamp() }); 
     }
     setIsModalOpen(false);
+  };
+
+  // テンプレート適用処理
+  const applyTemplate = (tpl) => {
+    document.querySelector('input[name="amount"]').value = tpl.amount;
+    document.querySelector('input[name="title"]').value = tpl.title;
+    document.querySelector('select[name="category"]').value = tpl.category;
+    // ラジオボタンの制御は少し複雑なため、DOM直接操作で簡易対応
+    const radios = document.querySelectorAll('input[name="method"]');
+    radios.forEach(r => { if(r.value === tpl.method) r.checked = true; });
   };
 
   const activeAlerts = useMemo(() => {
@@ -259,6 +284,11 @@ export default function App() {
 
       <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border animate-in fade-in duration-300">
         
+        {/* ... (HOME, LOG, ANALYSIS, SETTINGS の内容は前回と同じため省略なしで記述) ... */}
+        {/* 長くなるので、変更がない部分は前回のロジックをそのまま維持しています */}
+        {/* 今回はモーダル周りの変更が主なので、そこを中心に記述します */}
+        
+        {/* HOME TAB */}
         {activeTab === 'home' && (
           <>
             <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
@@ -287,10 +317,9 @@ export default function App() {
 
             {homeView === 'forecast' && (
               <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
-                {/* アラートを最上部に配置 */}
                 {activeAlerts.length > 0 ? (
                   <SimpleCard className="bg-white/[0.03] border-white/10 p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-zinc-400"><Calendar size={14}/><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Upcoming Payments</span></div>
+                    <div className="flex items-center gap-2 text-zinc-400"><CalendarIcon size={14}/><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Upcoming Payments</span></div>
                     <div className="space-y-2">
                       {activeAlerts.map(([card, day]) => (
                         <div key={card} className="flex justify-between items-center bg-black/20 p-2.5 rounded border border-white/5">
@@ -303,14 +332,12 @@ export default function App() {
                 ) : (
                   <div className="p-8 text-center text-zinc-600 text-xs font-bold border border-white/5 rounded-lg border-dashed">近日中の引き落とし予定はありません</div>
                 )}
-
                 <SimpleCard className="p-5">
                   <div className="flex justify-between items-end mb-3"><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座に残るお金 (見込み)</p><Banknote size={16} className="text-zinc-600"/></div>
                   <div className="flex justify-between items-center mb-1"><span className="text-xs text-zinc-400">給与収入</span><span className="text-sm font-bold text-white tabular-nums">+ ¥{summary.salary.toLocaleString()}</span></div>
                   <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/5"><span className="text-xs text-zinc-400">引き落とし計</span><span className="text-sm font-bold text-red-400 tabular-nums">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div>
                   <div className="flex justify-between items-end"><span className="text-xs font-bold text-zinc-500">残高予想</span><span className="text-2xl font-black text-white tabular-nums">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
                 </SimpleCard>
-                
                 <div className="grid grid-cols-2 gap-3">
                   {config.categories.filter(c => monthlyData.catBudgets?.[c]).map(c => {
                     const spent = summary.catTotals[c] || 0;
@@ -343,12 +370,10 @@ export default function App() {
                 <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
               </div>
             </div>
-
             <div className="flex gap-2">
               <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全てのカテゴリ</option>{config.categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
               <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
             </div>
-
             {logView === 'list' && (
               <div className="space-y-3">
                 {filteredTransactions.length === 0 ? <p className="text-center text-zinc-600 text-xs py-10">履歴が見つかりません</p> : filteredTransactions.map(t => (
@@ -366,7 +391,6 @@ export default function App() {
                 ))}
               </div>
             )}
-
             {logView === 'calendar' && (
               <SimpleCard className="p-4">
                 <div className="grid grid-cols-7 gap-1 text-center mb-2">
@@ -377,26 +401,17 @@ export default function App() {
                     if (day === null) return <div key={i} />;
                     const amt = summary.dailyTotals[day] || 0;
                     
-                    // NMD判定の修正
                     const targetDate = new Date(month + '-' + String(day).padStart(2,'0'));
                     const today = new Date();
-                    today.setHours(0,0,0,0); // 時間をリセットして比較
-                    
+                    today.setHours(0,0,0,0);
                     const isToday = day === today.getDate() && month === getMonthString(today);
-                    // 未来判定: targetDateが今日より後なら未来
                     const isFuture = targetDate > today;
-                    
-                    // NMD判定: 支出0円 かつ 未来ではない
                     const isNMD = amt === 0 && !isFuture;
                     
                     const dateStr = month + '-' + String(day).padStart(2,'0');
 
                     return (
-                      <div 
-                        key={i} 
-                        onClick={() => openModalWithDate(dateStr)}
-                        className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}
-                      >
+                      <div key={i} onClick={() => openModalWithDate(dateStr)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}>
                         <span className={`text-[9px] font-bold ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
                         {amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5">¥{(amt/1000).toFixed(1)}k</span>}
                         {isNMD && <span className="absolute text-xs">✨</span>}
@@ -410,7 +425,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ANALYSIS TAB, SETTINGS TAB (変更なし) */}
+        {/* ANALYSIS TAB */}
         {activeTab === 'analysis' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <SimpleCard className="p-6">
@@ -445,6 +460,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SETUP TAB */}
         {activeTab === 'settings' && (
           <div className="space-y-4">
             {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
@@ -540,13 +556,21 @@ export default function App() {
               <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
               <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
               <div className="flex flex-row gap-4 w-full box-border">
-                {/* valueで制御することでデフォルト日付を確実に反映 */}
-                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={editingTx ? editingTx.date.split('T')[0] : inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
+                {/* 日付を value で制御し、inputDate を反映 */}
+                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{config.categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               </div>
               <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
                 {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
               </div>
+              {/* おすすめテンプレート (ワンタップ入力) */}
+              {config.templates && (
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                  {config.templates.map((tpl, i) => (
+                    <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
+                  ))}
+                </div>
+              )}
               <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">保存する</button>
             </form>
           </SimpleCard>
