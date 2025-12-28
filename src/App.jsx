@@ -30,7 +30,7 @@ const SimpleCard = ({ children, className = "" }) => (
 const NavButton = ({ active, onClick, icon, label }) => (
   <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-3 transition-all ${active ? 'text-white' : 'text-zinc-500'}`}>
     <div className={`mb-1 ${active ? 'scale-110' : ''}`}>{icon}</div>
-    <span className="text-[10px] font-bold whitespace-nowrap uppercase">{label}</span>
+    <span className="text-[10px] font-bold whitespace-nowrap uppercase tracking-wider">{label}</span>
   </button>
 );
 
@@ -73,26 +73,16 @@ export default function App() {
   const summary = useMemo(() => {
     const fixed = (monthlyData.fixedCosts || []).reduce((s, i) => s + i.amount, 0);
     const totalCardBill = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-    
-    // カード計算
     const cardBudgetTotal = (monthlyData.budget || 0);
     const cardDisposable = cardBudgetTotal - fixed - totalCardBill;
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
-    // 「あと何%残っているか」
     const cardRemainingPercent = cardDisposable > 0 ? Math.max(Math.round((cardRemaining / cardDisposable) * 100), 0) : 0;
-
-    // 現金計算
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
     const cashRemaining = cashBudgetTotal - spentCash;
-    // 「あと何%残っているか」
     const cashRemainingPercent = cashBudgetTotal > 0 ? Math.max(Math.round((cashRemaining / cashBudgetTotal) * 100), 0) : 0;
-
-    return { 
-      cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
-      cardRemainingPercent, cashRemainingPercent 
-    };
+    return { cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, cardRemainingPercent, cashRemainingPercent };
   }, [monthlyData, transactions]);
 
   const handleTxSubmit = async (e) => {
@@ -119,192 +109,272 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold tracking-widest uppercase font-black">Syncing...</div>;
+  if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold tracking-widest uppercase">Syncing...</div>;
 
   return (
-    <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-28 flex flex-col items-center overflow-x-hidden font-black">
+    <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-28 flex flex-col items-center overflow-x-hidden">
       
       {/* HEADER */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center items-center box-border shadow-lg font-black">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center items-center box-border shadow-lg">
         <div className="w-full max-w-md flex justify-between items-center px-1">
           <div className="flex items-center gap-2">
             <img src="/favicon.ico" alt="logo" className="w-5 h-5 rounded object-contain" onError={(e) => e.target.style.display = 'none'} />
-            <h1 className="text-lg font-black tracking-tighter text-white uppercase">ZAIMU</h1>
+            <h1 className="text-lg font-bold tracking-tighter text-white uppercase">ZAIMU</h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setMonth(getMonthString(new Date()))} className="px-2.5 py-1.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black text-zinc-400">今月</button>
-            <div className="flex items-center bg-white/5 rounded-lg px-2 py-1 border border-white/5 font-mono text-xs tabular-nums font-black">
+            <button onClick={() => setMonth(getMonthString(new Date()))} className="px-2.5 py-1.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-bold text-zinc-400">今月</button>
+            <div className="flex items-center bg-white/5 rounded-lg px-2 py-1 border border-white/5 font-mono text-xs tabular-nums">
               <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }}><ChevronLeft size={16}/></button>
-              <span className="px-2 tracking-tight font-black">{month.replace('-','/')}</span>
+              <span className="px-2 tracking-tight font-bold">{month.replace('-','/')}</span>
               <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }}><ChevronRight size={16}/></button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border">
+      <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border animate-in fade-in duration-300">
+        
+        {/* HOME TAB */}
         {activeTab === 'home' && (
-          <div className="space-y-4 animate-in fade-in duration-300 font-black">
-            
-            {/* カード情報 */}
+          <div className="space-y-4">
             <SimpleCard className="p-5">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">カード残り</p>
-                  <h2 className={`text-3xl font-black mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>
-                    ¥{summary.cardRemaining.toLocaleString()}
-                  </h2>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">カード残り</p>
+                  <h2 className={`text-3xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
                 </div>
                 <div className="text-right">
-                  <p className="text-[8px] text-zinc-600 uppercase font-black tracking-tighter">軍資金</p>
-                  <p className="text-xs text-zinc-400 font-black tabular-nums">¥{summary.cardBudget.toLocaleString()}</p>
+                  <p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p>
+                  <p className="text-xs text-zinc-400 font-bold tabular-nums">¥{summary.cardBudget.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="space-y-1.5 font-black">
-                <div className="flex justify-between text-[8px] text-zinc-600 uppercase font-black tracking-widest">
-                  <span>残り</span>
-                  <span className="tabular-nums">{summary.cardRemainingPercent}%</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[8px] text-zinc-600 uppercase font-bold tracking-widest">
+                  <span>残り</span><span className="tabular-nums">{summary.cardRemainingPercent}%</span>
                 </div>
                 <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-700 ${summary.cardRemainingPercent <= 10 ? 'bg-red-500' : 'bg-white'}`} 
-                    style={{ width: `${summary.cardRemainingPercent}%` }} 
-                  />
+                  <div className={`h-full transition-all duration-700 ${summary.cardRemainingPercent <= 10 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} />
                 </div>
               </div>
             </SimpleCard>
 
-            {/* 現金情報 */}
             <SimpleCard className="p-5">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-black">現金予算残り</p>
-                  <h2 className={`text-3xl font-black mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>
-                    ¥{summary.cashRemaining.toLocaleString()}
-                  </h2>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">現金予算残り</p>
+                  <h2 className={`text-3xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2>
                 </div>
                 <div className="text-right">
-                  <p className="text-[8px] text-zinc-600 uppercase font-black tracking-tighter">軍資金</p>
-                  <p className="text-xs text-zinc-400 font-black tabular-nums">¥{summary.cashBudget.toLocaleString()}</p>
+                  <p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p>
+                  <p className="text-xs text-zinc-400 font-bold tabular-nums">¥{summary.cashBudget.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="space-y-1.5 font-black">
-                <div className="flex justify-between text-[8px] text-zinc-600 uppercase font-black tracking-widest">
-                  <span>残り</span>
-                  <span className="tabular-nums">{summary.cashRemainingPercent}%</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[8px] text-zinc-600 uppercase font-bold tracking-widest">
+                  <span>残り</span><span className="tabular-nums">{summary.cashRemainingPercent}%</span>
                 </div>
                 <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-700 ${summary.cashRemainingPercent <= 10 ? 'bg-red-500' : 'bg-zinc-400'}`} 
-                    style={{ width: `${summary.cashRemainingPercent}%` }} 
-                  />
+                  <div className={`h-full transition-all duration-700 ${summary.cashRemainingPercent <= 10 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} />
                 </div>
               </div>
             </SimpleCard>
-
           </div>
         )}
 
-        {/* LOG & SETUP タブは前回のスタイル（font-black等）を継承 */}
+        {/* LOG TAB */}
         {activeTab === 'log' && (
-          <div className="space-y-3 animate-in fade-in duration-300">
-            <div className="flex gap-2 pb-1 overflow-hidden font-black">
-              <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-black tracking-widest">
+          <div className="space-y-3">
+            <div className="flex gap-2 pb-1 overflow-hidden font-bold">
+              <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold">
                 <option value="ALL">全てのカテゴリ</option>
                 {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-black tracking-widest">
+              <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold">
                 <option value="ALL">全ての支払方法</option>
                 {config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
             {transactions.filter(t => (filter.category === 'ALL' || t.category === filter.category) && (filter.method === 'ALL' || t.paymentMethod === filter.method)).map(t => (
-              <SimpleCard key={t.id} className="p-4 flex justify-between items-center font-black">
+              <SimpleCard key={t.id} className="p-4 flex justify-between items-center font-bold">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/5 rounded-lg text-zinc-500">{t.paymentMethod === '現金' ? <Wallet size={16}/> : <CreditCard size={16}/>}</div>
-                  <div className="min-w-0">
-                    <div className="text-sm text-white truncate font-black">{t.title}</div>
-                    <div className="text-[9px] text-zinc-500 uppercase tracking-tighter tabular-nums font-black">{t.category} • {new Date(t.date).toLocaleDateString('ja-JP')}</div>
+                  <div className="min-w-0 text-left">
+                    <div className="text-sm text-white truncate font-bold">{t.title}</div>
+                    <div className="text-[9px] text-zinc-500 uppercase tracking-tighter tabular-nums">{t.category} • {new Date(t.date).toLocaleDateString('ja-JP')}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 pl-2">
-                  <span className="text-sm font-black tabular-nums">¥{t.amount.toLocaleString()}</span>
+                  <span className="text-sm font-bold tabular-nums whitespace-nowrap">¥{t.amount.toLocaleString()}</span>
                   <button onClick={() => { setEditingTx(t); setIsModalOpen(true); }} className="text-zinc-600"><Edit3 size={16}/></button>
-                  <button onClick={() => { if(window.confirm('削除しますか？')) deleteDoc(doc(db,'users',SHARED_USER_ID,'transactions',t.id)); }} className="text-zinc-800"><Trash2 size={16}/></button>
+                  <button onClick={() => { if(window.confirm('削除しますか？')) deleteDoc(doc(db,'users',SHARED_USER_ID,'transactions',t.id)); }} className="text-red-900/50 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
                 </div>
               </SimpleCard>
             ))}
           </div>
         )}
 
-        {/* SETUP */}
+        {/* SETUP TAB */}
         {activeTab === 'settings' && (
-          <div className="space-y-4 animate-in fade-in duration-300 font-black">
-            {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs mb-2 font-black uppercase tracking-widest"><ArrowLeft size={16}/> 戻る</button>}
+          <div className="space-y-4 font-bold">
+            {settingTab !== 'menu' && (
+              <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs mb-2 font-bold uppercase tracking-widest">
+                <ArrowLeft size={16}/> 戻る
+              </button>
+            )}
+
             {settingTab === 'menu' && (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {[
                   { id: 'budget', label: '資金計画', icon: <Landmark size={18}/> },
                   { id: 'fixed', label: '固定費', icon: <CreditCard size={18}/> },
                   { id: 'category', label: 'カテゴリ編集', icon: <Tags size={18}/> },
                   { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> },
                 ].map(item => (
-                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-black">
-                    <div className="flex items-center gap-4 text-zinc-300 tracking-tight">{item.icon} {item.label}</div>
+                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold">
+                    <div className="flex items-center gap-4 text-zinc-300">{item.icon} {item.label}</div>
                     <ChevronRight size={18} className="text-zinc-700"/>
                   </button>
                 ))}
               </div>
             )}
-            {/* 以前と同じフォームロジック */}
+
+            {settingTab === 'budget' && (
+              <div className="space-y-4">
+                <SimpleCard className="p-5 space-y-4">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">軍資金設定</p>
+                  <div className="space-y-3">
+                    <input type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" placeholder="カード予算" />
+                    <input type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" placeholder="現金予算" />
+                  </div>
+                </SimpleCard>
+                <SimpleCard className="p-5 space-y-4">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">カード別請求額</p>
+                  <div className="space-y-3 font-bold">
+                    {config.paymentMethods.filter(m => m !== '現金').map(card => (
+                      <div key={card} className="flex items-center gap-3">
+                        <label className="text-[10px] text-zinc-600 w-16 truncate uppercase font-bold">{card}</label>
+                        <input type="number" defaultValue={monthlyData.cardBills?.[card] || 0} onBlur={e => { const newBills = { ...(monthlyData.cardBills || {}), [card]: Number(e.target.value) }; setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardBills:newBills},{merge:true}); }} className="flex-1 h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold font-mono" />
+                      </div>
+                    ))}
+                  </div>
+                </SimpleCard>
+              </div>
+            )}
+
+            {settingTab === 'fixed' && (
+              <SimpleCard className="p-5 space-y-4">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">固定費管理</p>
+                <div className="space-y-2">
+                  {(monthlyData.fixedCosts || []).map(f => (
+                    <div key={f.id} className="flex justify-between items-center bg-black/20 p-4 rounded-lg border border-white/5 font-bold">
+                      <span className="text-xs text-zinc-300">{f.name}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold tabular-nums">¥{f.amount.toLocaleString()}</span>
+                        <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-red-900/50"/></button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex flex-col gap-3 pt-4 font-bold">
+                    <input id="fx-n" placeholder="費目" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" />
+                    <input id="fx-a" type="number" placeholder="金額" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" />
+                    <button onClick={() => { const n=document.getElementById('fx-n'),a=document.getElementById('fx-a'); if(!n.value || !a.value) return; setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:[...(monthlyData.fixedCosts || []),{id:Date.now(),name:n.value,amount:Number(a.value)}]},{merge:true}); n.value=''; a.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest mt-1">追加</button>
+                  </div>
+                </div>
+              </SimpleCard>
+            )}
+
+            {settingTab === 'category' && (
+              <SimpleCard className="p-5 space-y-4 font-bold">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">カテゴリ編集</p>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2 justify-start font-bold">
+                    {config.categories.map(c => (
+                      <div key={c} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-xs text-zinc-300 font-bold">{c}</span>
+                        <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'settings', 'config'),{...config,categories:config.categories.filter(x=>x!==c)})}><Trash2 size={12} className="text-zinc-600" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <input id="new-cat" placeholder="新カテゴリ名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" />
+                    <button onClick={() => { const i=document.getElementById('new-cat'); if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories,i.value]}); i.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase">追加</button>
+                  </div>
+                </div>
+              </SimpleCard>
+            )}
+
+            {settingTab === 'payment' && (
+              <SimpleCard className="p-5 space-y-4 font-bold">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">支払方法・カード</p>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2 justify-start font-bold">
+                    {config.paymentMethods.map(p => (
+                      <div key={p} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-xs text-zinc-300 font-bold">{p}</span>
+                        <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'settings', 'config'),{...config,paymentMethods:config.paymentMethods.filter(x=>x!==p)})}><Trash2 size={12} className="text-zinc-600" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-3 pt-2">
+                    <input id="new-pay" placeholder="新支払方法" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" />
+                    <button onClick={() => { const i=document.getElementById('new-pay'); if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:[...config.paymentMethods,i.value]}); i.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase">追加</button>
+                  </div>
+                </div>
+              </SimpleCard>
+            )}
           </div>
         )}
       </main>
 
       {/* FAB */}
       <div className="fixed bottom-28 w-full max-w-md pointer-events-none px-6 flex justify-end">
-        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center shadow-xl pointer-events-auto active:scale-90 transition-transform border border-zinc-200"><Plus size={26}/></button>
+        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center shadow-xl pointer-events-auto active:scale-90 transition-transform border border-zinc-200">
+          <Plus size={26}/>
+        </button>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL: メイン幅に統一 & レイアウト被り解消 */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 font-black">
-          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
-            <div className="flex justify-between items-center">
-              <h2 className="text-[10px] font-black uppercase text-white tracking-widest">支出入力</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white"><X size={18}/></button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 font-bold">
+          <SimpleCard className="relative max-w-md p-5 space-y-5">
+            <div className="flex justify-between items-center font-bold">
+              <h2 className="text-[10px] font-bold uppercase text-white tracking-widest">支出入力</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button>
             </div>
-            <form onSubmit={handleTxSubmit} className="space-y-4">
-              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-14 bg-black/20 border border-white/10 rounded-lg text-2xl font-black text-left px-4 text-white outline-none tabular-nums" placeholder="0" autoFocus required />
-              <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-black" placeholder="タイトル (例: ランチ)" />
-              <div className="flex gap-3 w-full">
-                <div className="flex-1 flex flex-col gap-1">
-                  <label className="text-[9px] text-zinc-500 uppercase pl-1 font-black tracking-widest">日付</label>
-                  <input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : getTodayString()} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-black tabular-nums" />
+            <form onSubmit={handleTxSubmit} className="space-y-5">
+              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-14 bg-black/20 border border-white/10 rounded-lg text-2xl font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
+              <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" placeholder="タイトル (例: ランチ)" />
+              
+              {/* 日付・カテゴリの被り解消 */}
+              <div className="flex flex-row gap-4 w-full box-border">
+                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+                  <label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label>
+                  <input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : getTodayString()} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold appearance-none box-border" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1">
-                  <label className="text-[9px] text-zinc-500 uppercase pl-1 font-black tracking-widest">カテゴリ</label>
-                  <select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-black">
+                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+                  <label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label>
+                  <select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold box-border">
                     {config.categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2 justify-start pt-1 font-black">
+
+              <div className="flex flex-wrap gap-2 justify-start font-bold">
                 {config.paymentMethods.map(m => (
                   <label key={m} className="cursor-pointer">
                     <input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required />
-                    <div className="px-3.5 h-10 text-center rounded-lg border border-zinc-800 text-[10px] font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px] tracking-widest font-black uppercase">{m}</div>
+                    <div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px] font-bold uppercase">{m}</div>
                   </label>
                 ))}
               </div>
-              <button type="submit" className="w-full h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform">保存する</button>
+              <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform">保存する</button>
             </form>
           </SimpleCard>
         </div>
       )}
 
       {/* FOOTER */}
-      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212]/95 backdrop-blur-md border-t border-white/5 flex justify-around p-3 pb-safe z-40">
+      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212]/95 backdrop-blur-md border-t border-white/5 flex justify-around p-3 pb-safe z-40 shadow-xl">
         <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={20}/>} label="Home" />
         <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={20}/>} label="Log" />
         <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={20}/>} label="Setup" />
