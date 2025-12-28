@@ -132,6 +132,7 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
+    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -337,7 +338,13 @@ export default function App() {
                     <div className="space-y-2">
                       {activeAlerts.map(([card, day]) => (
                         <div key={card} className="flex justify-between items-center bg-black/20 p-2.5 rounded border border-white/5">
-                          <div className="flex flex-col"><span className="text-[11px] font-bold text-zinc-200">{card}</span><span className="text-[9px] font-bold text-zinc-500 uppercase">{day}日に引き落とし</span></div>
+                          <div className="flex flex-col">
+                            <span className="text-[11px] font-bold text-zinc-200">{card}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] font-bold text-zinc-500 uppercase">{day}日に引き落とし</span>
+                              <span className="text-[9px] font-bold text-white tabular-nums">¥{(monthlyData.cardBills[card]||0).toLocaleString()}</span>
+                            </div>
+                          </div>
                           <button onClick={() => confirmPayment(card)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-black uppercase transition-all"><CheckCircle2 size={12}/> 完了</button>
                         </div>
                       ))}
@@ -361,9 +368,14 @@ export default function App() {
                     const per = Math.max(Math.round(((budget - spent) / budget) * 100), 0);
                     return (
                       <SimpleCard key={catName} className="p-3 space-y-2">
-                        <div className="flex justify-between items-center text-[9px] font-bold">
-                          <div className="flex items-center gap-1.5"><span className="text-sm">{icon}</span><span className="text-zinc-400">{catName}</span></div>
-                          <span className="text-zinc-500">{per}%</span>
+                        <div className="flex flex-col gap-1 text-[9px] font-bold">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1.5"><span className="text-sm">{icon}</span><span className="text-zinc-400">{catName}</span></div>
+                            <span className="text-zinc-500">{per}%</span>
+                          </div>
+                          <div className="text-right text-[8px] text-zinc-500 font-mono tracking-tighter">
+                            ¥{spent.toLocaleString()} / ¥{budget.toLocaleString()}
+                          </div>
                         </div>
                         <div className="h-0.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full ${per < 15 ? 'bg-red-500' : 'bg-zinc-500'}`} style={{ width: `${per}%` }} /></div>
                       </SimpleCard>
@@ -557,8 +569,17 @@ export default function App() {
                             
                             <input type="text" defaultValue={cName} onBlur={(e) => {
                               const newCats = [...config.categories];
-                              newCats[idx] = { ...newCats[idx], name: e.target.value };
+                              const oldName = newCats[idx].name;
+                              const newName = e.target.value;
+                              newCats[idx] = { ...newCats[idx], name: newName };
                               setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
+                              // 予算データも移行する（オプション）
+                              if (monthlyData.catBudgets[oldName]) {
+                                const newBudgets = { ...monthlyData.catBudgets };
+                                newBudgets[newName] = newBudgets[oldName];
+                                delete newBudgets[oldName];
+                                setDoc(doc(db,'users',SHARED_USER_ID,'months',month), { catBudgets: newBudgets }, { merge: true });
+                              }
                             }} className="flex-1 bg-transparent text-xs font-bold text-zinc-200 outline-none" />
 
                             <input type="number" placeholder="予算" defaultValue={monthlyData.catBudgets?.[cName] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[cName]:Number(e.target.value)}},{merge:true})} className="w-16 h-7 bg-black/40 border border-white/10 rounded px-2 text-right text-xs text-white outline-none" />
@@ -577,14 +598,18 @@ export default function App() {
                         <ImageIcon size={14} className="absolute top-3 left-3 text-zinc-600 pointer-events-none opacity-50" />
                       </div>
                       <input id="new-cat-name" placeholder="カテゴリ名" className="flex-1 h-10 bg-black/20 border border-white/10 rounded px-3 text-xs text-white outline-none" />
+                      <input id="new-cat-budget" type="number" placeholder="予算" className="w-16 h-10 bg-black/20 border border-white/10 rounded px-2 text-xs text-white outline-none" />
                     </div>
                     <button onClick={() => { 
                       const name = document.getElementById('new-cat-name').value;
                       const icon = document.getElementById('new-cat-icon').value || '🏷';
+                      const budget = document.getElementById('new-cat-budget').value;
                       if(name) {
                         setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories, {name, icon}]});
+                        if(budget) setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[name]:Number(budget)}},{merge:true});
                         document.getElementById('new-cat-name').value = '';
                         document.getElementById('new-cat-icon').value = '';
+                        document.getElementById('new-cat-budget').value = '';
                       }
                     }} className="w-full h-10 bg-white text-black rounded font-bold text-xs uppercase tracking-widest mt-1">追加</button>
                   </div>
@@ -652,6 +677,7 @@ export default function App() {
               <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
               <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
               <div className="flex flex-row gap-4 w-full box-border">
+                {/* 日付を value で制御し、inputDate を反映 */}
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               </div>
