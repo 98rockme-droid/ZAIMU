@@ -90,6 +90,19 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
+    // 日割り計算
+    const now = new Date();
+    const currentMonthStr = getMonthString(now);
+    let daysLeft = 0;
+    
+    if (month === currentMonthStr) {
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        daysLeft = Math.max(1, lastDay - now.getDate() + 1); // 今日を含む
+    } else if (month > currentMonthStr) {
+        const d = new Date(month + "-01");
+        daysLeft = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    }
+
     const salary = monthlyData.salary || 0;
     const fixedTotal = (monthlyData.fixedCosts || []).reduce((s, i) => s + i.amount, 0);
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -107,6 +120,9 @@ export default function App() {
     const cashRemaining = cashBudgetTotal - spentCash;
     const cashRemainingPercent = cashBudgetTotal > 0 ? Math.max(Math.round((cashRemaining / cashBudgetTotal) * 100), 0) : 0;
 
+    const totalRemaining = cardRemaining + cashRemaining;
+    const dailyBudget = daysLeft > 0 ? Math.floor(totalRemaining / daysLeft) : 0;
+
     const getCatTotals = (txs) => txs.reduce((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + t.amount;
       return acc;
@@ -120,9 +136,10 @@ export default function App() {
     return { 
       salary, totalWithdrawal, bankBalanceProjected,
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
-      cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent 
+      cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
+      dailyBudget, daysLeft
     };
-  }, [monthlyData, transactions, lastMonthTransactions]);
+  }, [monthlyData, transactions, lastMonthTransactions, month]);
 
   const confirmPayment = async (cardName) => {
     const confirmed = monthlyData.confirmedPayments || [];
@@ -206,9 +223,17 @@ export default function App() {
               </button>
             </div>
 
-            {/* SPENDING VIEW: 使う */}
+            {/* SPENDING VIEW */}
             {homeView === 'spending' && (
               <div className="space-y-4 animate-in slide-in-from-left-4 fade-in duration-300">
+                {/* 1日あたりの使用可能額 (新機能) */}
+                {summary.daysLeft > 0 && (
+                  <div className="flex justify-between items-center px-2">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">残り {summary.daysLeft}日</span>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">1日あたり <span className="text-white tabular-nums">¥{summary.dailyBudget.toLocaleString()}</span></span>
+                  </div>
+                )}
+
                 <SimpleCard className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div>
@@ -231,7 +256,7 @@ export default function App() {
               </div>
             )}
 
-            {/* FORECAST VIEW: 守る・予定 */}
+            {/* FORECAST VIEW */}
             {homeView === 'forecast' && (
               <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
                 <SimpleCard className="p-5">
@@ -274,7 +299,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* カテゴリ別予算進捗（こちらに移動） */}
                 <div className="grid grid-cols-2 gap-3">
                   {config.categories.filter(c => monthlyData.catBudgets?.[c]).map(c => {
                     const spent = summary.catTotals[c] || 0;
@@ -363,7 +387,7 @@ export default function App() {
               </div>
             )}
 
-            {/* 各設定フォーム */}
+            {/* カテゴリ設定 (UI修正) */}
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -418,6 +442,7 @@ export default function App() {
               </SimpleCard>
             )}
 
+            {/* 支払方法設定 (UI修正) */}
             {settingTab === 'payment' && (
               <SimpleCard className="p-5 space-y-6">
                  <div>
@@ -436,9 +461,9 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB (Integrated into footer) */}
-      
-      {/* MODAL */}
+      {/* FAB & MODAL (以下変更なし) */}
+      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
+
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative max-w-md p-5 space-y-5">
