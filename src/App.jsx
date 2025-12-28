@@ -50,7 +50,7 @@ export default function App() {
     paymentMethods: ['現金', '三井住友', '楽天', 'PayPay']
   });
   const [editingTx, setEditingTx] = useState(null);
-  const [inputDate, setInputDate] = useState(getTodayString()); // モーダル用の日付state
+  const [inputDate, setInputDate] = useState(getTodayString()); 
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const [searchText, setSearchText] = useState('');
 
@@ -173,10 +173,26 @@ export default function App() {
     e.preventDefault();
     const method = e.target.method.value;
     const amount = Number(e.target.amount.value);
-    const data = { title: e.target.title.value || e.target.category.value, amount, category: e.target.category.value, paymentMethod: method, date: e.target.date.value ? new Date(e.target.date.value).toISOString() : new Date().toISOString() };
-    if (method === '現金') { const diff = editingTx ? editingTx.amount - amount : -amount; await setDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), { balance: cashBalance + diff }, { merge: true }); }
-    if (editingTx) { await updateDoc(doc(db, 'users', SHARED_USER_ID, 'transactions', editingTx.id), data); setEditingTx(null); }
-    else { await setDoc(doc(collection(db, 'users', SHARED_USER_ID, 'transactions')), { ...data, createdAt: serverTimestamp() }); }
+    // 日付は state の inputDate を使用
+    const data = { 
+      title: e.target.title.value || e.target.category.value, 
+      amount, 
+      category: e.target.category.value, 
+      paymentMethod: method, 
+      date: inputDate ? new Date(inputDate).toISOString() : new Date().toISOString() 
+    };
+    
+    if (method === '現金') { 
+      const diff = editingTx ? editingTx.amount - amount : -amount; 
+      await setDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), { balance: cashBalance + diff }, { merge: true }); 
+    }
+    
+    if (editingTx) { 
+      await updateDoc(doc(db, 'users', SHARED_USER_ID, 'transactions', editingTx.id), data); 
+      setEditingTx(null); 
+    } else { 
+      await setDoc(doc(collection(db, 'users', SHARED_USER_ID, 'transactions')), { ...data, createdAt: serverTimestamp() }); 
+    }
     setIsModalOpen(false);
   };
 
@@ -211,7 +227,7 @@ export default function App() {
     return days;
   }, [month]);
 
-  // モーダルを開く処理（日付指定対応）
+  // モーダルを開く処理
   const openModalWithDate = (dateStr) => {
     setEditingTx(null);
     setInputDate(dateStr);
@@ -223,7 +239,7 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-28 flex flex-col items-center overflow-x-hidden font-bold">
       
-      {/* HEADER: ボタン高さ統一 (h-8) */}
+      {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center shadow-lg font-bold">
         <div className="w-full max-w-md flex justify-between items-center px-1">
           <div className="flex items-center gap-2">
@@ -271,7 +287,7 @@ export default function App() {
 
             {homeView === 'forecast' && (
               <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
-                {/* アラートを最上部に移動 */}
+                {/* アラートを最上部に配置 */}
                 {activeAlerts.length > 0 ? (
                   <SimpleCard className="bg-white/[0.03] border-white/10 p-4 space-y-3">
                     <div className="flex items-center gap-2 text-zinc-400"><Calendar size={14}/><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Upcoming Payments</span></div>
@@ -360,15 +376,25 @@ export default function App() {
                   {calendarDays.map((day, i) => {
                     if (day === null) return <div key={i} />;
                     const amt = summary.dailyTotals[day] || 0;
-                    const isToday = day === new Date().getDate() && month === getMonthString(new Date());
-                    const isFuture = !isToday && (new Date(month + '-' + String(day).padStart(2,'0')) > new Date());
-                    const isNMD = amt === 0 && !isFuture && day < new Date().getDate(); 
+                    
+                    // NMD判定の修正
+                    const targetDate = new Date(month + '-' + String(day).padStart(2,'0'));
+                    const today = new Date();
+                    today.setHours(0,0,0,0); // 時間をリセットして比較
+                    
+                    const isToday = day === today.getDate() && month === getMonthString(today);
+                    // 未来判定: targetDateが今日より後なら未来
+                    const isFuture = targetDate > today;
+                    
+                    // NMD判定: 支出0円 かつ 未来ではない
+                    const isNMD = amt === 0 && !isFuture;
+                    
                     const dateStr = month + '-' + String(day).padStart(2,'0');
 
                     return (
                       <div 
                         key={i} 
-                        onClick={() => openModalWithDate(dateStr)} // クリックでモーダルを開く
+                        onClick={() => openModalWithDate(dateStr)}
                         className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}
                       >
                         <span className={`text-[9px] font-bold ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
@@ -514,8 +540,8 @@ export default function App() {
               <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
               <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
               <div className="flex flex-row gap-4 w-full box-border">
-                {/* 日付初期値を inputDate で制御 */}
-                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : inputDate} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
+                {/* valueで制御することでデフォルト日付を確実に反映 */}
+                <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={editingTx ? editingTx.date.split('T')[0] : inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || config.categories[0]} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{config.categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               </div>
               <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
