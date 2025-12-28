@@ -92,7 +92,6 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
-    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -488,15 +487,15 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB (Integrated into footer) */}
-      
-      {/* MODAL */}
+      {/* FAB & MODAL */}
+      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
+
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <SimpleCard className="relative max-w-md p-5 space-y-5">
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
             <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">支出入力</h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
             <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
-              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-14 bg-black/20 border border-white/10 rounded-lg text-2xl font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
+              <input name="amount" type="number" defaultValue={editingTx?.amount || ''} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
               <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
               <div className="flex flex-row gap-4 w-full box-border">
                 <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" defaultValue={editingTx ? editingTx.date.split('T')[0] : getTodayString()} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
