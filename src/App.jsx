@@ -27,10 +27,10 @@ const SimpleCard = ({ children, className = "" }) => (
   </div>
 );
 
-const NavButton = ({ active, onClick, icon, label }) => (
-  <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-3 transition-all ${active ? 'text-white' : 'text-zinc-500'}`}>
-    <div className={`mb-1 ${active ? 'scale-110' : ''}`}>{icon}</div>
-    <span className="text-[10px] font-bold whitespace-nowrap uppercase tracking-wider">{label}</span>
+// ラベルを削除し、アイコンのみのボタンに変更
+const NavButton = ({ active, onClick, icon }) => (
+  <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-4 transition-all ${active ? 'text-white' : 'text-zinc-600'}`}>
+    <div className={`mb-0 ${active ? 'scale-110' : ''}`}>{icon}</div>
   </button>
 );
 
@@ -233,7 +233,7 @@ export default function App() {
               </div>
             </SimpleCard>
 
-            {/* 収支見込みカード (移動&色修正) */}
+            {/* 収支見込みカード */}
             <SimpleCard className="p-5">
               <div className="flex justify-between items-end mb-3">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座に残るお金 (見込み)</p>
@@ -332,6 +332,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SETUP TAB */}
         {activeTab === 'settings' && (
           <div className="space-y-4">
             {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
@@ -342,29 +343,6 @@ export default function App() {
                   <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all"><div className="flex items-center gap-4 text-zinc-300">{item.icon} {item.label}</div><ChevronRight size={18} className="text-zinc-700"/></button>
                 ))}
               </div>
-            )}
-
-            {settingTab === 'category' && (
-              <SimpleCard className="p-5 space-y-6">
-                <div>
-                  <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">カテゴリと月間予算</p>
-                  <div className="space-y-2">
-                    {config.categories.map(c => (
-                      <div key={c} className="flex items-center gap-3 bg-black/20 p-2 rounded border border-white/5">
-                        <span className="text-xs font-bold text-zinc-300 flex-1 truncate">{c}</span>
-                        <div className="flex items-center gap-2">
-                          <input type="number" placeholder="予算" defaultValue={monthlyData.catBudgets?.[c] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[c]:Number(e.target.value)}},{merge:true})} className="w-20 h-8 bg-[#121212] border border-white/10 rounded px-2 text-right text-xs text-white outline-none" />
-                          <button onClick={() => { if(window.confirm(`${c} を削除しますか？`)) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter(x=>x!==c)}); }} className="p-1.5 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-col gap-2 pt-6">
-                    <input id="new-cat" placeholder="新しいカテゴリ名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" />
-                    <button onClick={() => { const i=document.getElementById('new-cat'); if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories,i.value]}); i.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest">追加</button>
-                  </div>
-                </div>
-              </SimpleCard>
             )}
 
             {settingTab === 'budget' && (
@@ -398,6 +376,29 @@ export default function App() {
               </SimpleCard>
             )}
 
+            {settingTab === 'category' && (
+              <SimpleCard className="p-5 space-y-6">
+                <div>
+                  <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">カテゴリと月間予算</p>
+                  <div className="space-y-2">
+                    {config.categories.map(c => (
+                      <div key={c} className="flex items-center gap-3 bg-black/20 p-2 rounded border border-white/5">
+                        <span className="text-xs font-bold text-zinc-300 flex-1 truncate">{c}</span>
+                        <div className="flex items-center gap-2">
+                          <input type="number" placeholder="予算" defaultValue={monthlyData.catBudgets?.[c] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[c]:Number(e.target.value)}},{merge:true})} className="w-20 h-8 bg-[#121212] border border-white/10 rounded px-2 text-right text-xs text-white outline-none" />
+                          <button onClick={() => { if(window.confirm(`${c} を削除しますか？`)) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter(x=>x!==c)}); }} className="p-1.5 text-zinc-700 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2 pt-6">
+                    <input id="new-cat" placeholder="新しいカテゴリ名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" />
+                    <button onClick={() => { const i=document.getElementById('new-cat'); if(i.value) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:[...config.categories,i.value]}); i.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest">追加</button>
+                  </div>
+                </div>
+              </SimpleCard>
+            )}
+
             {settingTab === 'payment' && (
               <SimpleCard className="p-5 space-y-4">
                  <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">支払方法一覧</p>
@@ -411,11 +412,9 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB & MODAL */}
-      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end">
-        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform border border-zinc-200"><Plus size={28}/></button>
-      </div>
-
+      {/* FAB (Removed, integrated into footer) */}
+      
+      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative max-w-md p-5 space-y-5">
@@ -437,11 +436,16 @@ export default function App() {
       )}
 
       {/* FOOTER */}
-      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212]/95 backdrop-blur-md border-t border-white/5 flex justify-around p-3 pb-safe z-40">
-        <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={20}/>} label="Home" />
-        <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={20}/>} label="Log" />
-        <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={20}/>} label="Analysis" />
-        <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={20}/>} label="Setup" />
+      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212] border-t border-white/5 flex justify-around items-center p-2 pb-safe z-40">
+        <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={24}/>} />
+        <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
+        <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
+        <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={24}/>} />
+        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="flex-1 flex items-center justify-center text-white">
+          <div className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform">
+            <Plus size={24}/>
+          </div>
+        </button>
       </nav>
     </div>
   );
