@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
@@ -39,8 +39,8 @@ const NavButton = ({ active, onClick, icon }) => (
   </button>
 );
 
-// 電卓コンポーネント
-const CalculatorPad = ({ initialValue, onConfirm, onCancel }) => {
+// 電卓コンポーネント (レイアウト修正版)
+const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
 
@@ -60,14 +60,12 @@ const CalculatorPad = ({ initialValue, onConfirm, onCancel }) => {
       const res = new Function('return ' + display)();
       setDisplay(String(res));
       setIsResult(true);
+      return res;
     } catch(e) {
       setDisplay('Error');
       setIsResult(true);
+      return 0;
     }
-  };
-
-  const handleClear = () => {
-    setDisplay('0');
   };
 
   const handleDelete = () => {
@@ -75,7 +73,7 @@ const CalculatorPad = ({ initialValue, onConfirm, onCancel }) => {
   };
 
   const btns = [
-    { l: 'C', act: handleClear, style: 'text-red-400' },
+    { l: 'C', act: () => setDisplay('0'), style: 'text-red-400' },
     { l: '/', act: () => handlePush('/'), style: 'text-emerald-400' },
     { l: '*', act: () => handlePush('*'), style: 'text-emerald-400' },
     { l: <Delete size={18}/>, act: handleDelete, style: 'text-zinc-400' },
@@ -90,35 +88,35 @@ const CalculatorPad = ({ initialValue, onConfirm, onCancel }) => {
     { l: '1', act: () => handlePush('1') },
     { l: '2', act: () => handlePush('2') },
     { l: '3', act: () => handlePush('3') },
-    { l: '=', act: handleCalc, style: 'bg-emerald-500/20 text-emerald-400' }, // =ボタン
+    { l: '=', act: () => handleCalc(), style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
     { l: '0', act: () => handlePush('0'), style: 'col-span-2' },
     { l: '.', act: () => handlePush('.') },
   ];
 
   return (
-    <div className="w-full h-full flex flex-col gap-2">
-      <div className="bg-black/40 rounded-lg p-4 text-right">
-        <span className="text-3xl font-bold tracking-widest font-mono text-white">{display}</span>
+    <div className="w-full flex flex-col gap-3">
+      <div className="bg-black/40 rounded-lg p-3 text-right border border-white/5">
+        <span className="text-2xl font-bold tracking-widest font-mono text-white break-all">{display}</span>
       </div>
-      <div className="flex-1 grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-2 h-64">
         {btns.map((b, i) => (
-          <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-white/5 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'} ${b.l === '=' ? 'row-span-2 h-full' : ''}`}>
+          <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-white/5 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>
             {b.l}
           </button>
         ))}
-        {/* 決定ボタン (Enter) */}
-        <button onClick={() => {
-             // 最後に計算してから決定
-             try {
-                const final = new Function('return ' + display)();
-                onConfirm(Number(final));
-             } catch {
-                onConfirm(Number(display));
-             }
-        }} className="col-span-1 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest flex flex-col items-center justify-center active:scale-95">
-          決定
-        </button>
       </div>
+      <button onClick={() => {
+         let finalVal = Number(display);
+         if (!isResult) {
+            try {
+               // eslint-disable-next-line no-new-func
+               finalVal = Number(new Function('return ' + display)());
+            } catch {}
+         }
+         onConfirm(finalVal);
+      }} className="w-full h-12 bg-white text-black rounded-lg font-bold text-sm uppercase tracking-widest flex items-center justify-center active:scale-95 shadow-lg">
+        決定
+      </button>
     </div>
   );
 };
@@ -131,13 +129,12 @@ export default function App() {
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showCalculator, setShowCalculator] = useState(false); // 電卓表示フラグ
+  const [showCalculator, setShowCalculator] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Config初期値
   const [config, setConfig] = useState({ 
     categories: [
       { name: '食費', icon: '🍔' },
@@ -156,17 +153,14 @@ export default function App() {
   
   const [editingTx, setEditingTx] = useState(null);
   const [inputDate, setInputDate] = useState(getTodayString()); 
-  const [inputAmount, setInputAmount] = useState(''); // 金額入力用state
+  const [inputAmount, setInputAmount] = useState(''); 
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const [searchText, setSearchText] = useState('');
 
-  // カテゴリ情報取得ヘルパー
   const getCategoryIcon = (catName) => {
     if (!config.categories) return '🏷';
     const cat = config.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
-    if (!cat) return '🏷';
-    if (typeof cat === 'string') return '🏷';
-    return cat.icon || '🏷';
+    return cat ? (typeof cat === 'string' ? '🏷' : cat.icon) : '🏷';
   };
 
   const getCategoryNames = () => {
@@ -218,7 +212,6 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
-    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -282,6 +275,37 @@ export default function App() {
     }
   };
 
+  // 先月の設定を一括コピー
+  const copyLastMonthSettings = async () => {
+    if(!window.confirm('先月の予算・固定費・カテゴリ設定を今月にコピーしますか？')) return;
+    
+    // 先月の日付文字列を計算
+    const d = new Date(month + "-01");
+    d.setMonth(d.getMonth() - 1);
+    const lastMonthStr = getMonthString(d);
+
+    try {
+        const lastMonthDoc = await getDoc(doc(db, 'users', SHARED_USER_ID, 'months', lastMonthStr));
+        if (lastMonthDoc.exists()) {
+            const data = lastMonthDoc.data();
+            const newData = {
+                budget: data.budget || 0,
+                cashBudget: data.cashBudget || 0,
+                fixedCosts: data.fixedCosts || [],
+                catBudgets: data.catBudgets || {},
+                cardDueDates: data.cardDueDates || {}, // 引き落とし日のみコピー
+                // cardBills (請求額) はコピーしない
+            };
+            await setDoc(doc(db, 'users', SHARED_USER_ID, 'months', month), newData, { merge: true });
+            alert('コピーしました');
+        } else {
+            alert('先月のデータが見つかりませんでした');
+        }
+    } catch (e) {
+        alert('エラーが発生しました');
+    }
+  };
+
   const copyFixedCosts = async () => {
     if (!monthlyData.fixedCosts?.length) return alert('コピーする固定費がありません');
     if (!window.confirm('今月の履歴に固定費を一括追加しますか？')) return;
@@ -297,7 +321,7 @@ export default function App() {
   const handleTxSubmit = async (e) => {
     e.preventDefault();
     const method = e.target.method.value;
-    const amount = Number(inputAmount); // stateから取得
+    const amount = Number(inputAmount); 
     const data = { 
       title: e.target.title.value || e.target.category.value, 
       amount, 
@@ -366,7 +390,6 @@ export default function App() {
     setIsModalOpen(true);
   };
 
-  // 編集モード起動
   const startEditing = (t) => {
     setEditingTx(t);
     setInputDate(t.date.split('T')[0]);
@@ -378,7 +401,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-28 flex flex-col items-center overflow-x-hidden font-bold">
-      {/* ...Header... */}
+      
+      {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center shadow-lg font-bold">
         <div className="w-full max-w-md flex justify-between items-center px-1">
           <div className="flex items-center gap-2">
@@ -397,7 +421,8 @@ export default function App() {
       </header>
 
       <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border animate-in fade-in duration-300">
-        {/* ...Tabs Content (HOME, LOG, ANALYSIS, SETTINGS)... */}
+        
+        {/* HOME TAB (変更なし) */}
         {activeTab === 'home' && (
           <>
             <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
@@ -474,7 +499,7 @@ export default function App() {
           </>
         )}
 
-        {/* LOG, ANALYSIS, SETTINGS... */}
+        {/* LOG, ANALYSIS TABS (変更なし) */}
         {activeTab === 'log' && (
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -543,7 +568,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ANALYSIS, SETTINGS... */}
         {activeTab === 'analysis' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <SimpleCard className="p-6">
@@ -582,6 +606,7 @@ export default function App() {
           </div>
         )}
 
+        {/* SETUP TAB */}
         {activeTab === 'settings' && (
           <div className="space-y-4">
             {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
@@ -594,11 +619,10 @@ export default function App() {
               </div>
             )}
 
-            {/* Other setting tabs... (Budget, Fixed, Template, Payment) - same logic but keep consistent structure */}
             {settingTab === 'budget' && (
               <div className="space-y-4 font-bold">
                 <SimpleCard className="p-5 space-y-4">
-                  <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
+                  <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p><button onClick={copyLastMonthSettings} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-200 text-black rounded-lg text-[9px] font-bold uppercase active:scale-95"><CopyCheck size={12}/> 先月の設定をコピー</button></div>
                   <div className="space-y-3">
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
@@ -616,6 +640,7 @@ export default function App() {
               </div>
             )}
 
+            {/* Other settings tabs (Fixed, Template, Payment, Category) */}
             {settingTab === 'fixed' && (
               <SimpleCard className="p-5 space-y-4">
                 <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p><button onClick={copyFixedCosts} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-200 text-black rounded-lg text-[9px] font-bold uppercase active:scale-95"><CopyCheck size={12}/> 今月分を一括追加</button></div>
@@ -626,7 +651,6 @@ export default function App() {
               </SimpleCard>
             )}
 
-            {/* CATEGORY SETTING (UPDATED) */}
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -756,7 +780,7 @@ export default function App() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
             {showCalculator ? (
-              <div className="h-[360px]">
+              <div className="h-auto">
                 <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
                 <CalculatorPad 
                   initialValue={inputAmount || 0} 
