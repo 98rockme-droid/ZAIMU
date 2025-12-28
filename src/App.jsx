@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, Check, BarChart3, TrendingDown, TrendingUp, Banknote } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
 const firebaseConfig = {
@@ -27,10 +27,9 @@ const SimpleCard = ({ children, className = "" }) => (
   </div>
 );
 
-// ラベルを削除し、アイコンのみのボタンに変更
 const NavButton = ({ active, onClick, icon }) => (
-  <button onClick={onClick} className={`flex flex-col items-center justify-center flex-1 py-4 transition-all ${active ? 'text-white' : 'text-zinc-600'}`}>
-    <div className={`mb-0 ${active ? 'scale-110' : ''}`}>{icon}</div>
+  <button onClick={onClick} className={`flex items-center justify-center w-16 h-16 transition-all ${active ? 'text-white scale-110' : 'text-zinc-600'}`}>
+    {icon}
   </button>
 );
 
@@ -126,6 +125,7 @@ export default function App() {
     };
   }, [monthlyData, transactions, lastMonthTransactions]);
 
+  // アラートの「完了」処理（非表示にするだけ）
   const confirmPayment = async (cardName) => {
     const confirmed = monthlyData.confirmedPayments || [];
     if (!confirmed.includes(cardName)) {
@@ -162,6 +162,7 @@ export default function App() {
       const dueDay = Number(day);
       const isConfirmed = (monthlyData.confirmedPayments || []).includes(card);
       const hasBill = (monthlyData.cardBills?.[card] || 0) > 0;
+      // 表示条件: 請求額あり & 未完了 & 日付が今日以降 & 7日以内
       return hasBill && !isConfirmed && dueDay >= today && (dueDay - today) <= 7;
     });
   }, [monthlyData]);
@@ -194,7 +195,7 @@ export default function App() {
         {activeTab === 'home' && (
           <div className="space-y-4">
             
-            {/* 引き落とし通知 */}
+            {/* 引き落とし通知（条件を満たすと出現） */}
             {activeAlerts.length > 0 && (
               <SimpleCard className="bg-white/[0.03] border-white/10 p-4 space-y-3">
                 <div className="flex items-center gap-2 text-zinc-400">
@@ -205,14 +206,14 @@ export default function App() {
                   {activeAlerts.map(([card, day]) => (
                     <div key={card} className="flex justify-between items-center bg-black/20 p-2.5 rounded border border-white/5">
                       <div className="flex flex-col"><span className="text-[11px] font-bold text-zinc-200">{card}</span><span className="text-[9px] font-bold text-zinc-500 uppercase">{day}日に引き落とし</span></div>
-                      <button onClick={() => confirmPayment(card)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-black uppercase transition-all"><Check size={12}/> 確認</button>
+                      <button onClick={() => confirmPayment(card)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-black uppercase transition-all"><CheckCircle2 size={12}/> 完了</button>
                     </div>
                   ))}
                 </div>
               </SimpleCard>
             )}
 
-            {/* メイン予算カード */}
+            {/* カード予算 */}
             <SimpleCard className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div>
@@ -223,6 +224,7 @@ export default function App() {
               </div>
             </SimpleCard>
 
+            {/* 現金予算 */}
             <SimpleCard className="p-6">
               <div className="flex justify-between items-start mb-4">
                 <div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">現金残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div>
@@ -233,7 +235,7 @@ export default function App() {
               </div>
             </SimpleCard>
 
-            {/* 収支見込みカード */}
+            {/* 収支見込み（現金の下に移動） */}
             <SimpleCard className="p-5">
               <div className="flex justify-between items-end mb-3">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座に残るお金 (見込み)</p>
@@ -275,7 +277,7 @@ export default function App() {
           </div>
         )}
 
-        {/* LOG, ANALYSIS, SETTINGS TAB (前回と同じ) */}
+        {/* LOG TAB */}
         {activeTab === 'log' && (
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -412,9 +414,11 @@ export default function App() {
         )}
       </main>
 
-      {/* FAB (Removed, integrated into footer) */}
-      
-      {/* MODAL */}
+      {/* FAB & MODAL */}
+      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none">
+        {/* FAB is integrated into footer, but keeping this div for spacing if needed or future use. Currently empty. */}
+      </div>
+
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative max-w-md p-5 space-y-5">
@@ -436,15 +440,13 @@ export default function App() {
       )}
 
       {/* FOOTER */}
-      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212] border-t border-white/5 flex justify-around items-center p-2 pb-safe z-40">
+      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212] border-t border-white/5 flex justify-between items-center px-6 pb-safe z-40 h-20 box-border">
         <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={24}/>} />
         <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
         <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
         <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={24}/>} />
-        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="flex-1 flex items-center justify-center text-white">
-          <div className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-            <Plus size={24}/>
-          </div>
+        <button onClick={() => { setEditingTx(null); setIsModalOpen(true); }} className="flex items-center justify-center w-14 h-14 bg-white text-black rounded-full shadow-lg active:scale-90 transition-transform ml-2">
+          <Plus size={28}/>
         </button>
       </nav>
     </div>
