@@ -14,7 +14,7 @@ import { getAuth, signInAnonymously } from "firebase/auth";
 import { Plus, Trash2, Wallet, Receipt, TrendingDown, Calendar, GlassWater } from 'lucide-react';
 
 /* ----------------------------------------------------------------
-   1. FIREBASE SETUP (ここがあなたの専用設定です)
+   1. FIREBASE SETUP
 ------------------------------------------------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyD_MMX3Irb-xN1Tql5L0kWJo6BoO_rFX7g",
@@ -25,13 +25,12 @@ const firebaseConfig = {
   appId: "1:388166181792:web:d3ccef2742dca358d3bac5"
 };
 
-// 初期化
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
 /* ----------------------------------------------------------------
-   2. MAIN APPLICATION COMPONENT
+   2. MAIN APPLICATION
 ------------------------------------------------------------------- */
 export default function App() {
   const [items, setItems] = useState([]);
@@ -40,24 +39,15 @@ export default function App() {
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // ログインとデータ購読
   useEffect(() => {
-    // 匿名ログインを実行（Authenticationで有効にしている必要があります）
-    signInAnonymously(auth).catch((error) => {
-      console.error("Auth Error:", error);
-    });
+    signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
 
-    // Firestoreからリアルタイムにデータを取得
     const q = query(collection(db, "expenses"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setItems(data);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -66,7 +56,6 @@ export default function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!amount) return;
-
     try {
       await addDoc(collection(db, "expenses"), {
         amount: Number(amount),
@@ -77,125 +66,120 @@ export default function App() {
       setAmount('');
       setNote('');
     } catch (e) {
-      console.error("Error adding document: ", e);
-      alert("保存に失敗しました。Firebaseのルールを確認してください。");
+      alert("保存に失敗しました。Firestoreのルールを確認してください。");
     }
   };
 
   const deleteItem = async (id) => {
-    try {
-      await deleteDoc(doc(db, "expenses", id));
-    } catch (e) {
-      console.error("Error deleting document: ", e);
-    }
+    try { await deleteDoc(doc(db, "expenses", id)); } catch (e) { console.error(e); }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white">
         <div className="animate-pulse flex flex-col items-center">
           <GlassWater size={48} className="mb-4 text-blue-400" />
-          <p className="text-sm tracking-widest uppercase">Connecting to Database...</p>
+          <p className="text-[10px] tracking-[0.3em] uppercase opacity-50">Loading Glass Interface...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 font-sans selection:bg-white/20">
+      {/* Background Ornaments */}
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />
+
       {/* Header */}
-      <header className="max-w-md mx-auto mt-8 mb-12 text-center">
-        <div className="inline-block p-3 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 mb-4">
-          <Wallet size={24} className="text-white" />
+      <header className="relative max-w-md mx-auto pt-12 pb-16 text-center">
+        <h1 className="text-[10px] uppercase tracking-[0.4em] text-white/30 mb-4">Total Expenses</h1>
+        <div className="text-6xl font-extralight tracking-tighter mb-2">
+          <span className="text-2xl mr-1 opacity-30">¥</span>
+          {total.toLocaleString()}
         </div>
-        <h1 className="text-xs uppercase tracking-[0.3em] text-white/50 mb-2">Current Balance</h1>
-        <div className="text-5xl font-light tracking-tighter">
-          ¥ {total.toLocaleString()}
-        </div>
+        <div className="w-12 h-[1px] bg-white/20 mx-auto mt-8" />
       </header>
 
-      {/* Input Form */}
-      <div className="max-w-md mx-auto mb-12">
-        <form onSubmit={handleSubmit} className="space-y-4 p-6 rounded-[2rem] bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase tracking-widest text-white/40 ml-1">Amount</label>
+      {/* Glass Form */}
+      <div className="max-w-md mx-auto mb-16 relative">
+        <form onSubmit={handleSubmit} className="space-y-6 p-8 rounded-[2.5rem] bg-white/[0.03] backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+          <div className="space-y-4">
+            <div className="relative">
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0"
-                className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 focus:outline-none focus:ring-1 focus:ring-white/20 transition-all text-xl"
+                className="w-full bg-transparent border-b border-white/10 py-4 text-3xl font-light focus:outline-none focus:border-white/40 transition-all placeholder:opacity-10"
               />
+              <span className="absolute right-0 bottom-4 text-[10px] uppercase tracking-widest text-white/20">Amount</span>
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] uppercase tracking-widest text-white/40 ml-1">Category</label>
+            
+            <div className="grid grid-cols-2 gap-4 pt-2">
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 focus:outline-none focus:ring-1 focus:ring-white/20 transition-all appearance-none"
+                className="bg-white/[0.05] border border-white/5 rounded-2xl p-4 text-sm focus:outline-none focus:bg-white/10 transition-all appearance-none"
               >
                 {['食費', '日用品', '交際費', '固定費', 'その他'].map(cat => (
                   <option key={cat} value={cat} className="bg-zinc-900">{cat}</option>
                 ))}
               </select>
+              <input
+                type="text"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Memo..."
+                className="bg-white/[0.05] border border-white/5 rounded-2xl p-4 text-sm focus:outline-none focus:bg-white/10 transition-all"
+              />
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-widest text-white/40 ml-1">Memo</label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="..."
-              className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 focus:outline-none focus:ring-1 focus:ring-white/20 transition-all"
-            />
-          </div>
+
           <button
             type="submit"
-            className="w-full bg-white text-black font-medium p-4 rounded-2xl hover:bg-white/90 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            className="w-full bg-white text-black font-semibold p-5 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-xl"
           >
-            <Plus size={18} />
-            Add Transaction
+            <Plus size={20} />
+            <span className="text-xs uppercase tracking-widest">Add Record</span>
           </button>
         </form>
       </div>
 
-      {/* History */}
-      <div className="max-w-md mx-auto space-y-3">
-        <div className="flex items-center justify-between px-2 mb-4">
-          <h2 className="text-[10px] uppercase tracking-[0.2em] text-white/30 flex items-center gap-2">
-            <Calendar size={12} /> Recent Activities
-          </h2>
+      {/* Glass List */}
+      <div className="max-w-md mx-auto space-y-4 relative">
+        <div className="flex items-center gap-3 px-2 mb-6 opacity-30">
+          <Calendar size={14} />
+          <h2 className="text-[10px] uppercase tracking-[0.3em]">Timeline</h2>
         </div>
         
         {items.length === 0 ? (
-          <div className="text-center py-12 text-white/20 border border-dashed border-white/10 rounded-[2rem]">
-            <Receipt size={32} className="mx-auto mb-2 opacity-20" />
-            <p className="text-xs uppercase tracking-widest">No data yet</p>
+          <div className="text-center py-20 bg-white/[0.02] rounded-[2.5rem] border border-dashed border-white/10">
+            <p className="text-[10px] uppercase tracking-[0.2em] opacity-20">Clear Atmosphere</p>
           </div>
         ) : (
           items.map((item) => (
             <div
               key={item.id}
-              className="group flex items-center justify-between p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/5 hover:bg-white/5 transition-all duration-500"
+              className="group flex items-center justify-between p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-500"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                  <TrendingDown size={16} className="text-white/40" />
+              <div className="flex items-center gap-5">
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.03] flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform duration-500">
+                  <TrendingDown size={18} className="text-white/20" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium">{item.category}</div>
-                  <div className="text-[10px] text-white/30 uppercase tracking-tighter">{item.note || 'no memo'}</div>
+                  <div className="text-sm font-medium tracking-wide mb-1">{item.category}</div>
+                  <div className="text-[10px] text-white/20 uppercase tracking-widest">{item.note || 'no note'}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right font-light text-lg tracking-tight">
-                  - ¥{item.amount.toLocaleString()}
+              <div className="flex items-center gap-6">
+                <div className="text-right font-light text-xl tracking-tight">
+                  <span className="text-xs mr-1 opacity-20">¥</span>
+                  {Number(item.amount).toLocaleString()}
                 </div>
                 <button
                   onClick={() => deleteItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-white/20 hover:text-red-400 transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all duration-300"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -205,8 +189,7 @@ export default function App() {
         )}
       </div>
       
-      {/* Footer Decoration */}
-      <div className="h-24" />
+      <div className="h-32" />
     </div>
   );
 }
