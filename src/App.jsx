@@ -39,7 +39,7 @@ const NavButton = ({ active, onClick, icon }) => (
   </button>
 );
 
-// 電卓コンポーネント (レイアウト修正版)
+// 電卓コンポーネント
 const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
@@ -275,11 +275,9 @@ export default function App() {
     }
   };
 
-  // 先月の設定を一括コピー
   const copyLastMonthSettings = async () => {
     if(!window.confirm('先月の予算・固定費・カテゴリ設定を今月にコピーしますか？')) return;
     
-    // 先月の日付文字列を計算
     const d = new Date(month + "-01");
     d.setMonth(d.getMonth() - 1);
     const lastMonthStr = getMonthString(d);
@@ -291,10 +289,9 @@ export default function App() {
             const newData = {
                 budget: data.budget || 0,
                 cashBudget: data.cashBudget || 0,
-                fixedCosts: data.fixedCosts || [],
+                fixedCosts: data.fixedCosts || [], 
                 catBudgets: data.catBudgets || {},
-                cardDueDates: data.cardDueDates || {}, // 引き落とし日のみコピー
-                // cardBills (請求額) はコピーしない
+                cardDueDates: data.cardDueDates || {}, 
             };
             await setDoc(doc(db, 'users', SHARED_USER_ID, 'months', month), newData, { merge: true });
             alert('コピーしました');
@@ -304,18 +301,6 @@ export default function App() {
     } catch (e) {
         alert('エラーが発生しました');
     }
-  };
-
-  const copyFixedCosts = async () => {
-    if (!monthlyData.fixedCosts?.length) return alert('コピーする固定費がありません');
-    if (!window.confirm('今月の履歴に固定費を一括追加しますか？')) return;
-    const batch = writeBatch(db);
-    monthlyData.fixedCosts.forEach(f => {
-      const newDocRef = doc(collection(db, 'users', SHARED_USER_ID, 'transactions'));
-      batch.set(newDocRef, { title: f.name, amount: f.amount, category: '固定費', paymentMethod: config.paymentMethods.find(m => m !== '現金') || 'カード', date: new Date(`${month}-01T09:00:00`).toISOString(), createdAt: serverTimestamp() });
-    });
-    await batch.commit();
-    alert('反映しました');
   };
 
   const handleTxSubmit = async (e) => {
@@ -401,7 +386,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-28 flex flex-col items-center overflow-x-hidden font-bold">
-      
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center shadow-lg font-bold">
         <div className="w-full max-w-md flex justify-between items-center px-1">
@@ -422,7 +406,7 @@ export default function App() {
 
       <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border animate-in fade-in duration-300">
         
-        {/* HOME TAB (変更なし) */}
+        {/* HOME TAB */}
         {activeTab === 'home' && (
           <>
             <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
@@ -499,7 +483,7 @@ export default function App() {
           </>
         )}
 
-        {/* LOG, ANALYSIS TABS (変更なし) */}
+        {/* LOG, ANALYSIS TABS... */}
         {activeTab === 'log' && (
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -568,6 +552,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ANALYSIS TAB... */}
         {activeTab === 'analysis' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <SimpleCard className="p-6">
@@ -640,17 +625,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Other settings tabs (Fixed, Template, Payment, Category) */}
-            {settingTab === 'fixed' && (
-              <SimpleCard className="p-5 space-y-4">
-                <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p><button onClick={copyFixedCosts} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-200 text-black rounded-lg text-[9px] font-bold uppercase active:scale-95"><CopyCheck size={12}/> 今月分を一括追加</button></div>
-                <div className="space-y-2">{(monthlyData.fixedCosts || []).map(f => (
-                  <div key={f.id} className="flex justify-between items-center bg-black/20 p-4 rounded-lg border border-white/5 font-bold"><span className="text-xs text-zinc-300 font-bold">{f.name}</span><div className="flex items-center gap-4"><span className="text-sm font-bold tabular-nums">¥{f.amount.toLocaleString()}</span><button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-red-900/40"/></button></div></div>
-                ))}</div>
-                <div className="flex flex-col gap-3 pt-4 border-t border-white/5 font-bold"><input id="fx-n" placeholder="固定費名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><input id="fx-a" type="number" placeholder="金額" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><button onClick={() => { const n=document.getElementById('fx-n'),a=document.getElementById('fx-a'); setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:[...monthlyData.fixedCosts,{id:Date.now(),name:n.value,amount:Number(a.value)}]},{merge:true}); n.value=''; a.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest mt-1">固定費を追加</button></div>
-              </SimpleCard>
-            )}
-
+            {/* CATEGORY SETTING */}
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -661,7 +636,7 @@ export default function App() {
                       const cIcon = typeof c === 'string' ? '🏷' : c.icon;
                       return (
                         <div key={idx} className="flex flex-col gap-2 bg-black/20 p-3 rounded border border-white/5">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
                             <input type="text" defaultValue={cIcon} onBlur={(e) => {
                               const newCats = [...config.categories];
                               newCats[idx] = { ...newCats[idx], icon: e.target.value };
@@ -680,7 +655,7 @@ export default function App() {
                                 delete newBudgets[oldName];
                                 setDoc(doc(db,'users',SHARED_USER_ID,'months',month), { catBudgets: newBudgets }, { merge: true });
                               }
-                            }} className="flex-1 bg-transparent text-xs font-bold text-zinc-200 outline-none" />
+                            }} className="flex-1 bg-transparent text-xs font-bold text-zinc-200 outline-none min-w-0" />
 
                             <input type="number" placeholder="予算" defaultValue={monthlyData.catBudgets?.[cName] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{catBudgets:{...monthlyData.catBudgets,[cName]:Number(e.target.value)}},{merge:true})} className="w-16 h-7 bg-black/40 border border-white/10 rounded px-2 text-right text-xs text-white outline-none" />
                             
@@ -714,6 +689,17 @@ export default function App() {
                     }} className="w-full h-10 bg-white text-black rounded font-bold text-xs uppercase tracking-widest mt-1">追加</button>
                   </div>
                 </div>
+              </SimpleCard>
+            )}
+
+            {/* FIXED COSTS, TEMPLATE, PAYMENT (変更なし) */}
+            {settingTab === 'fixed' && (
+              <SimpleCard className="p-5 space-y-4">
+                <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p></div>
+                <div className="space-y-2">{(monthlyData.fixedCosts || []).map(f => (
+                  <div key={f.id} className="flex justify-between items-center bg-black/20 p-4 rounded-lg border border-white/5 font-bold"><span className="text-xs text-zinc-300 font-bold">{f.name}</span><div className="flex items-center gap-4"><span className="text-sm font-bold tabular-nums">¥{f.amount.toLocaleString()}</span><button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-red-900/40"/></button></div></div>
+                ))}</div>
+                <div className="flex flex-col gap-3 pt-4 border-t border-white/5 font-bold"><input id="fx-n" placeholder="固定費名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><input id="fx-a" type="number" placeholder="金額" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><button onClick={() => { const n=document.getElementById('fx-n'),a=document.getElementById('fx-a'); setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:[...monthlyData.fixedCosts,{id:Date.now(),name:n.value,amount:Number(a.value)}]},{merge:true}); n.value=''; a.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest mt-1">固定費を追加</button></div>
               </SimpleCard>
             )}
 
