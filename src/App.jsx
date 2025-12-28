@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar as CalendarIcon, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify } from 'lucide-react';
 
 /* --- FIREBASE 設定 --- */
 const firebaseConfig = {
@@ -236,11 +236,13 @@ export default function App() {
         
         {activeTab === 'home' && (
           <>
+            {/* ホーム内切り替えスイッチ */}
             <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
               <button onClick={() => setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14}/> 支出管理</button>
               <button onClick={() => setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><ListChecks size={14}/> 収支・予定</button>
             </div>
 
+            {/* SPENDING VIEW */}
             {homeView === 'spending' && (
               <div className="space-y-4 animate-in slide-in-from-left-4 fade-in duration-300">
                 {summary.daysLeft > 0 && (
@@ -260,6 +262,7 @@ export default function App() {
               </div>
             )}
 
+            {/* FORECAST VIEW */}
             {homeView === 'forecast' && (
               <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
                 <SimpleCard className="p-5">
