@@ -1,21 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from "firebase/app";
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, 
+  getAuth, 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  signInWithCustomToken 
+} from 'firebase/auth';
+import { 
+  getFirestore,
   collection, 
-  addDoc, 
+  doc, 
+  setDoc, 
+  getDoc,
   onSnapshot, 
   query, 
-  orderBy, 
-  deleteDoc, 
-  doc 
-} from "firebase/firestore";
-import { getAuth, signInAnonymously } from "firebase/auth";
-import { Plus, Trash2, Wallet, Receipt, TrendingDown, Calendar, GlassWater } from 'lucide-react';
+  deleteDoc,
+  serverTimestamp,
+  where
+} from 'firebase/firestore';
+import { 
+  Wallet, 
+  CreditCard, 
+  Landmark, 
+  Plus, 
+  Settings, 
+  Trash2, 
+  History,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  X,
+  Save,
+  Droplets
+} from 'lucide-react';
 
-/* ----------------------------------------------------------------
-   1. FIREBASE SETUP
-------------------------------------------------------------------- */
+/* --- FIREBASE SETUP (あなた専用の設定に書き換え済み) --- */
 const firebaseConfig = {
   apiKey: "AIzaSyD_MMX3Irb-xN1Tql5L0kWJo6BoO_rFX7g",
   authDomain: "zaimu-4f79b.firebaseapp.com",
@@ -26,170 +46,351 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = 'zaimu-app-prod'; // あなたのアプリ識別子
 
-/* ----------------------------------------------------------------
-   2. MAIN APPLICATION
-------------------------------------------------------------------- */
-export default function App() {
-  const [items, setItems] = useState([]);
+/* --- GEMINI API UTILS --- */
+const callGemini = async (prompt, systemInstruction = "") => {
+  const apiKey = ""; // APIキーは空でも動作する環境を想定
+  const model = "gemini-2.0-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+    generationConfig: { responseMimeType: "application/json" }
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return text ? JSON.parse(text) : { message: "少し休憩しましょう。" };
+  } catch (error) {
+    console.error("AI Advice error:", error);
+    return { message: "通信が不安定なようです。" };
+  }
+};
+
+/* --- UTILS --- */
+const getMonthString = (date) => date.toISOString().slice(0, 7);
+
+/* --- UI COMPONENTS --- */
+const GlassCard = ({ children, className = "", highlight = false }) => (
+  <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-xl transition-all duration-300 ${
+    highlight 
+      ? 'bg-white/10 border-white/20 shadow-[0_0_30px_rgba(255,255,255,0.1)]' 
+      : 'bg-black/40 border-white/10 shadow-lg'
+  } ${className}`}>
+    <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
+    <div className="relative z-10">{children}</div>
+  </div>
+);
+
+const NavButton = ({ active, onClick, icon, label, mobile = false }) => (
+  <button 
+    onClick={onClick}
+    className={`group flex flex-col items-center justify-center transition-all duration-300 ${
+      mobile ? 'w-16' : 'w-full py-4'
+    } ${active ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'text-zinc-600 hover:text-zinc-300'}`}
+  >
+    <div className={`mb-1 transition-transform ${active ? '-translate-y-1' : ''}`}>{icon}</div>
+    <span className="text-[10px] font-medium tracking-widest uppercase opacity-80">{label}</span>
+  </button>
+);
+
+const MonthSelector = ({ currentMonth, onChange }) => (
+  <div className="flex items-center bg-black/40 border border-white/10 rounded-full px-2 py-1 backdrop-blur-md">
+    <button onClick={() => onChange(-1)} className="p-2 text-zinc-400 hover:text-white transition-colors">
+      <ChevronLeft size={16} />
+    </button>
+    <span className="mx-3 font-mono text-sm text-white font-bold tracking-widest">{currentMonth}</span>
+    <button onClick={() => onChange(1)} className="p-2 text-zinc-400 hover:text-white transition-colors">
+      <ChevronRight size={16} />
+    </button>
+  </div>
+);
+
+const FixedCostManager = ({ fixedCosts, onUpdate }) => {
+  const [newName, setNewName] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+
+  const add = () => {
+    if (!newName || !newAmount) return;
+    const newItem = { id: Date.now(), name: newName, amount: Number(newAmount) };
+    onUpdate([...fixedCosts, newItem]);
+    setNewName('');
+    setNewAmount('');
+  };
+
+  const remove = (id) => onUpdate(fixedCosts.filter(item => item.id !== id));
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        {fixedCosts.map((item) => (
+          <div key={item.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+            <span className="text-zinc-300 text-sm">{item.name}</span>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-white">¥{item.amount.toLocaleString()}</span>
+              <button onClick={() => remove(item.id)} className="text-zinc-600 hover:text-red-400 transition-colors">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+        <input 
+          value={newName} onChange={(e) => setNewName(e.target.value)}
+          placeholder="項目名" className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none"
+        />
+        <input 
+          type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)}
+          placeholder="金額" className="w-24 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none"
+        />
+        <button onClick={add} className="bg-white text-black px-3 py-2 rounded-lg"><Plus size={18} /></button>
+      </div>
+    </div>
+  );
+};
+
+const TransactionForm = ({ onAdd, onCancel }) => {
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('食費');
-  const [note, setNote] = useState('');
+  const [category, setCategory] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const categories = ['食費', '日用品', '交通費', '交際費', '趣味', 'その他'];
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!amount || !category) return;
+    onAdd({ amount: Number(amount), category, paymentMethod });
+    onCancel();
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-8 duration-300">
+      <GlassCard className="p-6">
+        <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><Plus size={20} /> 支出を記録</h2>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-xl">¥</span>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} 
+              className="w-full bg-black/30 border border-white/10 rounded-xl py-4 pl-10 pr-4 text-2xl font-bold text-white outline-none" placeholder="0" autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => setPaymentMethod('cash')} className={`py-3 rounded-xl border ${paymentMethod === 'cash' ? 'bg-white text-black' : 'text-zinc-500 border-zinc-800'}`}><Wallet className="inline mr-2" size={18}/> 現金</button>
+            <button type="button" onClick={() => setPaymentMethod('card')} className={`py-3 rounded-xl border ${paymentMethod === 'card' ? 'bg-white text-black' : 'text-zinc-500 border-zinc-800'}`}><CreditCard className="inline mr-2" size={18}/> クレカ</button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {categories.map(c => (
+              <button key={c} type="button" onClick={() => setCategory(c)} className={`px-4 py-2 rounded-full text-sm border ${category === c ? 'bg-zinc-800 text-white border-white/30' : 'text-zinc-500 border-zinc-800'}`}>{c}</button>
+            ))}
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={onCancel} className="flex-1 text-zinc-400">キャンセル</button>
+            <button type="submit" className="flex-1 bg-white text-black font-bold rounded-xl py-3 shadow-lg">保存</button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
+};
+
+/* --- MAIN APP --- */
+export default function App() {
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [currentMonth, setCurrentMonth] = useState(getMonthString(new Date()));
+  const [transactions, setTransactions] = useState([]);
+  const [monthlyData, setMonthlyData] = useState({ income: 0, cardBill: 0, fixedCosts: [] });
+  const [aiAdvice, setAiAdvice] = useState(null);
+  const [adviceLoading, setAdviceLoading] = useState(false);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
-
-    const q = query(collection(db, "expenses"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setItems(data);
+    signInAnonymously(auth).catch(err => console.error(err));
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  const total = items.reduce((sum, item) => sum + Number(item.amount), 0);
+  useEffect(() => {
+    if (!user) return;
+    const startOfMonth = new Date(`${currentMonth}-01T00:00:00`).toISOString();
+    const d = new Date(`${currentMonth}-01`);
+    d.setMonth(d.getMonth() + 1);
+    const endOfMonth = d.toISOString();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!amount) return;
-    try {
-      await addDoc(collection(db, "expenses"), {
-        amount: Number(amount),
-        category,
-        note,
-        createdAt: new Date().toISOString(),
-      });
-      setAmount('');
-      setNote('');
-    } catch (e) {
-      alert("保存に失敗しました。Firestoreのルールを確認してください。");
-    }
-  };
-
-  const deleteItem = async (id) => {
-    try { await deleteDoc(doc(db, "expenses", id)); } catch (e) { console.error(e); }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white">
-        <div className="animate-pulse flex flex-col items-center">
-          <GlassWater size={48} className="mb-4 text-blue-400" />
-          <p className="text-[10px] tracking-[0.3em] uppercase opacity-50">Loading Glass Interface...</p>
-        </div>
-      </div>
+    const txQuery = query(
+      collection(db, 'users', user.uid, 'transactions'),
+      where('date', '>=', startOfMonth),
+      where('date', '<', endOfMonth)
     );
-  }
+
+    const unsubTx = onSnapshot(txQuery, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setTransactions(data);
+    });
+
+    const monthDocRef = doc(db, 'users', user.uid, 'months', currentMonth);
+    const unsubMonth = onSnapshot(monthDocRef, (docSnap) => {
+      if (docSnap.exists()) setMonthlyData(docSnap.data());
+      else setMonthlyData({ income: 0, cardBill: 0, fixedCosts: [] });
+    });
+
+    return () => { unsubTx(); unsubMonth(); };
+  }, [user, currentMonth]);
+
+  const addTransaction = async (tx) => {
+    if (!user) return;
+    const today = new Date();
+    const txDate = getMonthString(today) === currentMonth ? today.toISOString() : `${currentMonth}-01T12:00:00.000Z`;
+    const ref = doc(collection(db, 'users', user.uid, 'transactions'));
+    await setDoc(ref, { ...tx, createdAt: serverTimestamp(), date: txDate });
+  };
+
+  const deleteTransaction = async (id) => {
+    await deleteDoc(doc(db, 'users', user.uid, 'transactions', id));
+  };
+
+  const updateMonthlyData = async (newData) => {
+    const ref = doc(db, 'users', user.uid, 'months', currentMonth);
+    await setDoc(ref, newData, { merge: true });
+  };
+
+  const changeMonth = (delta) => {
+    const d = new Date(`${currentMonth}-01`);
+    d.setMonth(d.getMonth() + delta);
+    setCurrentMonth(getMonthString(d));
+    setAiAdvice(null);
+  };
+
+  const summary = useMemo(() => {
+    const totalFixed = (monthlyData.fixedCosts || []).reduce((sum, item) => sum + item.amount, 0);
+    const initialDisposable = (Number(monthlyData.income) || 0) - totalFixed - (Number(monthlyData.cardBill) || 0);
+    const currentVariableExpenses = transactions.reduce((sum, t) => sum + t.amount, 0);
+    return { totalFixed, initialDisposable, currentVariableExpenses, remaining: initialDisposable - currentVariableExpenses, totalIncome: monthlyData.income, cardBill: monthlyData.cardBill };
+  }, [monthlyData, transactions]);
+
+  const handleGenerateAdvice = async () => {
+    setAdviceLoading(true);
+    const prompt = `状況: 残り${summary.remaining}円。収入:${summary.totalIncome}, 固定費:${summary.totalFixed}, 請求:${summary.cardBill}。冷静な執事として50文字以内で助言を。{"message": "テキスト"}`;
+    const result = await callGemini(prompt);
+    setAiAdvice(result.message);
+    setAdviceLoading(false);
+  };
+
+  if (loading) return <div className="h-screen bg-black flex items-center justify-center text-zinc-500 font-mono tracking-widest">LOADING SYSTEM...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 font-sans selection:bg-white/20">
-      {/* Background Ornaments */}
-      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 blur-[120px] rounded-full pointer-events-none" />
+    <div className="min-h-screen bg-black text-zinc-200 font-sans pb-24 md:pl-24">
+      <div className="fixed top-[-20%] left-[-20%] w-[80%] h-[80%] bg-zinc-800/20 rounded-full blur-[150px] pointer-events-none" />
+      <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
 
-      {/* Header */}
-      <header className="relative max-w-md mx-auto pt-12 pb-16 text-center">
-        <h1 className="text-[10px] uppercase tracking-[0.4em] text-white/30 mb-4">Total Expenses</h1>
-        <div className="text-6xl font-extralight tracking-tighter mb-2">
-          <span className="text-2xl mr-1 opacity-30">¥</span>
-          {total.toLocaleString()}
-        </div>
-        <div className="w-12 h-[1px] bg-white/20 mx-auto mt-8" />
+      <header className="md:hidden sticky top-0 z-20 p-4 flex justify-between items-center bg-black/50 backdrop-blur-xl border-b border-white/5">
+        <h1 className="font-bold text-lg text-white flex items-center gap-2"><Droplets size={20} /> LIQUID</h1>
+        <MonthSelector currentMonth={currentMonth} onChange={changeMonth} />
       </header>
 
-      {/* Glass Form */}
-      <div className="max-w-md mx-auto mb-16 relative">
-        <form onSubmit={handleSubmit} className="space-y-6 p-8 rounded-[2.5rem] bg-white/[0.03] backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-          <div className="space-y-4">
-            <div className="relative">
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
-                className="w-full bg-transparent border-b border-white/10 py-4 text-3xl font-light focus:outline-none focus:border-white/40 transition-all placeholder:opacity-10"
-              />
-              <span className="absolute right-0 bottom-4 text-[10px] uppercase tracking-widest text-white/20">Amount</span>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 pt-2">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="bg-white/[0.05] border border-white/5 rounded-2xl p-4 text-sm focus:outline-none focus:bg-white/10 transition-all appearance-none"
-              >
-                {['食費', '日用品', '交際費', '固定費', 'その他'].map(cat => (
-                  <option key={cat} value={cat} className="bg-zinc-900">{cat}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Memo..."
-                className="bg-white/[0.05] border border-white/5 rounded-2xl p-4 text-sm focus:outline-none focus:bg-white/10 transition-all"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-white text-black font-semibold p-5 rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-xl"
-          >
-            <Plus size={20} />
-            <span className="text-xs uppercase tracking-widest">Add Record</span>
-          </button>
-        </form>
-      </div>
-
-      {/* Glass List */}
-      <div className="max-w-md mx-auto space-y-4 relative">
-        <div className="flex items-center gap-3 px-2 mb-6 opacity-30">
-          <Calendar size={14} />
-          <h2 className="text-[10px] uppercase tracking-[0.3em]">Timeline</h2>
+      <nav className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-24 bg-black/60 backdrop-blur-xl border-r border-white/5 items-center py-8 z-30">
+        <Droplets className="w-8 h-8 text-white mb-12" />
+        <div className="space-y-4 w-full px-2">
+          <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Landmark size={20} />} label="HOME" />
+          <NavButton active={activeTab === 'input'} onClick={() => setActiveTab('input')} icon={<Plus size={20} />} label="ADD" />
+          <NavButton active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<History size={20} />} label="LOG" />
+          <NavButton active={activeTab === 'fixed'} onClick={() => setActiveTab('fixed')} icon={<Settings size={20} />} label="SET" />
         </div>
-        
-        {items.length === 0 ? (
-          <div className="text-center py-20 bg-white/[0.02] rounded-[2.5rem] border border-dashed border-white/10">
-            <p className="text-[10px] uppercase tracking-[0.2em] opacity-20">Clear Atmosphere</p>
-          </div>
-        ) : (
-          items.map((item) => (
-            <div
-              key={item.id}
-              className="group flex items-center justify-between p-6 rounded-[2rem] bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] hover:border-white/10 transition-all duration-500"
-            >
-              <div className="flex items-center gap-5">
-                <div className="w-12 h-12 rounded-2xl bg-white/[0.03] flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform duration-500">
-                  <TrendingDown size={18} className="text-white/20" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium tracking-wide mb-1">{item.category}</div>
-                  <div className="text-[10px] text-white/20 uppercase tracking-widest">{item.note || 'no note'}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="text-right font-light text-xl tracking-tight">
-                  <span className="text-xs mr-1 opacity-20">¥</span>
-                  {Number(item.amount).toLocaleString()}
-                </div>
-                <button
-                  onClick={() => deleteItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-white/10 hover:text-red-400 transition-all duration-300"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+      </nav>
+
+      <main className="max-w-xl mx-auto p-4 space-y-6 relative z-10 pt-6">
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6 animate-in fade-in duration-700">
+            <div className="hidden md:flex justify-end mb-4"><MonthSelector currentMonth={currentMonth} onChange={changeMonth} /></div>
+            <GlassCard highlight={true} className="p-8 text-center relative overflow-hidden group">
+              <p className="text-zinc-500 text-xs font-bold tracking-widest uppercase mb-4">Safe to Spend</p>
+              <h2 className={`text-5xl md:text-6xl font-black tracking-tighter mb-2 ${summary.remaining < 0 ? 'text-zinc-500 line-through' : 'text-white'}`}>
+                ¥{summary.remaining.toLocaleString()}
+              </h2>
+              {summary.remaining < 0 && <p className="text-red-500 text-sm tracking-widest">OVER BUDGET</p>}
+            </GlassCard>
+
+            <div className="grid grid-cols-2 gap-4">
+               <GlassCard className="p-4 flex flex-col justify-between h-32">
+                 <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Income</div>
+                 <div className="text-2xl font-bold text-white">¥{(summary.totalIncome || 0).toLocaleString()}</div>
+               </GlassCard>
+               <GlassCard className="p-4 flex flex-col justify-between h-32">
+                 <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider">Fixed + Bill</div>
+                 <div className="text-2xl font-bold text-zinc-400">-¥{(summary.totalFixed + (Number(summary.cardBill) || 0)).toLocaleString()}</div>
+               </GlassCard>
             </div>
-          ))
+
+            <div className="py-2 text-center">
+              <button onClick={handleGenerateAdvice} disabled={adviceLoading} className="text-xs text-zinc-500 hover:text-white tracking-widest uppercase mb-3 flex items-center justify-center gap-2 w-full">
+                <Sparkles size={12} /> {adviceLoading ? 'Analyzing...' : 'AI Analysis'}
+              </button>
+              {aiAdvice && <p className="text-sm font-serif italic text-white/90">"{aiAdvice}"</p>}
+            </div>
+          </div>
         )}
-      </div>
-      
-      <div className="h-32" />
+
+        {activeTab === 'input' && <TransactionForm onAdd={addTransaction} onCancel={() => setActiveTab('dashboard')} />}
+
+        {activeTab === 'history' && (
+          <div className="space-y-4 pb-20">
+            <h2 className="text-xl font-bold text-white">History</h2>
+            {transactions.map(tx => (
+              <GlassCard key={tx.id} className="flex justify-between items-center p-4 group">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2 rounded-full border ${tx.paymentMethod === 'cash' ? 'border-zinc-700 text-zinc-500' : 'border-white/30 text-white'}`}>
+                    {tx.paymentMethod === 'cash' ? <Wallet size={16} /> : <CreditCard size={16} />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-zinc-200">{tx.category}</div>
+                    <div className="text-[10px] text-zinc-600">{new Date(tx.date).toLocaleDateString()}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-white font-mono">¥{tx.amount.toLocaleString()}</div>
+                  <button onClick={() => deleteTransaction(tx.id)} className="text-[10px] text-red-900 opacity-0 group-hover:opacity-100 transition-opacity">DELETE</button>
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'fixed' && (
+          <div className="space-y-6 pb-20">
+             <h2 className="text-xl font-bold text-white">Config</h2>
+             <GlassCard className="p-6 space-y-4">
+                <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Base Income & Bills</h3>
+                <input type="number" value={monthlyData.income} onChange={e => updateMonthlyData({...monthlyData, income: Number(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none" placeholder="月収" />
+                <input type="number" value={monthlyData.cardBill} onChange={e => updateMonthlyData({...monthlyData, cardBill: Number(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white outline-none" placeholder="クレカ請求" />
+             </GlassCard>
+             <GlassCard className="p-6">
+               <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Fixed Costs</h3>
+               <FixedCostManager fixedCosts={monthlyData.fixedCosts || []} onUpdate={newCosts => updateMonthlyData({...monthlyData, fixedCosts: newCosts})} />
+             </GlassCard>
+          </div>
+        )}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 flex justify-around items-end pb-safe md:hidden z-40 h-20">
+        <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Landmark size={24} />} label="HOME" mobile />
+        <div className="relative -top-6">
+          <button onClick={() => setActiveTab('input')} className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-95 transition-transform"><Plus size={32} /></button>
+        </div>
+        <NavButton active={activeTab === 'fixed'} onClick={() => setActiveTab('fixed')} icon={<Settings size={24} />} label="SET" mobile />
+      </nav>
     </div>
   );
 }
