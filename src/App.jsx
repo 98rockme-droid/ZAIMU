@@ -132,7 +132,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
-  // 編集用stateまとめ
+  // 編集用state
   const [editingItem, setEditingItem] = useState(null); // { type: 'category'|'fixed'|'template'|'payment', data: ... }
 
   const [transactions, setTransactions] = useState([]);
@@ -217,6 +217,7 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
+    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -238,14 +239,14 @@ export default function App() {
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     
-    // 【ロジック修正】口座残高予想 = 給与 - (現金固定費 + 先月のカード請求)
+    // 口座残高予想 = 給与 - (現金固定費 + 先月のカード請求)
     const totalWithdrawal = fixedCostsBank + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
     
-    // 【ロジック修正】カード残り = 今月のカード予算 - 今月のカード固定費 - 今月のカード利用額
-    // ※先月の請求額(billTotal)はここでは引かない
+    // 【再修正】カード残り = カード予算 - カード固定費 - 今月のカード利用額
+    // 請求額(billTotal)は引かない
     const cardDisposable = cardBudgetTotal - fixedCostsCard; 
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
@@ -348,23 +349,39 @@ export default function App() {
 
     if (type === 'category') {
         const newCats = [...config.categories];
-        newCats[index] = { name: data.name, icon: data.icon || '🏷' };
+        if (index === -1) {
+            newCats.push({ name: data.name, icon: data.icon || '🏷' });
+        } else {
+            newCats[index] = { name: data.name, icon: data.icon || '🏷' };
+        }
         setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
         const newBudgets = { ...monthlyData.catBudgets };
-        if (data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
-        newBudgets[data.name] = Number(data.budget);
+        if (index !== -1 && data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
+        if (data.budget) newBudgets[data.name] = Number(data.budget);
         setDoc(doc(db,'users',SHARED_USER_ID,'months',month), { catBudgets: newBudgets }, { merge: true });
     } else if (type === 'template') {
         const newTpls = [...(config.templates || [])];
-        newTpls[index] = { title: data.title, amount: Number(data.amount), category: data.category, method: data.method };
+        if (index === -1) {
+            newTpls.push({ title: data.title, amount: Number(data.amount), category: data.category, method: data.method });
+        } else {
+            newTpls[index] = { title: data.title, amount: Number(data.amount), category: data.category, method: data.method };
+        }
         setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: newTpls});
     } else if (type === 'fixed') {
         const newFixed = [...(monthlyData.fixedCosts || [])];
-        newFixed[index] = { ...newFixed[index], name: data.name, amount: Number(data.amount), method: data.method };
+        if (index === -1) {
+            newFixed.push({ id: Date.now(), name: data.name, amount: Number(data.amount), method: data.method });
+        } else {
+            newFixed[index] = { ...newFixed[index], name: data.name, amount: Number(data.amount), method: data.method };
+        }
         setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts: newFixed},{merge:true});
     } else if (type === 'payment') {
         const newMethods = [...config.paymentMethods];
-        newMethods[index] = data.name;
+        if (index === -1) {
+            if (data.name) newMethods.push(data.name);
+        } else {
+            newMethods[index] = data.name;
+        }
         setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, paymentMethods: newMethods});
     }
     setEditingItem(null);
@@ -373,6 +390,8 @@ export default function App() {
   const handleDeleteItem = () => {
     if (!editingItem || !window.confirm('本当に削除しますか？')) return;
     const { type, index } = editingItem;
+    if (index === -1) { setEditingItem(null); return; }
+
     if (type === 'category') {
         setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== index)});
     } else if (type === 'template') {
@@ -567,7 +586,6 @@ export default function App() {
                       className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
-                        {/* アイコンの背景丸を削除 */}
                         <div className="text-xl w-8 flex justify-center">{icon}</div>
                         <div className="text-left"><div className="text-sm font-bold text-white truncate w-32">{t.title}</div><div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category} • {t.date.split('T')[0]}</div></div>
                       </div>
