@@ -231,7 +231,7 @@ export default function App() {
 
     const salary = monthlyData.salary || 0;
     
-    // 固定費の計算
+    // 固定費
     const fixedCosts = monthlyData.fixedCosts || [];
     const fixedTotal = fixedCosts.reduce((s, i) => s + i.amount, 0);
     const fixedCostsBank = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
@@ -458,6 +458,7 @@ export default function App() {
   if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing...</div>;
 
   return (
+    // フッター余白修正: pb-6 -> pb-safe よりも確実に上げるため pb-6 指定 (Bottom margin request)
     <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-40 flex flex-col items-center overflow-x-hidden font-bold">
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center shadow-lg font-bold">
