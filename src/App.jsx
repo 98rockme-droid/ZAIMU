@@ -27,8 +27,8 @@ const getTodayString = () => {
 };
 
 /* --- UI COMPONENTS --- */
-const SimpleCard = ({ children, className = "" }) => (
-  <div className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
+const SimpleCard = ({ children, className = "", onClick }) => (
+  <div onClick={onClick} className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
     {children}
   </div>
 );
@@ -233,21 +233,18 @@ export default function App() {
     
     // 固定費の計算
     const fixedCosts = monthlyData.fixedCosts || [];
-    // 全固定費の合計（カード払い・現金払い問わずすべて）
     const fixedTotal = fixedCosts.reduce((s, i) => s + i.amount, 0);
-    // 現金払いのみの固定費（口座残高予想用）
     const fixedCostsBank = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     
-    // 口座残高予想 = 給与 - (現金固定費 + 先月のカード請求)
+    // 口座残高予想
     const totalWithdrawal = fixedCostsBank + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
     
-    // 【再修正】カード残り = カード軍資金 - 全固定費 - 今月のカード利用額
-    // ※「固定費は支払い方法関係なく全部引く」ロジック
+    // カード残り
     const cardDisposable = cardBudgetTotal - fixedTotal; 
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
@@ -797,8 +794,8 @@ export default function App() {
 
       {/* EDIT SETTINGS MODAL */}
       {editingItem && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">編集</h2><button onClick={() => setEditingItem(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
             <div className="space-y-4">
                 {editingItem.type === 'category' && (
@@ -849,8 +846,8 @@ export default function App() {
       <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
             {showCalculator ? (
               <div className="h-auto">
                 <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
@@ -899,7 +896,7 @@ export default function App() {
       )}
 
       {/* FOOTER */}
-      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212] border-t border-white/5 flex justify-between items-center px-6 pb-safe z-40 h-20 box-border">
+      <nav className="fixed bottom-0 w-full max-w-md bg-[#121212] border-t border-white/5 flex justify-between items-center px-6 pb-safe z-40 h-24 box-border">
         <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={24}/>} />
         <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
         <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
