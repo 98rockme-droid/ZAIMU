@@ -212,6 +212,7 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
+    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -225,13 +226,28 @@ export default function App() {
     }
 
     const salary = monthlyData.salary || 0;
-    const fixedTotal = (monthlyData.fixedCosts || []).reduce((s, i) => s + i.amount, 0);
+    
+    // 固定費の計算ロジック改善: カード払いとその他を分離
+    const fixedCosts = monthlyData.fixedCosts || [];
+    // カード払いと見なす固定費（"現金"以外の支払方法が設定されているもの）
+    const fixedCostsCard = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
+    // 直接口座から引かれる/現金払いの固定費（支払方法がない、または"現金"）
+    const fixedCostsBank = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
+
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-    const totalWithdrawal = fixedTotal + billTotal;
+    
+    // 残高予想: 給与 - (口座直接引き落とし固定費 + カード請求額) 
+    // ※カード払い固定費はカード請求額に含まれていると仮定して二重計上を防ぐ
+    const totalWithdrawal = fixedCostsBank + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
-    const cardDisposable = cardBudgetTotal - fixedTotal - billTotal;
+    
+    // カードの自由費: 予算 - 固定費(カード) - 請求額(前月分) ... これは違う。
+    // 「今月使えるお金」 = 予算 - 固定費(カード) - 今月のカード使用額
+    // ※請求額は「先月使った分」なので、今月の予算枠とは関係ない（口座残高には関係ある）
+    const cardDisposable = cardBudgetTotal - fixedCostsCard; 
+    
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
     const cardRemainingPercent = cardDisposable > 0 ? Math.min(Math.round((cardRemaining / cardDisposable) * 100), 100) : 0;
@@ -264,7 +280,8 @@ export default function App() {
       salary, totalWithdrawal, bankBalanceProjected,
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
-      dailyBudget, daysLeft, dailyTotals
+      dailyBudget, daysLeft, dailyTotals,
+      fixedCostsCard, fixedCostsBank // デバッグ用または表示用に保持
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
@@ -423,7 +440,7 @@ export default function App() {
                   </div>
                 )}
                 <SimpleCard className="p-6">
-                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{summary.cardBudget.toLocaleString()}</p></div></div>
+                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{(summary.cardBudget - summary.fixedCostsCard).toLocaleString()}</p></div></div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                 </SimpleCard>
                 <SimpleCard className="p-6">
@@ -483,7 +500,7 @@ export default function App() {
           </>
         )}
 
-        {/* LOG, ANALYSIS TABS... */}
+        {/* LOG, ANALYSIS TABS (変更なし) */}
         {activeTab === 'log' && (
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -552,7 +569,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ANALYSIS TAB... */}
+        {/* ANALYSIS... */}
         {activeTab === 'analysis' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <SimpleCard className="p-6">
@@ -625,7 +642,26 @@ export default function App() {
               </div>
             )}
 
-            {/* CATEGORY SETTING */}
+            {settingTab === 'fixed' && (
+              <SimpleCard className="p-5 space-y-4">
+                <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p></div>
+                <div className="space-y-2">{(monthlyData.fixedCosts || []).map(f => (
+                  <div key={f.id} className="flex justify-between items-center bg-black/20 p-4 rounded-lg border border-white/5 font-bold">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-zinc-300 font-bold">{f.name}</span>
+                        <span className="text-[9px] text-zinc-500">{f.method || '未設定'}</span>
+                    </div>
+                    <div className="flex items-center gap-4"><span className="text-sm font-bold tabular-nums">¥{f.amount.toLocaleString()}</span><button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-red-900/40"/></button></div></div>
+                ))}</div>
+                <div className="flex flex-col gap-3 pt-4 border-t border-white/5 font-bold">
+                    <input id="fx-n" placeholder="固定費名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" />
+                    <input id="fx-a" type="number" placeholder="金額" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" />
+                    <select id="fx-m" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                    <button onClick={() => { const n=document.getElementById('fx-n'),a=document.getElementById('fx-a'),m=document.getElementById('fx-m'); setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:[...monthlyData.fixedCosts,{id:Date.now(),name:n.value,amount:Number(a.value),method:m.value}]},{merge:true}); n.value=''; a.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest mt-1">固定費を追加</button>
+                </div>
+              </SimpleCard>
+            )}
+
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -692,17 +728,6 @@ export default function App() {
               </SimpleCard>
             )}
 
-            {/* FIXED COSTS, TEMPLATE, PAYMENT (変更なし) */}
-            {settingTab === 'fixed' && (
-              <SimpleCard className="p-5 space-y-4">
-                <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p></div>
-                <div className="space-y-2">{(monthlyData.fixedCosts || []).map(f => (
-                  <div key={f.id} className="flex justify-between items-center bg-black/20 p-4 rounded-lg border border-white/5 font-bold"><span className="text-xs text-zinc-300 font-bold">{f.name}</span><div className="flex items-center gap-4"><span className="text-sm font-bold tabular-nums">¥{f.amount.toLocaleString()}</span><button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter(x=>x.id!==f.id)},{merge:true})}><Trash2 size={16} className="text-red-900/40"/></button></div></div>
-                ))}</div>
-                <div className="flex flex-col gap-3 pt-4 border-t border-white/5 font-bold"><input id="fx-n" placeholder="固定費名" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><input id="fx-a" type="number" placeholder="金額" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" /><button onClick={() => { const n=document.getElementById('fx-n'),a=document.getElementById('fx-a'); setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:[...monthlyData.fixedCosts,{id:Date.now(),name:n.value,amount:Number(a.value)}]},{merge:true}); n.value=''; a.value=''; }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest mt-1">固定費を追加</button></div>
-              </SimpleCard>
-            )}
-
             {settingTab === 'template' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -761,7 +786,9 @@ export default function App() {
         )}
       </main>
 
-      {/* MODAL */}
+      {/* FAB & MODAL (電卓含む) - 変更なしだが念のため... */}
+      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
+
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
