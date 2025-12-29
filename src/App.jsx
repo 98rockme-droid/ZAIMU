@@ -152,7 +152,9 @@ export default function App() {
   });
   
   const [editingTx, setEditingTx] = useState(null);
-  const [editingFixedCost, setEditingFixedCost] = useState(null); // 固定費編集用
+  const [editingFixedCost, setEditingFixedCost] = useState(null); 
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [editingPayment, setEditingPayment] = useState(null);
   const [inputDate, setInputDate] = useState(getTodayString()); 
   const [inputAmount, setInputAmount] = useState(''); 
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
@@ -213,6 +215,7 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
+    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -237,7 +240,10 @@ export default function App() {
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
-    const cardDisposable = cardBudgetTotal - fixedCostsCard; 
+    
+    // 【変更】カード残り = カード軍資金 - カード固定費 - カード請求額 - 今月の使用額
+    // ※「カード軍資金」には、給与（またはカードに充てる総額）を設定する必要があります。
+    const cardDisposable = cardBudgetTotal - fixedCostsCard - billTotal; 
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
@@ -272,7 +278,8 @@ export default function App() {
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
-      fixedCostsCard, fixedCostsBank 
+      fixedCostsCard, fixedCostsBank,
+      cardDisposable // 表示用に保持
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
@@ -337,20 +344,39 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  // 固定費更新処理
+  // 固定費更新
   const handleFixedCostUpdate = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
     const amount = Number(e.target.amount.value);
     const method = e.target.method.value;
-    
-    const newFixedCosts = monthlyData.fixedCosts.map(f => 
-      f.id === editingFixedCost.id ? { ...f, name, amount, method } : f
-    );
-    
+    const newFixedCosts = monthlyData.fixedCosts.map(f => f.id === editingFixedCost.id ? { ...f, name, amount, method } : f);
     await setDoc(doc(db, 'users', SHARED_USER_ID, 'months', month), { fixedCosts: newFixedCosts }, { merge: true });
     setEditingFixedCost(null);
   };
+
+  // テンプレート更新
+  const handleTemplateUpdate = async (e) => {
+    e.preventDefault();
+    const title = e.target.title.value;
+    const amount = Number(e.target.amount.value);
+    const category = e.target.category.value;
+    const method = e.target.method.value;
+    const newTemplates = config.templates.map((t, i) => i === editingTemplate.index ? { title, amount, category, method } : t);
+    await setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: newTemplates});
+    setEditingTemplate(null);
+  }
+
+  // 支払方法更新
+  const handlePaymentUpdate = async (e) => {
+    e.preventDefault();
+    const newName = e.target.name.value;
+    if (!newName) return;
+    const newMethods = [...config.paymentMethods];
+    newMethods[editingPayment.index] = newName;
+    await setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, paymentMethods: newMethods});
+    setEditingPayment(null);
+  }
 
   const applyTemplate = (tpl) => {
     setInputAmount(tpl.amount);
@@ -429,7 +455,7 @@ export default function App() {
 
       <main className="w-full max-w-md p-4 pt-20 space-y-4 box-border animate-in fade-in duration-300">
         
-        {/* HOME TAB (変更なし) */}
+        {/* HOME TAB */}
         {activeTab === 'home' && (
           <>
             <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
@@ -446,7 +472,7 @@ export default function App() {
                   </div>
                 )}
                 <SimpleCard className="p-6">
-                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{(summary.cardBudget - summary.fixedCostsCard).toLocaleString()}</p></div></div>
+                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{summary.cardDisposable.toLocaleString()}</p></div></div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                 </SimpleCard>
                 <SimpleCard className="p-6">
@@ -668,7 +694,6 @@ export default function App() {
               </SimpleCard>
             )}
 
-            {/* CATEGORY, TEMPLATE, PAYMENT (変更なし) */}
             {settingTab === 'category' && (
               <SimpleCard className="p-5 space-y-6">
                 <div>
@@ -741,12 +766,12 @@ export default function App() {
                   <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">テンプレート一覧</p>
                   <div className="space-y-2 mb-6">
                     {(config.templates || []).map((t, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-black/20 p-3 rounded border border-white/5">
+                      <div key={idx} onClick={() => setEditingTemplate({ ...t, index: idx })} className="flex items-center justify-between bg-black/20 p-3 rounded border border-white/5 active:scale-95 transition-all">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-white">{t.title}</span>
                           <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
                         </div>
-                        <button onClick={() => { if(window.confirm('削除しますか？')) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== idx)}); }} className="text-zinc-600 hover:text-red-500"><Trash2 size={14}/></button>
+                        <button onClick={(e) => { e.stopPropagation(); if(window.confirm('削除しますか？')) setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== idx)}); }} className="text-zinc-600 hover:text-red-500"><Trash2 size={14}/></button>
                       </div>
                     ))}
                   </div>
@@ -779,8 +804,8 @@ export default function App() {
               <SimpleCard className="p-5 space-y-6">
                  <div>
                    <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">支払方法一覧</p>
-                   <div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map(m => (
-                     <div key={m} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold">{m} <button onClick={() => setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter(x=>x!==m)})}><Trash2 size={12} className="text-zinc-700"/></button></div>
+                   <div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map((m, idx) => (
+                     <div key={m} onClick={() => setEditingPayment({ name: m, index: idx })} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold active:scale-95 transition-all">{m} <button onClick={(e) => { e.stopPropagation(); setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter(x=>x!==m)})}}><Trash2 size={12} className="text-zinc-700"/></button></div>
                    ))}</div>
                    <div className="flex flex-col gap-3 pt-4 border-t border-white/5">
                      <input id="new-pay" placeholder="支払方法を追加" className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none" />
@@ -850,6 +875,37 @@ export default function App() {
                   {config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
+              <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">更新する</button>
+            </form>
+          </SimpleCard>
+        </div>
+      )}
+
+      {/* TEMPLATE EDIT MODAL */}
+      {editingTemplate && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
+            <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">テンプレート編集</h2><button onClick={() => setEditingTemplate(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
+            <form onSubmit={handleTemplateUpdate} className="space-y-5 font-bold">
+              <input name="amount" type="number" defaultValue={editingTemplate.amount} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
+              <input name="title" type="text" defaultValue={editingTemplate.title} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル" />
+              <div className="flex gap-2">
+                <div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTemplate.category} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                <div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">支払方法</label><select name="method" defaultValue={editingTemplate.method} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select></div>
+              </div>
+              <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">更新する</button>
+            </form>
+          </SimpleCard>
+        </div>
+      )}
+
+      {/* PAYMENT METHOD EDIT MODAL */}
+      {editingPayment && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5">
+            <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">支払方法の編集</h2><button onClick={() => setEditingPayment(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
+            <form onSubmit={handlePaymentUpdate} className="space-y-5 font-bold">
+              <input name="name" type="text" defaultValue={editingPayment.name} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="支払方法名" autoFocus />
               <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">更新する</button>
             </form>
           </SimpleCard>
