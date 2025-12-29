@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
 import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete } from 'lucide-react';
 
-/* --- FIREBASE 設定 --- */
+/* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
   apiKey: "AIzaSyD_MMX3Irb-xN1Tql5L0kWJo6BoO_rFX7g",
   authDomain: "zaimu-4f79b.firebaseapp.com",
@@ -39,7 +39,7 @@ const NavButton = ({ active, onClick, icon }) => (
   </button>
 );
 
-// 電卓コンポーネント
+// Calculator Component
 const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
@@ -133,7 +133,7 @@ export default function App() {
   const [showCalculator, setShowCalculator] = useState(false);
   
   // 編集用state
-  const [editingItem, setEditingItem] = useState(null); // { type: 'category'|'fixed'|'template'|'payment', data: ... }
+  const [editingItem, setEditingItem] = useState(null); 
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
@@ -217,7 +217,6 @@ export default function App() {
   }, [month]);
 
   const summary = useMemo(() => {
-    // 日割り計算
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
@@ -239,14 +238,14 @@ export default function App() {
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     
-    // 口座残高予想 = 給与 - (現金固定費 + 先月のカード請求)
+    // 【ロジック修正】口座残高予想 = 給与 - (現金固定費 + 先月のカード請求)
     const totalWithdrawal = fixedCostsBank + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
     
-    // 【再修正】カード残り = カード予算 - カード固定費 - 今月のカード利用額
-    // 請求額(billTotal)は引かない
+    // 【ロジック修正】カード残り = 今月のカード予算 - 今月のカード固定費 - 今月のカード利用額
+    // ※Bill(先月分請求)はここでは引かない
     const cardDisposable = cardBudgetTotal - fixedCostsCard; 
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
@@ -282,7 +281,7 @@ export default function App() {
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
-      fixedCostsCard, fixedCostsBank
+      fixedCostsCard, fixedCostsBank, cardDisposable
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
@@ -498,7 +497,7 @@ export default function App() {
                   </div>
                 )}
                 <SimpleCard className="p-6">
-                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{(summary.cardBudget - summary.fixedCostsCard).toLocaleString()}</p></div></div>
+                  <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{(summary.cardDisposable).toLocaleString()}</p></div></div>
                   <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                 </SimpleCard>
                 <SimpleCard className="p-6">
