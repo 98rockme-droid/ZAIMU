@@ -231,9 +231,11 @@ export default function App() {
 
     const salary = monthlyData.salary || 0;
     
-    // 固定費
+    // 固定費の計算
     const fixedCosts = monthlyData.fixedCosts || [];
-    const fixedCostsCard = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
+    // 全固定費の合計（カード払い・現金払い問わずすべて）
+    const fixedTotal = fixedCosts.reduce((s, i) => s + i.amount, 0);
+    // 現金払いのみの固定費（口座残高予想用）
     const fixedCostsBank = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -244,8 +246,9 @@ export default function App() {
 
     const cardBudgetTotal = (monthlyData.budget || 0);
     
-    // カード残り = 今月のカード予算 - 今月のカード固定費 - 今月のカード利用額
-    const cardDisposable = cardBudgetTotal - fixedCostsCard; 
+    // 【再修正】カード残り = カード軍資金 - 全固定費 - 今月のカード利用額
+    // ※「固定費は支払い方法関係なく全部引く」ロジック
+    const cardDisposable = cardBudgetTotal - fixedTotal; 
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
@@ -280,7 +283,7 @@ export default function App() {
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
-      fixedCostsCard, fixedCostsBank, cardDisposable
+      fixedCostsBank, cardDisposable
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
@@ -583,11 +586,14 @@ export default function App() {
                       onClick={() => startEditing(t)} 
                       className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="text-xl w-8 flex justify-center">{icon}</div>
-                        <div className="text-left"><div className="text-sm font-bold text-white truncate w-32">{t.title}</div><div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category} • {t.date.split('T')[0]}</div></div>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="text-xl w-8 flex justify-center flex-shrink-0">{icon}</div>
+                        <div className="text-left flex-1 min-w-0">
+                          <div className="text-sm font-bold text-white truncate">{t.title}</div>
+                          <div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category} • {t.date.split('T')[0]}</div>
+                        </div>
                       </div>
-                      <span className="text-sm font-bold tabular-nums text-white">¥{t.amount.toLocaleString()}</span>
+                      <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
                     </div>
                   );
                 })}
