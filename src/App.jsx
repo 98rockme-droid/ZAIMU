@@ -547,6 +547,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -790,7 +793,7 @@ export default function App() {
               <div key={month}>
                 {settingTab !== 'menu' && (
                     <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
-                        <button onClick={() => { setSettingTab('menu'); mainRef.current?.scrollTo({top:0, behavior:'smooth'}); }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
+                        <button onClick={() => { setSettingTab('menu'); if(mainRef.current) mainRef.current.scrollTop = 0; }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
                 
