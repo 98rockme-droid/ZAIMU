@@ -123,7 +123,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
 
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [monthLoading, setMonthLoading] = useState(false); // 月移動時のローディング判定用
+  const [monthLoading, setMonthLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
   const [logView, setLogView] = useState('list');
@@ -175,7 +175,7 @@ export default function App() {
 
   // データ取得
   useEffect(() => {
-    setMonthLoading(true); // 月変更時にローディング開始
+    setMonthLoading(true);
 
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
@@ -202,7 +202,7 @@ export default function App() {
 
     const unsubMonth = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'months', month), (s) => {
       setMonthlyData(s.exists() ? s.data() : { salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
-      setMonthLoading(false); // データ取得完了でローディング解除
+      setMonthLoading(false);
     });
     
     const unsubCash = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), (s) => {
@@ -678,7 +678,7 @@ export default function App() {
             
             {settingTab === 'menu' && (
               <div className="space-y-3 pb-20 relative min-h-[50vh]">
-                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/>, value: `¥${((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}` }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
+                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/> }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
                   <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all">
                     <div className="flex items-center gap-4 text-zinc-300">
                       {item.icon}
@@ -693,14 +693,14 @@ export default function App() {
                 
                 {/* Copy Button Fixed at Bottom of Menu */}
                 <div className="absolute bottom-0 w-full flex justify-center pb-4">
-                    <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-zinc-800 border border-white/10 rounded-full text-xs font-bold text-zinc-300 shadow-lg active:scale-95 transition-all">
+                    <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white text-white rounded-full text-xs font-bold shadow-lg active:scale-95 transition-all">
                         <CopyCheck size={16}/> 先月の設定をコピー
                     </button>
                 </div>
               </div>
             )}
 
-            {/* If month is loading, show skeletons or nothing to prevent 0-value glitch */}
+            {/* If month is loading, show nothing to prevent 0-value glitch */}
             {monthLoading ? (
                <div className="p-10 text-center text-zinc-600 text-xs animate-pulse">Loading data...</div>
             ) : (
@@ -708,7 +708,10 @@ export default function App() {
                 {settingTab === 'budget' && (
                   <div className="space-y-4 font-bold">
                     <SimpleCard className="p-5 space-y-4">
-                      <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p></div>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
+                        <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}</span>
+                      </div>
                       <div className="space-y-3">
                         <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                         <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
