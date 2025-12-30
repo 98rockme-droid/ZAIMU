@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown } from 'lucide-react'; // ArrowUp, ArrowDown 追加
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -189,6 +189,22 @@ export default function App() {
     if(window.confirm('ログアウトしますか？')) {
         await signOut(auth);
     }
+  };
+  
+  const handleDeleteAccount = async () => {
+      if(!user) return;
+      const confirm1 = window.confirm('【重要】本当に退会しますか？\n\n退会すると、あなたのデータへのアクセス権が削除され、二度と復元できなくなります。');
+      if(!confirm1) return;
+      const confirm2 = window.confirm('最終確認です。\n\n本当に退会してよろしいですか？');
+      if(!confirm2) return;
+      
+      try {
+          await deleteUser(user);
+          alert('退会処理が完了しました。ご利用ありがとうございました。');
+      } catch (error) {
+          console.error("Delete user failed", error);
+          alert('退会に失敗しました。再度ログインしてからお試しください。（セキュリティ上の理由で、ログイン直後でないと退会できない場合があります）');
+      }
   };
 
   // CSVエクスポート機能
@@ -887,7 +903,7 @@ export default function App() {
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span>
-                                    <ChevronRight size={16} className="text-zinc-700"/>
+                                    {/* ChevronRemoved */}
                                   </div>
                                 </div>
                               ))}
@@ -920,7 +936,7 @@ export default function App() {
                                             {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums mr-2">予算: ¥{budget.toLocaleString()}</span>}
                                             <button onClick={() => moveCategory(idx, 'up')} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowUp size={14}/></button>
                                             <button onClick={() => moveCategory(idx, 'down')} disabled={idx === config.categories.length - 1} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowDown size={14}/></button>
-                                            <button onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="p-1.5 text-zinc-700 hover:text-white"><ChevronRight size={16}/></button>
+                                            {/* ChevronButtonRemoved */}
                                         </div>
                                     </div>
                                   );
@@ -944,7 +960,7 @@ export default function App() {
                                       <span className="text-xs font-bold text-white">{t.title}</span>
                                       <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
                                     </div>
-                                    <ChevronRight size={16} className="text-zinc-700"/>
+                                    {/* ChevronRemoved */}
                                   </div>
                                 ))}
                               </div>
