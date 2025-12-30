@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore'; // orderBy追加
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react'; // FileText追加
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -17,6 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const SHARED_USER_ID = "my-private-zaimu-v1"; // 旧データID
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -206,12 +207,13 @@ export default function App() {
       }
   };
 
-  // CSVエクスポート機能（NEW!）
+  // CSVエクスポート機能
   const handleExportCSV = async () => {
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
 
     try {
+      // ユーザーの全データを日付順で取得
       const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
       
@@ -225,10 +227,10 @@ export default function App() {
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
       // データ行
-      snapshot.forEach(doc => {
+      snapshot.docs.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
-        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // エスケープ処理
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // ダブルクォートのエスケープ
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
@@ -248,7 +250,55 @@ export default function App() {
 
     } catch(e) {
       console.error(e);
-      alert('エクスポートに失敗しました');
+      alert('エクスポートに失敗しました: ' + e.message);
+    }
+  };
+
+  // 旧データ移行ロジック
+  const migrateLegacyData = async () => {
+    if (!user) return;
+    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
+
+    setLoading(true);
+    try {
+        const batch = writeBatch(db);
+        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
+        const newUserRef = collection(db, 'users', user.uid, 'transactions');
+
+        // 1. Transactions Copy
+        const txSnap = await getDocs(oldUserRef);
+        txSnap.docs.forEach(docSnap => {
+            const newDocRef = doc(newUserRef, docSnap.id); // 同じIDで作成
+            batch.set(newDocRef, docSnap.data());
+        });
+
+        // 2. Settings Copy
+        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
+        if (configSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
+        }
+
+        // 3. Wallet Copy
+        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
+        if (walletSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
+        }
+
+        // 4. Months Copy
+        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
+        const monthsSnap = await getDocs(monthsRef);
+        monthsSnap.docs.forEach(docSnap => {
+             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
+        });
+
+        await batch.commit();
+        alert('データの引き継ぎが完了しました！');
+        window.location.reload(); // リロードして反映
+    } catch (error) {
+        console.error("Migration failed", error);
+        alert('エラーが発生しました: ' + error.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -597,7 +647,7 @@ export default function App() {
         </header>
 
         {/* MAIN SCROLL AREA */}
-        <main className="flex-1 overflow-y-auto scrollbar-hide pb-32">
+        <main className="flex-1 overflow-y-auto scrollbar-hide pb-32 overflow-x-hidden">
           <div className="w-full max-w-md mx-auto">
             
             {/* HOME TAB */}
@@ -791,8 +841,7 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -809,7 +858,7 @@ export default function App() {
                                 ) : (
                                     <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white"><User size={16}/></div>
                                 )}
-                                <span className="text-xs font-bold text-white">{user.email}</span>
+                                <span className="text-xs font-bold text-white">{user.displayName || user.email}</span>
                             </div>
                             <div className="flex gap-4 pl-1">
                                 <button onClick={handleLogout} className="text-[10px] text-zinc-500 font-bold hover:text-white transition-colors">ログアウト</button>
