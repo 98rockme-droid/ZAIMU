@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown } from 'lucide-react'; // ArrowUp, ArrowDown 追加
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -190,22 +190,6 @@ export default function App() {
         await signOut(auth);
     }
   };
-  
-  const handleDeleteAccount = async () => {
-      if(!user) return;
-      const confirm1 = window.confirm('【重要】本当に退会しますか？\n\n退会すると、あなたのデータへのアクセス権が削除され、二度と復元できなくなります。');
-      if(!confirm1) return;
-      const confirm2 = window.confirm('最終確認です。\n\n本当に退会してよろしいですか？');
-      if(!confirm2) return;
-      
-      try {
-          await deleteUser(user);
-          alert('退会処理が完了しました。ご利用ありがとうございました。');
-      } catch (error) {
-          console.error("Delete user failed", error);
-          alert('退会に失敗しました。再度ログインしてからお試しください。（セキュリティ上の理由で、ログイン直後でないと退会できない場合があります）');
-      }
-  };
 
   // CSVエクスポート機能
   const handleExportCSV = async () => {
@@ -213,7 +197,6 @@ export default function App() {
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
 
     try {
-      // ユーザーの全データを日付順で取得
       const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
       
@@ -222,15 +205,13 @@ export default function App() {
         return;
       }
 
-      // CSVヘッダー
-      let csvContent = "\uFEFF"; // BOM (Excelでの文字化け防止)
+      let csvContent = "\uFEFF"; 
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
-      // データ行
       snapshot.docs.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
-        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // ダブルクォートのエスケープ
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : '';
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
@@ -238,7 +219,6 @@ export default function App() {
         csvContent += `${date},${title},${category},${amount},${method}\n`;
       });
 
-      // ダウンロードリンク作成 & クリック
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -254,52 +234,23 @@ export default function App() {
     }
   };
 
-  // 旧データ移行ロジック
-  const migrateLegacyData = async () => {
-    if (!user) return;
-    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
-
-    setLoading(true);
-    try {
-        const batch = writeBatch(db);
-        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
-        const newUserRef = collection(db, 'users', user.uid, 'transactions');
-
-        // 1. Transactions Copy
-        const txSnap = await getDocs(oldUserRef);
-        txSnap.docs.forEach(docSnap => {
-            const newDocRef = doc(newUserRef, docSnap.id); // 同じIDで作成
-            batch.set(newDocRef, docSnap.data());
-        });
-
-        // 2. Settings Copy
-        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
-        if (configSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
-        }
-
-        // 3. Wallet Copy
-        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
-        if (walletSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
-        }
-
-        // 4. Months Copy
-        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
-        const monthsSnap = await getDocs(monthsRef);
-        monthsSnap.docs.forEach(docSnap => {
-             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
-        });
-
-        await batch.commit();
-        alert('データの引き継ぎが完了しました！');
-        window.location.reload(); // リロードして反映
-    } catch (error) {
-        console.error("Migration failed", error);
-        alert('エラーが発生しました: ' + error.message);
-    } finally {
-        setLoading(false);
+  // カテゴリ並び替え機能
+  const moveCategory = async (index, direction) => {
+    if (!config.categories) return;
+    const newCats = [...config.categories];
+    
+    // 入れ替え処理
+    if (direction === 'up' && index > 0) {
+      [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
+    } else if (direction === 'down' && index < newCats.length - 1) {
+      [newCats[index], newCats[index + 1]] = [newCats[index + 1], newCats[index]];
+    } else {
+      return;
     }
+
+    // 即座に保存
+    setConfig({...config, categories: newCats});
+    await setDoc(doc(db, 'users', user.uid, 'settings', 'config'), { ...config, categories: newCats });
   };
 
   const getCategoryIcon = (catName) => {
@@ -851,19 +802,16 @@ export default function App() {
                     {settingTab === 'menu' && (
                       <div className="space-y-6 pb-10">
                         {/* Account Info (Simplified) */}
-                        <div className="flex flex-col gap-3 px-2">
+                        <div className="flex items-center justify-between px-2">
                             <div className="flex items-center gap-3">
                                 {user.photoURL ? (
                                     <img src={user.photoURL} alt="icon" className="w-8 h-8 rounded-full object-cover" />
                                 ) : (
                                     <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white"><User size={16}/></div>
                                 )}
-                                <span className="text-xs font-bold text-white">{user.displayName || user.email}</span>
+                                <span className="text-xs font-bold text-white">{user.email}</span>
                             </div>
-                            <div className="flex gap-4 pl-1">
-                                <button onClick={handleLogout} className="text-[10px] text-zinc-500 font-bold hover:text-white transition-colors">ログアウト</button>
-                                <button onClick={handleDeleteAccount} className="text-[10px] text-red-900 font-bold hover:text-red-500 transition-colors">退会する</button>
-                            </div>
+                            <button onClick={handleLogout} className="px-3 py-1.5 bg-white/10 rounded-full text-[10px] text-white font-bold hover:bg-white/20 transition-colors">ログアウト</button>
                         </div>
 
                         {/* Menu Items */}
@@ -882,7 +830,7 @@ export default function App() {
                             ))}
                         </div>
                         
-                        {/* Copy Button (Placed at the end of the list) */}
+                        {/* Action Buttons */}
                         <div className="pt-4 flex justify-center flex-col items-center gap-4">
                             <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white/30 text-zinc-300 rounded-full text-xs font-bold active:scale-95 transition-all hover:bg-white/5">
                                 <CopyCheck size={16}/> 先月の設定をコピー
@@ -963,14 +911,16 @@ export default function App() {
                                   const cIcon = typeof c === 'string' ? '🏷' : c.icon;
                                   const budget = monthlyData.catBudgets?.[cName] || 0;
                                   return (
-                                    <div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
-                                        <div className="flex items-center gap-3">
+                                    <div key={idx} className="flex justify-between items-center py-3">
+                                        <div onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex items-center gap-3 flex-1 cursor-pointer">
                                             <span className="text-xl w-8 text-center">{cIcon}</span>
                                             <span className="text-xs font-bold text-white">{cName}</span>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums">予算: ¥{budget.toLocaleString()}</span>}
-                                            <ChevronRight size={16} className="text-zinc-700"/>
+                                        <div className="flex items-center gap-2">
+                                            {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums mr-2">予算: ¥{budget.toLocaleString()}</span>}
+                                            <button onClick={() => moveCategory(idx, 'up')} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowUp size={14}/></button>
+                                            <button onClick={() => moveCategory(idx, 'down')} disabled={idx === config.categories.length - 1} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowDown size={14}/></button>
+                                            <button onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="p-1.5 text-zinc-700 hover:text-white"><ChevronRight size={16}/></button>
                                         </div>
                                     </div>
                                   );
