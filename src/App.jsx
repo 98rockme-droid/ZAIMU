@@ -123,6 +123,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
 
 export default function App() {
   const [loading, setLoading] = useState(true);
+  const [monthLoading, setMonthLoading] = useState(false); // 月移動時のローディング判定用
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
   const [logView, setLogView] = useState('list');
@@ -174,6 +175,8 @@ export default function App() {
 
   // データ取得
   useEffect(() => {
+    setMonthLoading(true); // 月変更時にローディング開始
+
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
@@ -199,7 +202,9 @@ export default function App() {
 
     const unsubMonth = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'months', month), (s) => {
       setMonthlyData(s.exists() ? s.data() : { salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
+      setMonthLoading(false); // データ取得完了でローディング解除
     });
+    
     const unsubCash = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), (s) => {
       setCashBalance(s.exists() ? s.data().balance : 0);
     });
@@ -672,134 +677,153 @@ export default function App() {
             {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
             
             {settingTab === 'menu' && (
-              <div className="space-y-3">
-                <button onClick={copyLastMonthSettings} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all text-zinc-300"><div className="flex items-center gap-4"><CopyCheck size={18}/> 先月の設定をコピー</div><ChevronRight size={18} className="text-zinc-700"/></button>
-                <div className="h-px bg-white/5 my-2"></div>
-                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/> }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/> }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
-                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all"><div className="flex items-center gap-4 text-zinc-300">{item.icon} {item.label}</div><ChevronRight size={18} className="text-zinc-700"/></button>
-                ))}
-              </div>
-            )}
-
-            {settingTab === 'budget' && (
-              <div className="space-y-4 font-bold">
-                <SimpleCard className="p-5 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                    <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                    <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                  </div>
-                </SimpleCard>
-                <SimpleCard className="p-5 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カード別請求 & 引き落とし日</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{(Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0)).toLocaleString()}</span>
-                  </div>
-                  <div className="space-y-3">
-                    {config.paymentMethods.filter(m => m !== '現金').map(m => (
-                      <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="number" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] || 0} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value)}},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
-                    ))}
-                  </div>
-                </SimpleCard>
-              </div>
-            )}
-
-            {settingTab === 'fixed' && (
-              <SimpleCard className="p-5 space-y-2">
-                <div className="flex justify-between items-center mb-2">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{summary.fixedTotal.toLocaleString()}</span>
-                </div>
-                <div className="divide-y divide-white/5">
-                  {(monthlyData.fixedCosts || []).map((f, idx) => (
-                    <div key={f.id} onClick={() => setEditingItem({ type: 'fixed', data: f, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
-                      <div className="flex flex-col">
-                          <span className="text-xs text-zinc-200 font-bold">{f.name}</span>
-                          <span className="text-[9px] text-zinc-500">{f.method || '未設定'}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span>
-                        <ChevronRight size={16} className="text-zinc-700"/>
+              <div className="space-y-3 pb-20 relative min-h-[50vh]">
+                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/>, value: `¥${((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}` }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
+                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all">
+                    <div className="flex items-center gap-4 text-zinc-300">
+                      {item.icon}
+                      <div className="text-left">
+                        <div>{item.label}</div>
+                        {item.value && <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{item.value}</div>}
                       </div>
                     </div>
-                  ))}
+                    <ChevronRight size={18} className="text-zinc-700"/>
+                  </button>
+                ))}
+                
+                {/* Copy Button Fixed at Bottom of Menu */}
+                <div className="absolute bottom-0 w-full flex justify-center pb-4">
+                    <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-zinc-800 border border-white/10 rounded-full text-xs font-bold text-zinc-300 shadow-lg active:scale-95 transition-all">
+                        <CopyCheck size={16}/> 先月の設定をコピー
+                    </button>
                 </div>
-                <div className="pt-4 border-t border-white/5">
-                    <button onClick={() => setEditingItem({ type: 'fixed', data: { name: '', amount: '', method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 固定費を追加</button>
-                </div>
-              </SimpleCard>
+              </div>
             )}
 
-            {settingTab === 'category' && (
-              <SimpleCard className="p-5 space-y-2">
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}</span>
-                  </div>
-                  <div className="divide-y divide-white/5">
-                    {config.categories.map((c, idx) => {
-                      const cName = typeof c === 'string' ? c : c.name;
-                      const cIcon = typeof c === 'string' ? '🏷' : c.icon;
-                      const budget = monthlyData.catBudgets?.[cName] || 0;
-                      return (
-                        <div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl w-8 text-center">{cIcon}</span>
-                                <span className="text-xs font-bold text-white">{cName}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums">予算: ¥{budget.toLocaleString()}</span>}
-                                <ChevronRight size={16} className="text-zinc-700"/>
-                            </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="pt-4 mt-2 border-t border-white/5">
-                    <button onClick={() => setEditingItem({ type: 'category', data: { name: '', icon: '🏷', budget: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> カテゴリを追加</button>
-                  </div>
-                </div>
-              </SimpleCard>
-            )}
-
-            {settingTab === 'template' && (
-              <SimpleCard className="p-5 space-y-2">
-                <div>
-                  <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">テンプレート一覧</p>
-                  <div className="divide-y divide-white/5">
-                    {(config.templates || []).map((t, idx) => (
-                      <div key={idx} onClick={() => setEditingItem({ type: 'template', data: t, index: idx })} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-white">{t.title}</span>
-                          <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
-                        </div>
-                        <ChevronRight size={16} className="text-zinc-700"/>
+            {/* If month is loading, show skeletons or nothing to prevent 0-value glitch */}
+            {monthLoading ? (
+               <div className="p-10 text-center text-zinc-600 text-xs animate-pulse">Loading data...</div>
+            ) : (
+              <>
+                {settingTab === 'budget' && (
+                  <div className="space-y-4 font-bold">
+                    <SimpleCard className="p-5 space-y-4">
+                      <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p></div>
+                      <div className="space-y-3">
+                        <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                        <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                        <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                       </div>
-                    ))}
+                    </SimpleCard>
+                    <SimpleCard className="p-5 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カード別請求 & 引き落とし日</p>
+                        <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{(Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0)).toLocaleString()}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {config.paymentMethods.filter(m => m !== '現金').map(m => (
+                          <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="number" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] || 0} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value)}},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
+                        ))}
+                      </div>
+                    </SimpleCard>
                   </div>
-                  <div className="pt-4 mt-2 border-t border-white/5">
-                    <button onClick={() => setEditingItem({ type: 'template', data: { title: '', amount: '', category: getCategoryNames()[0], method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> テンプレートを追加</button>
-                  </div>
-                </div>
-              </SimpleCard>
-            )}
+                )}
 
-            {settingTab === 'payment' && (
-              <SimpleCard className="p-5 space-y-6">
-                 <div>
-                   <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">支払方法一覧</p>
-                   <div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map((m, idx) => (
-                     <div key={m} onClick={() => setEditingItem({ type: 'payment', data: { name: m }, index: idx })} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold cursor-pointer active:scale-95 transition-transform">{m}</div>
-                   ))}</div>
-                   <div className="pt-4 border-t border-white/5">
-                     <button onClick={() => setEditingItem({ type: 'payment', data: { name: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 支払方法を追加</button>
-                   </div>
-                 </div>
-              </SimpleCard>
+                {settingTab === 'fixed' && (
+                  <SimpleCard className="p-5 space-y-2">
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p>
+                        <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{summary.fixedTotal.toLocaleString()}</span>
+                    </div>
+                    <div className="divide-y divide-white/5">
+                      {(monthlyData.fixedCosts || []).map((f, idx) => (
+                        <div key={f.id} onClick={() => setEditingItem({ type: 'fixed', data: f, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
+                          <div className="flex flex-col">
+                              <span className="text-xs text-zinc-200 font-bold">{f.name}</span>
+                              <span className="text-[9px] text-zinc-500">{f.method || '未設定'}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span>
+                            <ChevronRight size={16} className="text-zinc-700"/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="pt-4 border-t border-white/5">
+                        <button onClick={() => setEditingItem({ type: 'fixed', data: { name: '', amount: '', method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 固定費を追加</button>
+                    </div>
+                  </SimpleCard>
+                )}
+
+                {settingTab === 'category' && (
+                  <SimpleCard className="p-5 space-y-2">
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p>
+                        <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}</span>
+                      </div>
+                      <div className="divide-y divide-white/5">
+                        {config.categories.map((c, idx) => {
+                          const cName = typeof c === 'string' ? c : c.name;
+                          const cIcon = typeof c === 'string' ? '🏷' : c.icon;
+                          const budget = monthlyData.catBudgets?.[cName] || 0;
+                          return (
+                            <div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl w-8 text-center">{cIcon}</span>
+                                    <span className="text-xs font-bold text-white">{cName}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums">予算: ¥{budget.toLocaleString()}</span>}
+                                    <ChevronRight size={16} className="text-zinc-700"/>
+                                </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="pt-4 mt-2 border-t border-white/5">
+                        <button onClick={() => setEditingItem({ type: 'category', data: { name: '', icon: '🏷', budget: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> カテゴリを追加</button>
+                      </div>
+                    </div>
+                  </SimpleCard>
+                )}
+
+                {settingTab === 'template' && (
+                  <SimpleCard className="p-5 space-y-2">
+                    <div>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">テンプレート一覧</p>
+                      <div className="divide-y divide-white/5">
+                        {(config.templates || []).map((t, idx) => (
+                          <div key={idx} onClick={() => setEditingItem({ type: 'template', data: t, index: idx })} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-white">{t.title}</span>
+                              <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
+                            </div>
+                            <ChevronRight size={16} className="text-zinc-700"/>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-4 mt-2 border-t border-white/5">
+                        <button onClick={() => setEditingItem({ type: 'template', data: { title: '', amount: '', category: getCategoryNames()[0], method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> テンプレートを追加</button>
+                      </div>
+                    </div>
+                  </SimpleCard>
+                )}
+
+                {settingTab === 'payment' && (
+                  <SimpleCard className="p-5 space-y-6">
+                     <div>
+                       <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">支払方法一覧</p>
+                       <div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map((m, idx) => (
+                         <div key={m} onClick={() => setEditingItem({ type: 'payment', data: { name: m }, index: idx })} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold cursor-pointer active:scale-95 transition-transform">{m}</div>
+                       ))}</div>
+                       <div className="pt-4 border-t border-white/5">
+                         <button onClick={() => setEditingItem({ type: 'payment', data: { name: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 支払方法を追加</button>
+                       </div>
+                     </div>
+                  </SimpleCard>
+                )}
+              </>
             )}
           </div>
         )}
