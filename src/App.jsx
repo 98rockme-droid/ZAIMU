@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore'; // orderBy追加
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react'; // FileText追加
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -206,7 +206,7 @@ export default function App() {
       }
   };
 
-  // CSVエクスポート機能（NEW!）
+  // CSVエクスポート機能
   const handleExportCSV = async () => {
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
@@ -220,15 +220,13 @@ export default function App() {
         return;
       }
 
-      // CSVヘッダー
-      let csvContent = "\uFEFF"; // BOM (Excelでの文字化け防止)
+      let csvContent = "\uFEFF"; 
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
-      // データ行
-      snapshot.forEach(doc => {
+      snapshot.docs.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
-        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // エスケープ処理
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : '';
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
@@ -236,7 +234,6 @@ export default function App() {
         csvContent += `${date},${title},${category},${amount},${method}\n`;
       });
 
-      // ダウンロードリンク作成 & クリック
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -248,8 +245,25 @@ export default function App() {
 
     } catch(e) {
       console.error(e);
-      alert('エクスポートに失敗しました');
+      alert('エクスポートに失敗しました: ' + e.message);
     }
+  };
+
+  // カテゴリ並び替え機能
+  const moveCategory = async (index, direction) => {
+    if (!config.categories) return;
+    const newCats = [...config.categories];
+    
+    if (direction === 'up' && index > 0) {
+      [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
+    } else if (direction === 'down' && index < newCats.length - 1) {
+      [newCats[index], newCats[index + 1]] = [newCats[index + 1], newCats[index]];
+    } else {
+      return;
+    }
+
+    setConfig({...config, categories: newCats});
+    await setDoc(doc(db, 'users', user.uid, 'settings', 'config'), { ...config, categories: newCats });
   };
 
   const getCategoryIcon = (catName) => {
@@ -597,7 +611,7 @@ export default function App() {
         </header>
 
         {/* MAIN SCROLL AREA */}
-        <main className="flex-1 overflow-y-auto scrollbar-hide pb-32">
+        <main className="flex-1 overflow-y-auto scrollbar-hide pb-32 overflow-x-hidden">
           <div className="w-full max-w-md mx-auto">
             
             {/* HOME TAB */}
@@ -791,8 +805,7 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -802,7 +815,7 @@ export default function App() {
                     {settingTab === 'menu' && (
                       <div className="space-y-6 pb-10">
                         {/* Account Info (Simplified) */}
-                        <div className="flex flex-col gap-3 px-2">
+                        <div className="flex items-center justify-between px-2">
                             <div className="flex items-center gap-3">
                                 {user.photoURL ? (
                                     <img src={user.photoURL} alt="icon" className="w-8 h-8 rounded-full object-cover" />
@@ -811,10 +824,7 @@ export default function App() {
                                 )}
                                 <span className="text-xs font-bold text-white">{user.email}</span>
                             </div>
-                            <div className="flex gap-4 pl-1">
-                                <button onClick={handleLogout} className="text-[10px] text-zinc-500 font-bold hover:text-white transition-colors">ログアウト</button>
-                                <button onClick={handleDeleteAccount} className="text-[10px] text-red-900 font-bold hover:text-red-500 transition-colors">退会する</button>
-                            </div>
+                            <button onClick={handleLogout} className="px-3 py-1.5 bg-white/10 rounded-full text-[10px] text-white font-bold hover:bg-white/20 transition-colors">ログアウト</button>
                         </div>
 
                         {/* Menu Items */}
@@ -833,7 +843,7 @@ export default function App() {
                             ))}
                         </div>
                         
-                        {/* Copy Button (Placed at the end of the list) */}
+                        {/* Action Buttons */}
                         <div className="pt-4 flex justify-center flex-col items-center gap-4">
                             <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white/30 text-zinc-300 rounded-full text-xs font-bold active:scale-95 transition-all hover:bg-white/5">
                                 <CopyCheck size={16}/> 先月の設定をコピー
@@ -890,7 +900,6 @@ export default function App() {
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span>
-                                    <ChevronRight size={16} className="text-zinc-700"/>
                                   </div>
                                 </div>
                               ))}
@@ -914,14 +923,15 @@ export default function App() {
                                   const cIcon = typeof c === 'string' ? '🏷' : c.icon;
                                   const budget = monthlyData.catBudgets?.[cName] || 0;
                                   return (
-                                    <div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
-                                        <div className="flex items-center gap-3">
+                                    <div key={idx} className="flex justify-between items-center py-3">
+                                        <div onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex items-center gap-3 flex-1 cursor-pointer">
                                             <span className="text-xl w-8 text-center">{cIcon}</span>
                                             <span className="text-xs font-bold text-white">{cName}</span>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums">予算: ¥{budget.toLocaleString()}</span>}
-                                            <ChevronRight size={16} className="text-zinc-700"/>
+                                        <div className="flex items-center gap-2">
+                                            {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums mr-2">予算: ¥{budget.toLocaleString()}</span>}
+                                            <button onClick={() => moveCategory(idx, 'up')} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowUp size={14}/></button>
+                                            <button onClick={() => moveCategory(idx, 'down')} disabled={idx === config.categories.length - 1} className="p-1.5 rounded-lg hover:bg-white/10 text-zinc-500 hover:text-white disabled:opacity-30"><ArrowDown size={14}/></button>
                                         </div>
                                     </div>
                                   );
@@ -945,7 +955,6 @@ export default function App() {
                                       <span className="text-xs font-bold text-white">{t.title}</span>
                                       <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
                                     </div>
-                                    <ChevronRight size={16} className="text-zinc-700"/>
                                   </div>
                                 ))}
                               </div>
@@ -1037,6 +1046,57 @@ export default function App() {
                     <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-zinc-200 transition-colors">保存</button>
                 </div>
             </div>
+          </SimpleCard>
+        </div>
+      )}
+
+      {/* TX MODAL & FAB */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
+          <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
+            {showCalculator ? (
+              <div className="h-auto">
+                <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
+                <CalculatorPad 
+                  initialValue={inputAmount || 0} 
+                  onConfirm={(val) => { setInputAmount(val); setShowCalculator(false); }} 
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">
+                    {editingTx ? '支出を編集' : '支出入力'}
+                    {editingTx && <button onClick={(e) => { 
+                          if(window.confirm('削除しますか？')) {
+                              deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
+                              setIsModalOpen(false);
+                          }
+                        }} className="ml-4 text-red-500 text-[10px] underline">削除</button>}
+                </h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
+                <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
+                  <div className="flex gap-2 items-center">
+                    <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
+                    <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
+                  </div>
+                  <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
+                  <div className="flex flex-row gap-4 w-full box-border">
+                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
+                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
+                    {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
+                  </div>
+                  {!editingTx && config.templates && (
+                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                      {config.templates.map((tpl, i) => (
+                        <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
+                      ))}
+                    </div>
+                  )}
+                  <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">保存する</button>
+                </form>
+              </>
+            )}
           </SimpleCard>
         </div>
       )}
