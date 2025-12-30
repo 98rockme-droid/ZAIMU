@@ -684,7 +684,6 @@ export default function App() {
                 <SimpleCard className="p-5 space-y-4">
                   <div className="flex justify-between items-center">
                     <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}</span>
                   </div>
                   <div className="space-y-3">
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
@@ -740,7 +739,7 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(Object.values(monthlyData.catBudgets||{}).reduce((s,v)=>s+v,0)).toLocaleString()}</span>
+                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}</span>
                   </div>
                   <div className="divide-y divide-white/5">
                     {config.categories.map((c, idx) => {
