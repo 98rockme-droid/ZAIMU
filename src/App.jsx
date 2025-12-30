@@ -191,10 +191,10 @@ export default function App() {
     }
   };
 
-  // 旧データ移行ロジック
+  // 旧データ移行ロジック（追加！）
   const migrateLegacyData = async () => {
     if (!user) return;
-    if (!window.confirm('旧データ（誰でも見れる状態だったデータ）を、現在ログイン中のあなたのアカウントにコピーしますか？\n※上書きされる可能性があります。')) return;
+    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
 
     setLoading(true);
     try {
@@ -221,7 +221,7 @@ export default function App() {
             batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
         }
 
-        // 4. Months Copy (直近数ヶ月分だけ簡易コピー)
+        // 4. Months Copy
         const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
         const monthsSnap = await getDocs(monthsRef);
         monthsSnap.docs.forEach(docSnap => {
@@ -556,7 +556,9 @@ export default function App() {
     );
   }
 
-  if (loading && !monthlyData.budget && !transactions.length) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
+  // --- RENDER: MAIN APP ---
+
+  if (loading && !monthlyData.budget) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center">
@@ -777,7 +779,7 @@ export default function App() {
               <div key={month}>
                 {settingTab !== 'menu' && (
                     // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-3 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -808,6 +810,10 @@ export default function App() {
                         
                         <div className="flex justify-center pt-8">
                             <button onClick={handleLogout} className="text-red-500 text-xs font-bold flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity"><LogOut size={14}/> ログアウト</button>
+                        </div>
+                        
+                        <div className="flex justify-center pt-4">
+                           <button onClick={migrateLegacyData} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline"><Import size={12}/> 旧データを引き継ぐ</button>
                         </div>
                       </div>
                     )}
