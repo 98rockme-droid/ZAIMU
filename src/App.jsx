@@ -458,7 +458,6 @@ export default function App() {
   if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing...</div>;
 
   return (
-    // フッター余白修正: pb-6 -> pb-safe よりも確実に上げるため pb-6 指定 (Bottom margin request)
     <div className="min-h-screen w-full bg-[#121212] text-zinc-200 font-sans pb-40 flex flex-col items-center overflow-x-hidden font-bold">
       {/* HEADER */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#121212] border-b border-white/5 px-4 py-4 flex justify-center shadow-lg font-bold">
@@ -674,8 +673,17 @@ export default function App() {
             
             {settingTab === 'menu' && (
               <div className="space-y-3">
-                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/> }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/> }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
-                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all"><div className="flex items-center gap-4 text-zinc-300">{item.icon} {item.label}</div><ChevronRight size={18} className="text-zinc-700"/></button>
+                {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/>, value: `¥${((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}` }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(Object.values(monthlyData.catBudgets||{}).reduce((s,v)=>s+v,0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
+                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all">
+                    <div className="flex items-center gap-4 text-zinc-300">
+                      {item.icon}
+                      <div className="text-left">
+                        <div>{item.label}</div>
+                        {item.value && <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{item.value}</div>}
+                      </div>
+                    </div>
+                    <ChevronRight size={18} className="text-zinc-700"/>
+                  </button>
                 ))}
               </div>
             )}
