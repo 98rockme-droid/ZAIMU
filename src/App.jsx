@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore'; // orderBy追加
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowRight, ShieldCheck, Smartphone, Moon } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react'; // FileText追加
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -17,7 +17,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const SHARED_USER_ID = "my-private-zaimu-v1"; 
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -123,72 +122,6 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   );
 };
 
-/* --- LANDING PAGE COMPONENT --- */
-const LandingPage = ({ onLogin }) => {
-  return (
-    <div className="min-h-screen w-full bg-[#121212] text-white font-sans overflow-y-auto overflow-x-hidden">
-      {/* Navbar */}
-      <nav className="flex justify-between items-center p-6 max-w-5xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center border border-white/10">
-            <img src="/favicon.ico" alt="logo" className="w-5 h-5 object-contain" />
-          </div>
-          <span className="text-lg font-black tracking-tighter">ZAIMU</span>
-        </div>
-        <button onClick={onLogin} className="text-xs font-bold text-zinc-400 hover:text-white transition-colors">
-          ログイン
-        </button>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="flex flex-col items-center justify-center text-center px-4 pt-20 pb-32 max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">
-          <Zap size={12} className="fill-current"/> 2025 New Standard
-        </div>
-        <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9]">
-          ミニマリストのための、<br/><span className="text-zinc-500">静かな</span>家計簿。
-        </h1>
-        <p className="text-zinc-400 text-sm md:text-base font-bold leading-relaxed max-w-md">
-          複雑な機能も、眩しい画面も、邪魔な広告もありません。<br/>
-          ZAIMUは、あなたの財布の中身を<br/>「ただ記録する」ことだけに特化したツールです。
-        </p>
-        <div className="pt-4">
-          <button onClick={onLogin} className="group relative px-8 py-4 bg-white text-black rounded-full font-black text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] flex items-center gap-3">
-            Googleで今すぐ始める <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/>
-          </button>
-          <p className="text-[10px] text-zinc-600 mt-4 font-bold">完全無料 / クレジットカード不要</p>
-        </div>
-      </section>
-
-      {/* Features Grid */}
-      <section className="px-4 pb-32 max-w-5xl mx-auto">
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-[#181818] p-8 rounded-2xl border border-white/5 space-y-4 hover:border-white/10 transition-colors">
-            <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-emerald-400 border border-white/5"><Moon size={24}/></div>
-            <h3 className="text-xl font-bold">完全ダークモード</h3>
-            <p className="text-xs text-zinc-500 font-bold leading-relaxed">目に優しいオールブラックデザイン。夜中のふとした時でも、眩しさを感じずに収支を確認できます。</p>
-          </div>
-          <div className="bg-[#181818] p-8 rounded-2xl border border-white/5 space-y-4 hover:border-white/10 transition-colors">
-            <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-blue-400 border border-white/5"><ShieldCheck size={24}/></div>
-            <h3 className="text-xl font-bold">安心のプライバシー</h3>
-            <p className="text-xs text-zinc-500 font-bold leading-relaxed">データはGoogle認証で厳重に保護。あなた以外の誰も、あなたの財布の中身を見ることはできません。</p>
-          </div>
-          <div className="bg-[#181818] p-8 rounded-2xl border border-white/5 space-y-4 hover:border-white/10 transition-colors">
-            <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-purple-400 border border-white/5"><Smartphone size={24}/></div>
-            <h3 className="text-xl font-bold">アプリのような操作感</h3>
-            <p className="text-xs text-zinc-500 font-bold leading-relaxed">Webサイトなのに、まるでネイティブアプリのようなサクサク感。ホーム画面に追加して使いましょう。</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-white/5 py-12 text-center">
-        <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">© 2025 ZAIMU. All rights reserved.</p>
-      </footer>
-    </div>
-  );
-};
-
 export default function App() {
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
@@ -203,6 +136,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
+  // 編集用state
   const [editingItem, setEditingItem] = useState(null); 
 
   const [transactions, setTransactions] = useState([]);
@@ -272,7 +206,7 @@ export default function App() {
       }
   };
 
-  // CSVエクスポート機能
+  // CSVエクスポート機能（NEW!）
   const handleExportCSV = async () => {
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
@@ -287,14 +221,14 @@ export default function App() {
       }
 
       // CSVヘッダー
-      let csvContent = "\uFEFF"; 
+      let csvContent = "\uFEFF"; // BOM (Excelでの文字化け防止)
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
       // データ行
       snapshot.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
-        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; 
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // エスケープ処理
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
@@ -315,54 +249,6 @@ export default function App() {
     } catch(e) {
       console.error(e);
       alert('エクスポートに失敗しました');
-    }
-  };
-
-  // 旧データ移行ロジック
-  const migrateLegacyData = async () => {
-    if (!user) return;
-    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
-
-    setLoading(true);
-    try {
-        const batch = writeBatch(db);
-        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
-        const newUserRef = collection(db, 'users', user.uid, 'transactions');
-
-        // 1. Transactions Copy
-        const txSnap = await getDocs(oldUserRef);
-        txSnap.docs.forEach(docSnap => {
-            const newDocRef = doc(newUserRef, docSnap.id); 
-            batch.set(newDocRef, docSnap.data());
-        });
-
-        // 2. Settings Copy
-        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
-        if (configSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
-        }
-
-        // 3. Wallet Copy
-        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
-        if (walletSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
-        }
-
-        // 4. Months Copy
-        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
-        const monthsSnap = await getDocs(monthsRef);
-        monthsSnap.docs.forEach(docSnap => {
-             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
-        });
-
-        await batch.commit();
-        alert('データの引き継ぎが完了しました！');
-        window.location.reload(); 
-    } catch (error) {
-        console.error("Migration failed", error);
-        alert('エラーが発生しました: ' + error.message);
-    } finally {
-        setLoading(false);
     }
   };
 
@@ -664,7 +550,23 @@ export default function App() {
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
-    return <LandingPage onLogin={handleLogin} />;
+    return (
+      <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl">
+            <img src="/favicon.ico" alt="logo" className="w-12 h-12 object-contain" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-3xl font-black text-white tracking-tighter uppercase">ZAIMU</h1>
+            <p className="text-zinc-500 text-xs font-bold tracking-widest mt-1">Simple Financial Management</p>
+          </div>
+        </div>
+        <button onClick={handleLogin} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold text-sm uppercase tracking-widest hover:bg-zinc-200 transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-xl">
+          <Lock size={18} />
+          Googleでログイン
+        </button>
+      </div>
+    );
   }
 
   // --- RENDER: MAIN APP ---
