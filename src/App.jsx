@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore'; // orderBy追加
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react'; // FileText追加
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -17,7 +17,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const SHARED_USER_ID = "my-private-zaimu-v1"; // 旧データID
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -207,7 +206,7 @@ export default function App() {
       }
   };
 
-  // CSVエクスポート機能
+  // CSVエクスポート機能（NEW!）
   const handleExportCSV = async () => {
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
@@ -250,54 +249,6 @@ export default function App() {
     } catch(e) {
       console.error(e);
       alert('エクスポートに失敗しました');
-    }
-  };
-
-  // 旧データ移行ロジック
-  const migrateLegacyData = async () => {
-    if (!user) return;
-    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
-
-    setLoading(true);
-    try {
-        const batch = writeBatch(db);
-        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
-        const newUserRef = collection(db, 'users', user.uid, 'transactions');
-
-        // 1. Transactions Copy
-        const txSnap = await getDocs(oldUserRef);
-        txSnap.docs.forEach(docSnap => {
-            const newDocRef = doc(newUserRef, docSnap.id); // 同じIDで作成
-            batch.set(newDocRef, docSnap.data());
-        });
-
-        // 2. Settings Copy
-        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
-        if (configSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
-        }
-
-        // 3. Wallet Copy
-        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
-        if (walletSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
-        }
-
-        // 4. Months Copy
-        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
-        const monthsSnap = await getDocs(monthsRef);
-        monthsSnap.docs.forEach(docSnap => {
-             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
-        });
-
-        await batch.commit();
-        alert('データの引き継ぎが完了しました！');
-        window.location.reload(); // リロードして反映
-    } catch (error) {
-        console.error("Migration failed", error);
-        alert('エラーが発生しました: ' + error.message);
-    } finally {
-        setLoading(false);
     }
   };
 
@@ -890,10 +841,6 @@ export default function App() {
                             
                             <button onClick={handleExportCSV} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
                                 <FileText size={12}/> 全データをCSV出力
-                            </button>
-                            
-                            <button onClick={migrateLegacyData} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
-                                <Import size={12}/> 旧データを引き継ぐ
                             </button>
                         </div>
                       </div>
