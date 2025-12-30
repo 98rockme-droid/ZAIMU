@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore'; // orderBy追加
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react'; // FileText追加
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -204,6 +204,52 @@ export default function App() {
           console.error("Delete user failed", error);
           alert('退会に失敗しました。再度ログインしてからお試しください。（セキュリティ上の理由で、ログイン直後でないと退会できない場合があります）');
       }
+  };
+
+  // CSVエクスポート機能（NEW!）
+  const handleExportCSV = async () => {
+    if(!user) return;
+    if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
+
+    try {
+      const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      if (snapshot.empty) {
+        alert('出力するデータがありません。');
+        return;
+      }
+
+      // CSVヘッダー
+      let csvContent = "\uFEFF"; // BOM (Excelでの文字化け防止)
+      csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
+
+      // データ行
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const date = data.date ? data.date.split('T')[0] : '';
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // エスケープ処理
+        const category = data.category || '';
+        const amount = data.amount || 0;
+        const method = data.paymentMethod || '';
+        
+        csvContent += `${date},${title},${category},${amount},${method}\n`;
+      });
+
+      // ダウンロードリンク作成 & クリック
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `zaimu_backup_${getTodayString()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch(e) {
+      console.error(e);
+      alert('エクスポートに失敗しました');
+    }
   };
 
   const getCategoryIcon = (catName) => {
@@ -788,9 +834,13 @@ export default function App() {
                         </div>
                         
                         {/* Copy Button (Placed at the end of the list) */}
-                        <div className="pt-4 flex justify-center">
+                        <div className="pt-4 flex justify-center flex-col items-center gap-4">
                             <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white/30 text-zinc-300 rounded-full text-xs font-bold active:scale-95 transition-all hover:bg-white/5">
                                 <CopyCheck size={16}/> 先月の設定をコピー
+                            </button>
+                            
+                            <button onClick={handleExportCSV} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
+                                <FileText size={12}/> 全データをCSV出力
                             </button>
                         </div>
                       </div>
