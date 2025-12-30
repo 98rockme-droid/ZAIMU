@@ -547,9 +547,6 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  // --- スクロール制御用Ref ---
-  const mainRef = useRef(null);
-
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
