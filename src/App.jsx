@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, User, FileText } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -17,6 +17,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const SHARED_USER_ID = "my-private-zaimu-v1"; // 旧データID
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -189,22 +190,6 @@ export default function App() {
         await signOut(auth);
     }
   };
-  
-  const handleDeleteAccount = async () => {
-      if(!user) return;
-      const confirm1 = window.confirm('【重要】本当に退会しますか？\n\n退会すると、あなたのデータへのアクセス権が削除され、二度と復元できなくなります。');
-      if(!confirm1) return;
-      const confirm2 = window.confirm('最終確認です。\n\n本当に退会してよろしいですか？');
-      if(!confirm2) return;
-      
-      try {
-          await deleteUser(user);
-          alert('退会処理が完了しました。ご利用ありがとうございました。');
-      } catch (error) {
-          console.error("Delete user failed", error);
-          alert('退会に失敗しました。再度ログインしてからお試しください。（セキュリティ上の理由で、ログイン直後でないと退会できない場合があります）');
-      }
-  };
 
   // CSVエクスポート機能
   const handleExportCSV = async () => {
@@ -221,14 +206,14 @@ export default function App() {
       }
 
       // CSVヘッダー
-      let csvContent = "\uFEFF"; // BOM (Excelでの文字化け防止)
+      let csvContent = "\uFEFF"; // BOM
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
       // データ行
       snapshot.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
-        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : ''; // エスケープ処理
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : '';
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
@@ -236,7 +221,7 @@ export default function App() {
         csvContent += `${date},${title},${category},${amount},${method}\n`;
       });
 
-      // ダウンロードリンク作成 & クリック
+      // ダウンロードリンク
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -249,6 +234,54 @@ export default function App() {
     } catch(e) {
       console.error(e);
       alert('エクスポートに失敗しました');
+    }
+  };
+
+  // 旧データ移行ロジック
+  const migrateLegacyData = async () => {
+    if (!user) return;
+    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
+
+    setLoading(true);
+    try {
+        const batch = writeBatch(db);
+        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
+        const newUserRef = collection(db, 'users', user.uid, 'transactions');
+
+        // 1. Transactions Copy
+        const txSnap = await getDocs(oldUserRef);
+        txSnap.docs.forEach(docSnap => {
+            const newDocRef = doc(newUserRef, docSnap.id); 
+            batch.set(newDocRef, docSnap.data());
+        });
+
+        // 2. Settings Copy
+        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
+        if (configSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
+        }
+
+        // 3. Wallet Copy
+        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
+        if (walletSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
+        }
+
+        // 4. Months Copy
+        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
+        const monthsSnap = await getDocs(monthsRef);
+        monthsSnap.docs.forEach(docSnap => {
+             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
+        });
+
+        await batch.commit();
+        alert('データの引き継ぎが完了しました！');
+        window.location.reload(); 
+    } catch (error) {
+        console.error("Migration failed", error);
+        alert('エラーが発生しました: ' + error.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -791,8 +824,7 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -801,19 +833,18 @@ export default function App() {
                 <div className="p-4 space-y-4">
                     {settingTab === 'menu' && (
                       <div className="space-y-6 pb-10">
-                        {/* Account Info (Simplified) */}
-                        <div className="flex flex-col gap-3 px-2">
-                            <div className="flex items-center gap-3">
-                                {user.photoURL ? (
-                                    <img src={user.photoURL} alt="icon" className="w-8 h-8 rounded-full object-cover" />
-                                ) : (
-                                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white"><User size={16}/></div>
-                                )}
-                                <span className="text-xs font-bold text-white">{user.email}</span>
-                            </div>
-                            <div className="flex gap-4 pl-1">
-                                <button onClick={handleLogout} className="text-[10px] text-zinc-500 font-bold hover:text-white transition-colors">ログアウト</button>
-                                <button onClick={handleDeleteAccount} className="text-[10px] text-red-900 font-bold hover:text-red-500 transition-colors">退会する</button>
+                        {/* Account Info */}
+                        <div className="flex flex-col gap-1 px-2">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    {user.photoURL ? (
+                                        <img src={user.photoURL} alt="icon" className="w-8 h-8 rounded-full object-cover" />
+                                    ) : (
+                                        <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white"><User size={16}/></div>
+                                    )}
+                                    <span className="text-xs font-bold text-white">{user.email}</span>
+                                </div>
+                                <button onClick={handleLogout} className="text-zinc-500 hover:text-white transition-colors p-2"><LogOut size={16}/></button>
                             </div>
                         </div>
 
@@ -833,7 +864,7 @@ export default function App() {
                             ))}
                         </div>
                         
-                        {/* Copy Button (Placed at the end of the list) */}
+                        {/* Copy Button */}
                         <div className="pt-4 flex justify-center flex-col items-center gap-4">
                             <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white/30 text-zinc-300 rounded-full text-xs font-bold active:scale-95 transition-all hover:bg-white/5">
                                 <CopyCheck size={16}/> 先月の設定をコピー
@@ -841,6 +872,10 @@ export default function App() {
                             
                             <button onClick={handleExportCSV} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
                                 <FileText size={12}/> 全データをCSV出力
+                            </button>
+                            
+                            <button onClick={migrateLegacyData} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
+                                <Import size={12}/> 旧データを引き継ぐ
                             </button>
                         </div>
                       </div>
@@ -1038,61 +1073,6 @@ export default function App() {
                 </div>
             </div>
           </SimpleCard>
-        </div>
-      )}
-
-      {/* TX MODAL & FAB */}
-      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-          <div className="flex min-h-full items-center justify-center p-4">
-            <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-              {showCalculator ? (
-                <div className="h-auto">
-                  <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
-                  <CalculatorPad 
-                    initialValue={inputAmount || 0} 
-                    onConfirm={(val) => { setInputAmount(val); setShowCalculator(false); }} 
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">
-                      {editingTx ? '支出を編集' : '支出入力'}
-                      {editingTx && <button onClick={(e) => { 
-                            if(window.confirm('削除しますか？')) {
-                                deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
-                                setIsModalOpen(false);
-                            }
-                          }} className="ml-4 text-red-500 text-[10px] underline">削除</button>}
-                  </h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
-                  <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
-                    <div className="flex gap-2 items-center">
-                      <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
-                      <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
-                    </div>
-                    <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
-                    <div className="flex flex-row gap-4 w-full box-border">
-                      <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
-                      <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
-                      {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
-                    </div>
-                    {!editingTx && config.templates && (
-                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                        {config.templates.map((tpl, i) => (
-                          <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
-                        ))}
-                      </div>
-                    )}
-                    <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">保存する</button>
-                  </form>
-                </>
-              )}
-            </SimpleCard>
-          </div>
         </div>
       )}
 
