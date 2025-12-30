@@ -547,6 +547,10 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -1077,7 +1081,7 @@ export default function App() {
                         <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                         </div>
                         <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
-                        {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3 py-2 text-xs h-auto min-w-[40px] text-center rounded-lg border border-zinc-800 font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center">{m}</div></label>))}
+                        {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3 py-2 text-xs min-w-[60px] text-center rounded-lg border border-zinc-800 font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center">{m}</div></label>))}
                         </div>
                         {!editingTx && config.templates && (
                         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
