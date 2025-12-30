@@ -745,6 +745,7 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
+                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
                     <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
