@@ -591,9 +591,9 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button onClick={() => setMonth(getMonthString(new Date()))} className="h-8 px-2.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400 flex items-center justify-center">今月</button>
               <div className="h-8 flex items-center bg-white/5 rounded-lg px-1 border border-white/5 font-mono text-xs gap-1">
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={18}/></button>
-                <span className="px-1 font-bold">{month.replace('-','/')}</span>
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={18}/></button>
+                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={20}/></button>
+                <span className="px-1 font-bold text-sm">{month.replace('-','/')}</span>
+                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={20}/></button>
               </div>
             </div>
           </div>
@@ -793,7 +793,10 @@ export default function App() {
               <div key={month}>
                 {settingTab !== 'menu' && (
                     <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
-                        <button onClick={() => { setSettingTab('menu'); if(mainRef.current) mainRef.current.scrollTop = 0; }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
+                        <button onClick={() => { 
+                            setSettingTab('menu'); 
+                            setTimeout(() => { if(mainRef.current) mainRef.current.scrollTop = 0; }, 0); 
+                        }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
                 
@@ -991,11 +994,14 @@ export default function App() {
 
       {/* EDIT SETTINGS MODAL */}
       {editingItem && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
-          <div className="flex min-h-full items-center justify-center p-4">
-            <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">編集</h2><button onClick={() => setEditingItem(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
-              <div className="space-y-4">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
+          <div className="w-full h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
+                <h2 className="text-xs font-bold uppercase text-white tracking-widest">編集</h2>
+                <button onClick={() => setEditingItem(null)} className="p-2 -mr-2 text-zinc-500 hover:text-white"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 pb-32">
+              <div className="space-y-6">
                   {editingItem.type === 'category' && (
                       <>
                           <div className="flex gap-2">
@@ -1037,7 +1043,7 @@ export default function App() {
                       <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-zinc-200 transition-colors">保存</button>
                   </div>
               </div>
-            </SimpleCard>
+            </div>
           </div>
         </div>
       )}
@@ -1046,57 +1052,58 @@ export default function App() {
       <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-          <div className="flex min-h-full items-center justify-center p-4">
-            <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-              {showCalculator ? (
-                <div className="h-auto">
-                  <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
-                  <CalculatorPad 
-                    initialValue={inputAmount || 0} 
-                    onConfirm={(val) => { setInputAmount(val); setShowCalculator(false); }} 
-                  />
-                </div>
-              ) : (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
+          <div className="w-full h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {showCalculator ? (
+              <div className="flex-1 p-5">
+                <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
+                <CalculatorPad 
+                  initialValue={inputAmount || 0} 
+                  onConfirm={(val) => { setInputAmount(val); setShowCalculator(false); }} 
+                />
+              </div>
+            ) : (
                 <>
-                  <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">
-                      {editingTx ? '支出を編集' : '支出入力'}
-                  </h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
-                  <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
-                    <div className="flex gap-2 items-center">
-                      <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
-                      <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
-                    </div>
-                    <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
-                    <div className="flex flex-row gap-4 w-full box-border">
-                      <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
-                      <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
-                      {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
-                    </div>
-                    {!editingTx && config.templates && (
-                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                        {config.templates.map((tpl, i) => (
-                          <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                        {editingTx && (
-                            <button type="button" onClick={() => { 
-                                if(window.confirm('削除しますか？')) {
-                                    deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
-                                    setIsModalOpen(false);
-                                }
-                            }} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
+                  <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
+                    <h2 className="text-xs font-bold uppercase text-white tracking-widest">{editingTx ? '支出を編集' : '支出入力'}</h2>
+                    <button onClick={() => setIsModalOpen(false)} className="p-2 -mr-2 text-zinc-500 hover:text-white"><X size={20}/></button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-5 pb-32">
+                    <form onSubmit={handleTxSubmit} className="space-y-6">
+                        <div className="flex gap-2 items-center">
+                        <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
+                        <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
+                        </div>
+                        <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
+                        <div className="flex flex-row gap-4 w-full box-border">
+                        <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
+                        <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                        </div>
+                        <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
+                        {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3 py-2 text-xs h-auto min-w-[40px] text-center rounded-lg border border-zinc-800 font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center">{m}</div></label>))}
+                        </div>
+                        {!editingTx && config.templates && (
+                        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                            {config.templates.map((tpl, i) => (
+                            <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
+                            ))}
+                        </div>
                         )}
-                        <button type="submit" className="flex-1 h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform font-black">保存する</button>
-                    </div>
-                  </form>
+                        <div className="flex gap-2 pt-2">
+                            {editingTx && (
+                                <button type="button" onClick={() => { 
+                                    if(window.confirm('削除しますか？')) {
+                                        deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
+                                        setIsModalOpen(false);
+                                    }
+                                }} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
+                            )}
+                            <button type="submit" className="flex-1 h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform font-black">保存する</button>
+                        </div>
+                    </form>
+                  </div>
                 </>
-              )}
-            </SimpleCard>
+            )}
           </div>
         </div>
       )}
