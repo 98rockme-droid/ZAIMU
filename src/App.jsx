@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, User, FileText, ArrowUp, ArrowDown } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -136,6 +136,7 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
+  // 編集用state
   const [editingItem, setEditingItem] = useState(null); 
 
   const [transactions, setTransactions] = useState([]);
@@ -143,6 +144,9 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
+  // Ref for scroll control
+  const mainRef = useRef(null);
+
   const [config, setConfig] = useState({ 
     categories: [
       { name: '食費', icon: '🍔' },
@@ -543,6 +547,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -583,17 +590,17 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setMonth(getMonthString(new Date()))} className="h-8 px-2.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400 flex items-center justify-center">今月</button>
-              <div className="h-8 flex items-center bg-white/5 rounded-lg px-2 border border-white/5 font-mono text-xs">
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }}><ChevronLeft size={16}/></button>
-                <span className="px-2 font-bold">{month.replace('-','/')}</span>
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }}><ChevronRight size={16}/></button>
+              <div className="h-8 flex items-center bg-white/5 rounded-lg px-1 border border-white/5 font-mono text-xs gap-1">
+                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={18}/></button>
+                <span className="px-1 font-bold">{month.replace('-','/')}</span>
+                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={18}/></button>
               </div>
             </div>
           </div>
         </header>
 
         {/* MAIN SCROLL AREA */}
-        <main className="flex-1 overflow-y-auto scrollbar-hide pb-32">
+        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pb-32">
           <div className="w-full max-w-md mx-auto">
             
             {/* HOME TAB */}
@@ -625,7 +632,7 @@ export default function App() {
 
                 {homeView === 'forecast' && (
                   <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
-                    {activeAlerts.length > 0 ? (
+                    {activeAlerts.length > 0 && (
                       <SimpleCard className="bg-white/[0.03] border-white/10 p-4 space-y-3">
                         <div className="flex items-center gap-2 text-zinc-400"><Calendar size={14}/><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Upcoming Payments</span></div>
                         <div className="space-y-2">
@@ -638,8 +645,6 @@ export default function App() {
                           ))}
                         </div>
                       </SimpleCard>
-                    ) : (
-                      <div className="p-8 text-center text-zinc-600 text-xs font-bold border border-white/5 rounded-lg border-dashed">近日中の引き落とし予定はありません</div>
                     )}
                     <SimpleCard className="p-5">
                       <div className="flex justify-between items-end mb-3"><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座に残るお金 (見込み)</p><Banknote size={16} className="text-zinc-600"/></div>
@@ -672,7 +677,7 @@ export default function App() {
               </div>
             )}
 
-            {/* LOG TAB - Padding Added here */}
+            {/* LOG TAB */}
             {activeTab === 'log' && (
               <div className="p-4 space-y-3">
                 <div className="flex gap-2">
@@ -744,7 +749,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ANALYSIS TAB - Padding Added here */}
+            {/* ANALYSIS TAB */}
             {activeTab === 'analysis' && (
               <div className="p-4 space-y-4 animate-in fade-in duration-300">
                 <SimpleCard className="p-6">
@@ -788,7 +793,7 @@ export default function App() {
               <div key={month}>
                 {settingTab !== 'menu' && (
                     <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
-                        <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
+                        <button onClick={() => { setSettingTab('menu'); mainRef.current?.scrollTo({top:0, behavior:'smooth'}); }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
                 
@@ -973,7 +978,7 @@ export default function App() {
 
         {/* FOOTER */}
         <footer className="flex-none h-24 bg-[#121212] border-t border-white/5 flex justify-between items-center px-6 pb-6 z-40 w-full max-w-md left-0 right-0 mx-auto">
-          <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Landmark size={24}/>} />
+          <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Home size={24}/>} />
           <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
           <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
           <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={24}/>} />
@@ -1056,12 +1061,6 @@ export default function App() {
                 <>
                   <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">
                       {editingTx ? '支出を編集' : '支出入力'}
-                      {editingTx && <button onClick={(e) => { 
-                            if(window.confirm('削除しますか？')) {
-                                deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
-                                setIsModalOpen(false);
-                            }
-                          }} className="ml-4 text-red-500 text-[10px] underline">削除</button>}
                   </h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
                   <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
                     <div className="flex gap-2 items-center">
@@ -1083,7 +1082,17 @@ export default function App() {
                         ))}
                       </div>
                     )}
-                    <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">保存する</button>
+                    <div className="flex gap-2">
+                        {editingTx && (
+                            <button type="button" onClick={() => { 
+                                if(window.confirm('削除しますか？')) {
+                                    deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
+                                    setIsModalOpen(false);
+                                }
+                            }} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
+                        )}
+                        <button type="submit" className="flex-1 h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-transform font-black">保存する</button>
+                    </div>
                   </form>
                 </>
               )}
