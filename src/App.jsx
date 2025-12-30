@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth'; // Auth機能追加
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -16,7 +16,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); // Auth初期化
+const auth = getAuth(app);
+const SHARED_USER_ID = "my-private-zaimu-v1"; // 旧データID
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -123,9 +124,9 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 export default function App() {
-  const [user, setUser] = useState(null); // ログインユーザー情報
-  const [authLoading, setAuthLoading] = useState(true); // Auth初期化待ち
-  const [loading, setLoading] = useState(true); // データ読み込み待ち
+  const [user, setUser] = useState(null); 
+  const [authLoading, setAuthLoading] = useState(true); 
+  const [loading, setLoading] = useState(true); 
   const [monthLoading, setMonthLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
@@ -185,10 +186,56 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if(window.confirm('ログアウトしますか？')) {
+        await signOut(auth);
+    }
+  };
+
+  // 旧データ移行ロジック
+  const migrateLegacyData = async () => {
+    if (!user) return;
+    if (!window.confirm('旧データ（誰でも見れる状態だったデータ）を、現在ログイン中のあなたのアカウントにコピーしますか？\n※上書きされる可能性があります。')) return;
+
+    setLoading(true);
     try {
-      await signOut(auth);
+        const batch = writeBatch(db);
+        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
+        const newUserRef = collection(db, 'users', user.uid, 'transactions');
+
+        // 1. Transactions Copy
+        const txSnap = await getDocs(oldUserRef);
+        txSnap.docs.forEach(docSnap => {
+            const newDocRef = doc(newUserRef, docSnap.id); // 同じIDで作成
+            batch.set(newDocRef, docSnap.data());
+        });
+
+        // 2. Settings Copy
+        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
+        if (configSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
+        }
+
+        // 3. Wallet Copy
+        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
+        if (walletSnap.exists()) {
+            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
+        }
+
+        // 4. Months Copy (直近数ヶ月分だけ簡易コピー)
+        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
+        const monthsSnap = await getDocs(monthsRef);
+        monthsSnap.docs.forEach(docSnap => {
+             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
+        });
+
+        await batch.commit();
+        alert('データの引き継ぎが完了しました！');
+        window.location.reload(); // リロードして反映
     } catch (error) {
-      console.error("Logout failed", error);
+        console.error("Migration failed", error);
+        alert('エラーが発生しました: ' + error.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -202,9 +249,9 @@ export default function App() {
     return config.categories.map(c => typeof c === 'string' ? c : c.name);
   };
 
-  // データ取得 (ユーザーがいる場合のみ)
+  // データ取得
   useEffect(() => {
-    if (!user) return; // ログインしていない場合は何もしない
+    if (!user) return; 
 
     setMonthLoading(true);
 
@@ -219,7 +266,6 @@ export default function App() {
     const prevStart = new Date(`${prevMonthStr}-01T00:00:00`).toISOString();
     const prevEnd = start;
 
-    // user.uid を使用してパスを構築
     const unsubTx = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
       setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoading(false);
@@ -251,7 +297,7 @@ export default function App() {
     });
 
     return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
-  }, [month, user]); // userが変わったときも再実行
+  }, [month, user]);
 
   const summary = useMemo(() => {
     const now = new Date();
@@ -488,8 +534,6 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  // --- RENDER: LOGIN SCREEN or APP ---
-
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -512,9 +556,7 @@ export default function App() {
     );
   }
 
-  // --- RENDER: MAIN APP ---
-
-  if (loading && !monthlyData.budget) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
+  if (loading && !monthlyData.budget && !transactions.length) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center">
@@ -619,7 +661,7 @@ export default function App() {
               </div>
             )}
 
-            {/* LOG TAB */}
+            {/* LOG TAB - Padding Added here */}
             {activeTab === 'log' && (
               <div className="p-4 space-y-3">
                 <div className="flex gap-2">
@@ -691,7 +733,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ANALYSIS TAB */}
+            {/* ANALYSIS TAB - Padding Added here */}
             {activeTab === 'analysis' && (
               <div className="p-4 space-y-4 animate-in fade-in duration-300">
                 <SimpleCard className="p-6">
@@ -735,7 +777,7 @@ export default function App() {
               <div key={month}>
                 {settingTab !== 'menu' && (
                     // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-3 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -961,59 +1003,6 @@ export default function App() {
                     <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-zinc-200 transition-colors">保存</button>
                 </div>
             </div>
-          </SimpleCard>
-        </div>
-      )}
-
-      {/* TX MODAL & FAB */}
-      <div className="fixed bottom-28 w-full max-w-md px-6 flex justify-end pointer-events-none"></div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-          <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-            {showCalculator ? (
-              <div className="h-auto">
-                <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
-                <CalculatorPad 
-                  initialValue={inputAmount || 0} 
-                  onConfirm={(val) => { setInputAmount(val); setShowCalculator(false); }} 
-                />
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">
-                    {editingTx ? '支出を編集' : '支出入力'}
-                    {editingTx && <button onClick={(e) => { 
-                          if(window.confirm('削除しますか？')) {
-                              deleteDoc(doc(db,'users',SHARED_USER_ID,'transactions',editingTx.id));
-                              setIsModalOpen(false);
-                          }
-                        }} className="ml-4 text-red-500 text-[10px] underline">削除</button>}
-                </h2><button onClick={() => setIsModalOpen(false)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
-                <form onSubmit={handleTxSubmit} className="space-y-5 font-bold">
-                  <div className="flex gap-2 items-center">
-                    <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
-                    <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
-                  </div>
-                  <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
-                  <div className="flex flex-row gap-4 w-full box-border">
-                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">日付</label><input name="date" type="date" value={inputDate} onChange={(e) => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold" /></div>
-                    <div className="flex-1 flex flex-col gap-1.5 overflow-hidden"><label className="text-[9px] text-zinc-500 uppercase pl-1 font-bold">カテゴリ</label><select name="category" defaultValue={editingTx?.category || (getCategoryNames()[0])} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none appearance-none font-bold">{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 justify-start font-bold uppercase">
-                    {config.paymentMethods.map(m => (<label key={m} className="cursor-pointer"><input type="radio" name="method" value={m} className="peer hidden" defaultChecked={editingTx?.paymentMethod === m || (!editingTx && m === config.paymentMethods[0])} required /><div className="px-3.5 h-11 text-center rounded-lg border border-zinc-800 text-[10px] font-bold text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all flex items-center justify-center min-w-[64px]">{m}</div></label>))}
-                  </div>
-                  {!editingTx && config.templates && (
-                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                      {config.templates.map((tpl, i) => (
-                        <button key={i} type="button" onClick={() => applyTemplate(tpl)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-white/10 flex items-center gap-1.5"><Zap size={10} className="text-yellow-400"/> {tpl.title}</button>
-                      ))}
-                    </div>
-                  )}
-                  <button type="submit" className="w-full h-12 bg-white text-black font-bold rounded-lg text-xs uppercase tracking-widest shadow-lg mt-1 active:scale-95 transition-transform font-black">保存する</button>
-                </form>
-              </>
-            )}
           </SimpleCard>
         </div>
       )}
