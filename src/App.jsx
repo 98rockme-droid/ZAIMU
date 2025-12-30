@@ -684,14 +684,12 @@ export default function App() {
                 <SimpleCard className="p-5 space-y-4">
                   <div className="flex justify-between items-center">
                     <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
+                    <button onClick={copyLastMonthSettings} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-200 text-black rounded-lg text-[9px] font-bold uppercase active:scale-95"><CopyCheck size={12}/> 先月の設定をコピー</button>
                   </div>
                   <div className="space-y-3">
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                     <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                  </div>
-                  <div className="pt-4 border-t border-white/5 flex justify-end">
-                    <button onClick={copyLastMonthSettings} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-200 text-black rounded-lg text-[9px] font-bold uppercase active:scale-95"><CopyCheck size={12}/> 先月の設定をコピー</button>
                   </div>
                 </SimpleCard>
                 <SimpleCard className="p-5 space-y-4">
@@ -739,7 +737,11 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p>
-                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}</span>
+                    {/* カテゴリ予算合計のロジックを修正: 表示されているカテゴリの予算のみを集計 */}
+                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((sum, cat) => {
+                        const catName = typeof cat === 'string' ? cat : cat.name;
+                        return sum + (Number(monthlyData.catBudgets?.[catName]) || 0);
+                    }, 0)).toLocaleString()}</span>
                   </div>
                   <div className="divide-y divide-white/5">
                     {config.categories.map((c, idx) => {
