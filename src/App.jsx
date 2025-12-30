@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, User, FileText, ArrowUp, ArrowDown } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -17,7 +17,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-const SHARED_USER_ID = "my-private-zaimu-v1"; // 旧データID
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -137,7 +136,6 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
-  // 編集用state
   const [editingItem, setEditingItem] = useState(null); 
 
   const [transactions, setTransactions] = useState([]);
@@ -206,7 +204,7 @@ export default function App() {
       }
 
       // CSVヘッダー
-      let csvContent = "\uFEFF"; // BOM
+      let csvContent = "\uFEFF"; 
       csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
 
       // データ行
@@ -221,7 +219,6 @@ export default function App() {
         csvContent += `${date},${title},${category},${amount},${method}\n`;
       });
 
-      // ダウンロードリンク
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -237,52 +234,18 @@ export default function App() {
     }
   };
 
-  // 旧データ移行ロジック
-  const migrateLegacyData = async () => {
-    if (!user) return;
-    if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
-
-    setLoading(true);
-    try {
-        const batch = writeBatch(db);
-        const oldUserRef = collection(db, 'users', SHARED_USER_ID, 'transactions');
-        const newUserRef = collection(db, 'users', user.uid, 'transactions');
-
-        // 1. Transactions Copy
-        const txSnap = await getDocs(oldUserRef);
-        txSnap.docs.forEach(docSnap => {
-            const newDocRef = doc(newUserRef, docSnap.id); 
-            batch.set(newDocRef, docSnap.data());
-        });
-
-        // 2. Settings Copy
-        const configSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'));
-        if (configSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'settings', 'config'), configSnap.data());
-        }
-
-        // 3. Wallet Copy
-        const walletSnap = await getDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'));
-        if (walletSnap.exists()) {
-            batch.set(doc(db, 'users', user.uid, 'wallet', 'cash'), walletSnap.data());
-        }
-
-        // 4. Months Copy
-        const monthsRef = collection(db, 'users', SHARED_USER_ID, 'months');
-        const monthsSnap = await getDocs(monthsRef);
-        monthsSnap.docs.forEach(docSnap => {
-             batch.set(doc(db, 'users', user.uid, 'months', docSnap.id), docSnap.data());
-        });
-
-        await batch.commit();
-        alert('データの引き継ぎが完了しました！');
-        window.location.reload(); 
-    } catch (error) {
-        console.error("Migration failed", error);
-        alert('エラーが発生しました: ' + error.message);
-    } finally {
-        setLoading(false);
+  const handleMoveCategory = async (index, direction, e) => {
+    e.stopPropagation();
+    const newCats = [...config.categories];
+    if (direction === 'up' && index > 0) {
+      [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
+    } else if (direction === 'down' && index < newCats.length - 1) {
+      [newCats[index], newCats[index + 1]] = [newCats[index + 1], newCats[index]];
+    } else {
+      return;
     }
+    setConfig({ ...config, categories: newCats });
+    await setDoc(doc(db, 'users', user.uid, 'settings', 'config'), { ...config, categories: newCats }, { merge: true });
   };
 
   const getCategoryIcon = (catName) => {
@@ -824,8 +787,7 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
-                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
+                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -834,8 +796,8 @@ export default function App() {
                 <div className="p-4 space-y-4">
                     {settingTab === 'menu' && (
                       <div className="space-y-6 pb-10">
-                        {/* Account Info (Simplified) */}
-                        <div className="flex flex-col gap-3 px-2">
+                        {/* Account Info */}
+                        <div className="flex flex-col gap-1 px-2">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     {user.photoURL ? (
@@ -864,7 +826,7 @@ export default function App() {
                             ))}
                         </div>
                         
-                        {/* Copy Button (Placed at the end of the list) */}
+                        {/* Copy Button */}
                         <div className="pt-4 flex justify-center flex-col items-center gap-4">
                             <button onClick={copyLastMonthSettings} className="flex items-center gap-2 px-6 py-3 bg-transparent border border-white/30 text-zinc-300 rounded-full text-xs font-bold active:scale-95 transition-all hover:bg-white/5">
                                 <CopyCheck size={16}/> 先月の設定をコピー
@@ -872,10 +834,6 @@ export default function App() {
                             
                             <button onClick={handleExportCSV} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
                                 <FileText size={12}/> 全データをCSV出力
-                            </button>
-                            
-                            <button onClick={migrateLegacyData} className="text-zinc-600 text-[10px] flex items-center gap-2 hover:text-white transition-colors underline">
-                                <Import size={12}/> 旧データを引き継ぐ
                             </button>
                         </div>
                       </div>
@@ -953,8 +911,12 @@ export default function App() {
                                             <span className="text-xl w-8 text-center">{cIcon}</span>
                                             <span className="text-xs font-bold text-white">{cName}</span>
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
                                             {budget > 0 && <span className="text-[10px] text-zinc-500 tabular-nums">予算: ¥{budget.toLocaleString()}</span>}
+                                            <div className="flex gap-1">
+                                                <button onClick={(e) => handleMoveCategory(idx, 'up', e)} className={`p-1 rounded hover:bg-white/10 ${idx === 0 ? 'text-zinc-700' : 'text-zinc-400'}`}><ArrowUp size={14}/></button>
+                                                <button onClick={(e) => handleMoveCategory(idx, 'down', e)} className={`p-1 rounded hover:bg-white/10 ${idx === config.categories.length - 1 ? 'text-zinc-700' : 'text-zinc-400'}`}><ArrowDown size={14}/></button>
+                                            </div>
                                         </div>
                                     </div>
                                   );
@@ -1025,51 +987,53 @@ export default function App() {
       {/* EDIT SETTINGS MODAL */}
       {editingItem && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
-          <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">編集</h2><button onClick={() => setEditingItem(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
-            <div className="space-y-4">
-                {editingItem.type === 'category' && (
-                    <>
-                        <div className="flex gap-2">
-                            <input value={editingItem.data.icon} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, icon: e.target.value }})} className="w-12 h-12 text-center bg-black/20 border border-white/10 rounded-lg text-xl text-white outline-none" />
-                            <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="カテゴリ名" />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <label className="text-[9px] text-zinc-500 font-bold">月間予算</label>
-                            <input type="number" value={editingItem.data.budget} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, budget: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="0" />
-                        </div>
-                    </>
-                )}
-                {/* ... (Fixed, Template, Payment - Same as before) ... */}
-                {editingItem.type === 'fixed' && (
-                    <>
-                        <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="固定費名" />
-                        <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
-                        <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                    </>
-                )}
-                {editingItem.type === 'template' && (
-                    <>
-                        <input value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, title: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="テンプレート名" />
-                        <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
-                        <div className="flex gap-2">
-                            <select value={editingItem.data.category} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, category: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select>
-                            <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
-                        </div>
-                    </>
-                )}
-                {editingItem.type === 'payment' && (
-                    <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="支払方法名" />
-                )}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <SimpleCard className="relative w-full max-w-md p-5 space-y-5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center font-bold"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">編集</h2><button onClick={() => setEditingItem(null)} className="text-zinc-600 hover:text-white transition-colors"><X size={18}/></button></div>
+              <div className="space-y-4">
+                  {editingItem.type === 'category' && (
+                      <>
+                          <div className="flex gap-2">
+                              <input value={editingItem.data.icon} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, icon: e.target.value }})} className="w-12 h-12 text-center bg-black/20 border border-white/10 rounded-lg text-xl text-white outline-none" />
+                              <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="カテゴリ名" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                              <label className="text-[9px] text-zinc-500 font-bold">月間予算</label>
+                              <input type="number" value={editingItem.data.budget} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, budget: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="0" />
+                          </div>
+                      </>
+                  )}
+                  {/* ... (Fixed, Template, Payment - Same as before) ... */}
+                  {editingItem.type === 'fixed' && (
+                      <>
+                          <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="固定費名" />
+                          <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
+                          <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                      </>
+                  )}
+                  {editingItem.type === 'template' && (
+                      <>
+                          <input value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, title: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="テンプレート名" />
+                          <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
+                          <div className="flex gap-2">
+                              <select value={editingItem.data.category} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, category: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select>
+                              <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
+                          </div>
+                      </>
+                  )}
+                  {editingItem.type === 'payment' && (
+                      <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="支払方法名" />
+                  )}
 
-                <div className="flex gap-2 pt-2">
-                    {editingItem.index !== -1 && (
-                        <button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
-                    )}
-                    <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-zinc-200 transition-colors">保存</button>
-                </div>
-            </div>
-          </SimpleCard>
+                  <div className="flex gap-2 pt-2">
+                      {editingItem.index !== -1 && (
+                          <button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
+                      )}
+                      <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-bold text-xs uppercase tracking-widest hover:bg-zinc-200 transition-colors">保存</button>
+                  </div>
+              </div>
+            </SimpleCard>
+          </div>
         </div>
       )}
 
