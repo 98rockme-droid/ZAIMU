@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -191,7 +191,7 @@ export default function App() {
     }
   };
 
-  // 旧データ移行ロジック（追加！）
+  // 旧データ移行ロジック
   const migrateLegacyData = async () => {
     if (!user) return;
     if (!window.confirm('旧データ（ログイン前に使っていたデータ）を、現在ログイン中のアカウントにコピーしますか？\n※現在のデータは上書きされる可能性があります。')) return;
@@ -540,7 +540,7 @@ export default function App() {
     return (
       <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl">
             <img src="/favicon.ico" alt="logo" className="w-12 h-12 object-contain" />
           </div>
           <div className="text-center">
@@ -550,7 +550,7 @@ export default function App() {
         </div>
         <button onClick={handleLogin} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold text-sm uppercase tracking-widest hover:bg-zinc-200 transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-xl">
           <Lock size={18} />
-          Sign in with Google
+          Googleでログイン
         </button>
       </div>
     );
