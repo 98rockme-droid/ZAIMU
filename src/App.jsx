@@ -668,7 +668,7 @@ export default function App() {
 
         {/* SETUP TAB */}
         {activeTab === 'settings' && (
-          <div className="space-y-4">
+          <div className="space-y-4" key={month}>
             {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
             
             {settingTab === 'menu' && (
@@ -737,11 +737,7 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p>
-                    {/* カテゴリ予算合計のロジックを修正: 表示されているカテゴリの予算のみを集計 */}
-                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((sum, cat) => {
-                        const catName = typeof cat === 'string' ? cat : cat.name;
-                        return sum + (Number(monthlyData.catBudgets?.[catName]) || 0);
-                    }, 0)).toLocaleString()}</span>
+                    <span className="text-[10px] font-mono text-white tabular-nums">予算計: ¥{(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}</span>
                   </div>
                   <div className="divide-y divide-white/5">
                     {config.categories.map((c, idx) => {
