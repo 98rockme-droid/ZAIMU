@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc } from 'firebase/firestore';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth'; // Auth機能追加
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -15,7 +16,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const SHARED_USER_ID = "my-private-zaimu-v1";
+const auth = getAuth(app); // Auth初期化
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const getTodayString = () => {
@@ -122,7 +123,9 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 export default function App() {
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null); // ログインユーザー情報
+  const [authLoading, setAuthLoading] = useState(true); // Auth初期化待ち
+  const [loading, setLoading] = useState(true); // データ読み込み待ち
   const [monthLoading, setMonthLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
@@ -163,6 +166,32 @@ export default function App() {
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const [searchText, setSearchText] = useState('');
 
+  // ログイン監視
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
   const getCategoryIcon = (catName) => {
     if (!config.categories) return '🏷';
     const cat = config.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
@@ -173,8 +202,10 @@ export default function App() {
     return config.categories.map(c => typeof c === 'string' ? c : c.name);
   };
 
-  // データ取得
+  // データ取得 (ユーザーがいる場合のみ)
   useEffect(() => {
+    if (!user) return; // ログインしていない場合は何もしない
+
     setMonthLoading(true);
 
     const start = new Date(`${month}-01T00:00:00`).toISOString();
@@ -188,27 +219,28 @@ export default function App() {
     const prevStart = new Date(`${prevMonthStr}-01T00:00:00`).toISOString();
     const prevEnd = start;
 
-    const unsubTx = onSnapshot(query(collection(db, 'users', SHARED_USER_ID, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
+    // user.uid を使用してパスを構築
+    const unsubTx = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
       setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoading(false);
     });
 
     const fetchLastMonth = async () => {
-      const q = query(collection(db, 'users', SHARED_USER_ID, 'transactions'), where('date', '>=', prevStart), where('date', '<', prevEnd));
+      const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', prevEnd));
       const s = await getDocs(q);
       setLastMonthTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchLastMonth();
 
-    const unsubMonth = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'months', month), (s) => {
+    const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
       setMonthlyData(s.exists() ? s.data() : { salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
       setMonthLoading(false);
     });
     
-    const unsubCash = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), (s) => {
+    const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => {
       setCashBalance(s.exists() ? s.data().balance : 0);
     });
-    const unsubConfig = onSnapshot(doc(db, 'users', SHARED_USER_ID, 'settings', 'config'), (s) => {
+    const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => {
       if (s.exists()) {
         const data = s.data();
         if (data.categories && typeof data.categories[0] === 'string') {
@@ -219,7 +251,7 @@ export default function App() {
     });
 
     return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
-  }, [month]);
+  }, [month, user]); // userが変わったときも再実行
 
   const summary = useMemo(() => {
     const now = new Date();
@@ -288,7 +320,7 @@ export default function App() {
   const confirmPayment = async (cardName) => {
     const confirmed = monthlyData.confirmedPayments || [];
     if (!confirmed.includes(cardName)) {
-      await setDoc(doc(db, 'users', SHARED_USER_ID, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
+      await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
     }
   };
 
@@ -298,7 +330,7 @@ export default function App() {
     d.setMonth(d.getMonth() - 1);
     const lastMonthStr = getMonthString(d);
     try {
-        const lastMonthDoc = await getDoc(doc(db, 'users', SHARED_USER_ID, 'months', lastMonthStr));
+        const lastMonthDoc = await getDoc(doc(db, 'users', user.uid, 'months', lastMonthStr));
         if (lastMonthDoc.exists()) {
             const data = lastMonthDoc.data();
             const newData = {
@@ -308,7 +340,7 @@ export default function App() {
                 catBudgets: data.catBudgets || {},
                 cardDueDates: data.cardDueDates || {}, 
             };
-            await setDoc(doc(db, 'users', SHARED_USER_ID, 'months', month), newData, { merge: true });
+            await setDoc(doc(db, 'users', user.uid, 'months', month), newData, { merge: true });
             alert('コピーしました');
         } else {
             alert('先月のデータが見つかりませんでした');
@@ -331,13 +363,13 @@ export default function App() {
     };
     if (method === '現金') { 
       const diff = editingTx ? editingTx.amount - amount : -amount; 
-      await setDoc(doc(db, 'users', SHARED_USER_ID, 'wallet', 'cash'), { balance: cashBalance + diff }, { merge: true }); 
+      await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + diff }, { merge: true }); 
     }
     if (editingTx) { 
-      await updateDoc(doc(db, 'users', SHARED_USER_ID, 'transactions', editingTx.id), data); 
+      await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data); 
       setEditingTx(null); 
     } else { 
-      await setDoc(doc(collection(db, 'users', SHARED_USER_ID, 'transactions')), { ...data, createdAt: serverTimestamp() }); 
+      await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() }); 
     }
     setIsModalOpen(false);
   };
@@ -353,11 +385,11 @@ export default function App() {
         } else {
             newCats[index] = { name: data.name, icon: data.icon || '🏷' };
         }
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, categories: newCats});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
         const newBudgets = { ...monthlyData.catBudgets };
         if (index !== -1 && data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
         if (data.budget) newBudgets[data.name] = Number(data.budget);
-        setDoc(doc(db,'users',SHARED_USER_ID,'months',month), { catBudgets: newBudgets }, { merge: true });
+        setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: newBudgets }, { merge: true });
     } else if (type === 'template') {
         const newTpls = [...(config.templates || [])];
         if (index === -1) {
@@ -365,7 +397,7 @@ export default function App() {
         } else {
             newTpls[index] = { title: data.title, amount: Number(data.amount), category: data.category, method: data.method };
         }
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: newTpls});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: newTpls});
     } else if (type === 'fixed') {
         const newFixed = [...(monthlyData.fixedCosts || [])];
         if (index === -1) {
@@ -373,7 +405,7 @@ export default function App() {
         } else {
             newFixed[index] = { ...newFixed[index], name: data.name, amount: Number(data.amount), method: data.method };
         }
-        setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts: newFixed},{merge:true});
+        setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts: newFixed},{merge:true});
     } else if (type === 'payment') {
         const newMethods = [...config.paymentMethods];
         if (index === -1) {
@@ -381,7 +413,7 @@ export default function App() {
         } else {
             newMethods[index] = data.name;
         }
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, paymentMethods: newMethods});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: newMethods});
     }
     setEditingItem(null);
   };
@@ -392,13 +424,13 @@ export default function App() {
     if (index === -1) { setEditingItem(null); return; }
 
     if (type === 'category') {
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== index)});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== index)});
     } else if (type === 'template') {
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== index)});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== index)});
     } else if (type === 'fixed') {
-        setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true});
+        setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true});
     } else if (type === 'payment') {
-        setDoc(doc(db,'users',SHARED_USER_ID,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter((_, i) => i !== index)});
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter((_, i) => i !== index)});
     }
     setEditingItem(null);
   };
@@ -456,7 +488,33 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  if (loading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing...</div>;
+  // --- RENDER: LOGIN SCREEN or APP ---
+
+  if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
+
+  if (!user) {
+    return (
+      <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-2xl">
+            <img src="/favicon.ico" alt="logo" className="w-12 h-12 object-contain" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-3xl font-black text-white tracking-tighter uppercase">ZAIMU</h1>
+            <p className="text-zinc-500 text-xs font-bold tracking-widest mt-1">Simple Financial Management</p>
+          </div>
+        </div>
+        <button onClick={handleLogin} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold text-sm uppercase tracking-widest hover:bg-zinc-200 transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-xl">
+          <Lock size={18} />
+          Sign in with Google
+        </button>
+      </div>
+    );
+  }
+
+  // --- RENDER: MAIN APP ---
+
+  if (loading && !monthlyData.budget) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center">
@@ -481,11 +539,11 @@ export default function App() {
           </div>
         </header>
 
-        {/* MAIN SCROLL AREA - Padding Removed here */}
+        {/* MAIN SCROLL AREA */}
         <main className="flex-1 overflow-y-auto scrollbar-hide pb-32">
           <div className="w-full max-w-md mx-auto">
             
-            {/* HOME TAB - Padding Added here */}
+            {/* HOME TAB */}
             {activeTab === 'home' && (
               <div className="p-4 space-y-4">
                 <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
@@ -561,7 +619,7 @@ export default function App() {
               </div>
             )}
 
-            {/* LOG TAB - Padding Added here */}
+            {/* LOG TAB */}
             {activeTab === 'log' && (
               <div className="p-4 space-y-3">
                 <div className="flex gap-2">
@@ -633,7 +691,7 @@ export default function App() {
               </div>
             )}
 
-            {/* ANALYSIS TAB - Padding Added here */}
+            {/* ANALYSIS TAB */}
             {activeTab === 'analysis' && (
               <div className="p-4 space-y-4 animate-in fade-in duration-300">
                 <SimpleCard className="p-6">
@@ -676,8 +734,8 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    // Sticky Header: 親のpaddingの影響を受けないため、top-0で完全に張り付きます
-                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
+                    // Sticky Header Button: ネガティブマージンで左右と上を埋め、ヘッダー直下に固定
+                    <div className="sticky top-0 z-10 bg-[#121212] -mx-4 -mt-4 px-4 py-2 border-b border-white/5 w-[calc(100%+2rem)] flex items-center mb-4">
                         <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
                     </div>
                 )}
@@ -705,6 +763,10 @@ export default function App() {
                                 <CopyCheck size={16}/> 先月の設定をコピー
                             </button>
                         </div>
+                        
+                        <div className="flex justify-center pt-8">
+                            <button onClick={handleLogout} className="text-red-500 text-xs font-bold flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity"><LogOut size={14}/> ログアウト</button>
+                        </div>
                       </div>
                     )}
 
@@ -718,9 +780,9 @@ export default function App() {
                             <SimpleCard className="p-5 space-y-4">
                               <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p></div>
                               <div className="space-y-3">
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                               </div>
                             </SimpleCard>
                             <SimpleCard className="p-5 space-y-4">
@@ -730,7 +792,7 @@ export default function App() {
                               </div>
                               <div className="space-y-3">
                                 {config.paymentMethods.filter(m => m !== '現金').map(m => (
-                                  <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="number" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] || 0} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value)}},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
+                                  <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="number" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] || 0} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value)}},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
                                 ))}
                               </div>
                             </SimpleCard>
