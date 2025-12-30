@@ -674,20 +674,25 @@ export default function App() {
         {/* SETUP TAB */}
         {activeTab === 'settings' && (
           <div className="space-y-4" key={month}>
-            {settingTab !== 'menu' && <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold mb-4"><ArrowLeft size={16}/> 戻る</button>}
+            {/* Sticky Back Button */}
+            {settingTab !== 'menu' && (
+                <div className="sticky top-20 z-10 bg-[#121212] py-2 mb-2 w-full">
+                    <button onClick={() => setSettingTab('menu')} className="flex items-center gap-2 text-zinc-500 text-xs font-bold"><ArrowLeft size={16}/> 戻る</button>
+                </div>
+            )}
             
             {settingTab === 'menu' && (
               <div className="space-y-3 pb-20 relative min-h-[50vh]">
                 {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/> }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
-                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all">
-                    <div className="flex items-center gap-4 text-zinc-300">
+                  <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all text-zinc-300">
+                    <div className="flex items-center gap-4">
                       {item.icon}
-                      <div className="text-left">
-                        <div>{item.label}</div>
-                        {item.value && <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{item.value}</div>}
-                      </div>
+                      <span className="text-sm font-bold">{item.label}</span>
                     </div>
-                    <ChevronRight size={18} className="text-zinc-700"/>
+                    <div className="flex items-center gap-3">
+                        {item.value && <span className="text-[10px] text-zinc-500 font-mono mt-0.5">{item.value}</span>}
+                        <ChevronRight size={18} className="text-zinc-700"/>
+                    </div>
                   </button>
                 ))}
                 
@@ -708,10 +713,8 @@ export default function App() {
                 {settingTab === 'budget' && (
                   <div className="space-y-4 font-bold">
                     <SimpleCard className="p-5 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
-                        <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}</span>
-                      </div>
+                      <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p>
+                      <span className="text-[10px] font-mono text-white tabular-nums">合計: ¥{((monthlyData.budget||0) + (monthlyData.cashBudget||0)).toLocaleString()}</span></div>
                       <div className="space-y-3">
                         <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
                         <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',SHARED_USER_ID,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
