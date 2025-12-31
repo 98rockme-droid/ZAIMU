@@ -121,7 +121,8 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
       </div>
       <div className="grid grid-cols-4 gap-2 h-64">
         {btns.map((b, i) => (
-          <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-white/5 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>
+          // ここを修正: bg-white/5 -> bg-zinc-800 にして不透明化
+          <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center shadow-sm ${b.style || 'text-white'}`}>
             {b.l}
           </button>
         ))}
@@ -167,7 +168,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ★ここが唯一の宣言箇所です★
+  // Ref for scroll control - ※ここが唯一の宣言箇所です
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -567,6 +568,19 @@ export default function App() {
     });
   }, [transactions, searchText, filter]);
 
+  const groupedTransactions = useMemo(() => {
+    const groups = {};
+    filteredTransactions.forEach(t => {
+      const dateKey = t.date.split('T')[0];
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(t);
+    });
+    return Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)).map(date => ({
+      date,
+      items: groups[date]
+    }));
+  }, [filteredTransactions]);
+
   const calendarDays = useMemo(() => {
     const d = new Date(month + "-01");
     const year = d.getFullYear();
@@ -780,31 +794,33 @@ export default function App() {
                         </div>
                     ) : filteredTransactions.map(t => {
                       return (
-                        <div 
-                          key={t.id} 
-                          onClick={() => startEditing(t)} 
-                          className="flex items-center justify-between py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            {/* Date */}
-                            <div className="w-10 text-center font-mono text-xs text-zinc-500">{formatDateShort(t.date)}</div>
-                            
-                            {/* Category Label (New) */}
-                            <div className="w-14 flex-shrink-0 flex justify-center">
-                               <span className="bg-white/10 text-zinc-300 text-[10px] px-1 rounded h-5 flex items-center justify-center w-full truncate">
-                                 {t.category}
-                               </span>
-                            </div>
+                         <SimpleCard 
+                            key={t.id} 
+                            onClick={() => startEditing(t)} 
+                            className="bg-[#1E1E1E] mb-2 cursor-pointer border border-white/5 active:scale-98 transition-transform"
+                          >
+                           <div className="flex items-center justify-between p-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {/* Date */}
+                                <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
+                                
+                                {/* Category Label (New) */}
+                                <div className="w-16 flex-shrink-0 flex justify-center">
+                                   <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
+                                     {t.category}
+                                   </span>
+                                </div>
 
-                            {/* Title */}
-                            <div className="flex-1 truncate text-sm font-bold text-white">
-                                {t.title}
+                                {/* Title */}
+                                <div className="flex-1 truncate text-sm font-bold text-white">
+                                    {t.title}
+                                </div>
+                              </div>
+                              
+                              {/* Amount */}
+                              <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
                             </div>
-                          </div>
-                          
-                          {/* Amount */}
-                          <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
-                        </div>
+                          </SimpleCard>
                       );
                     })}
                   </div>
