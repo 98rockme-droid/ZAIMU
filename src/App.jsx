@@ -63,7 +63,6 @@ const normalizeConfig = (data) => ({
 });
 
 /* --- COMPONENTS --- */
-// ErrorBoundary
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -80,8 +79,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="h-screen w-full bg-[#121212] text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
           <h1 className="text-xl font-bold text-red-400">エラーが発生しました</h1>
-          <p className="text-xs text-zinc-500 text-center">アプリに問題が発生しました。<br/>再読み込みしてください。</p>
-          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm uppercase active:scale-95 transition-transform">再読み込み</button>
+          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm uppercase">再読み込み</button>
         </div>
       );
     }
@@ -152,7 +150,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
     { l: '7', act: () => handlePush('7') }, { l: '8', act: () => handlePush('8') }, { l: '9', act: () => handlePush('9') }, { l: '-', act: () => handlePush('-'), style: 'text-emerald-400' },
     { l: '4', act: () => handlePush('4') }, { l: '5', act: () => handlePush('5') }, { l: '6', act: () => handlePush('6') }, { l: '+', act: () => handlePush('+'), style: 'text-emerald-400' },
     { l: '1', act: () => handlePush('1') }, { l: '2', act: () => handlePush('2') }, { l: '3', act: () => handlePush('3') },
-    { l: '=', act: () => { const res = safeCalculate(display); setDisplay(res); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
+    { l: '=', act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
     { l: '0', act: () => handlePush('0'), style: 'col-span-2' }, { l: '.', act: () => handlePush('.') },
   ];
   return (
@@ -259,25 +257,25 @@ function AppMain() {
   }, [user]);
 
   const summary = useMemo(() => {
-    const fixedCosts = monthlyData.fixedCosts || [];
+    const fixedCosts = monthlyData?.fixedCosts || [];
     const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
     const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
     const fixedTotal = fixedCashTotal + fixedCardTotal;
 
-    const totalBudget = Number(monthlyData.budget) || 0;
+    const totalBudget = Number(monthlyData?.budget) || 0;
     const spentCard = transactions.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
-    const cashBudgetTotal = Number(monthlyData.cashBudget) || 0;
+    const cashBudgetTotal = Number(monthlyData?.cashBudget) || 0;
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
     const cashRemaining = cashBudgetTotal - spentCash;
 
-    const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+    const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCashTotal + billTotal; 
-    const bankBalanceProjected = (Number(monthlyData.salary) || 0) - totalWithdrawal;
+    const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
     const getCatTotals = (txs) => (txs || []).reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
-    const catBudgetSum = (config.categories || []).reduce((sum, c) => sum + (monthlyData.catBudgets?.[c.name] || 0), 0);
+    const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name || c] || 0), 0);
 
     const now = new Date();
     const isCurrentMonth = month === getMonthString(now);
@@ -297,12 +295,14 @@ function AppMain() {
 
   const activeAlerts = useMemo(() => {
     const today = new Date().getDate();
-    return Object.entries(monthlyData?.cardDueDates || {}).filter(([card, day]) => {
+    const bills = monthlyData?.cardBills || {};
+    const dueDates = monthlyData?.cardDueDates || {};
+    const confirmed = monthlyData?.confirmedPayments || [];
+
+    return Object.entries(dueDates).filter(([card, day]) => {
       const dueDay = Number(day);
-      const isConfirmed = (monthlyData?.confirmedPayments || []).includes(card);
-      // 金額があるかチェック
-      const hasBill = (monthlyData?.cardBills?.[card] || 0) > 0;
-      // 条件: 請求額あり & 未完了 & 今日以降 & 7日以内
+      const isConfirmed = confirmed.includes(card);
+      const hasBill = (Number(bills[card]) || 0) > 0;
       return hasBill && !isConfirmed && dueDay >= today && (dueDay - today) <= 7;
     });
   }, [monthlyData]);
@@ -323,6 +323,7 @@ function AppMain() {
   const handleSettingsSave = async () => {
     if(!editingItem) return;
     const { type, data, index } = editingItem;
+    // 配列操作時のundefined対策 (|| [])
     if (type === 'category') {
         const newCats = [...(config.categories || [])];
         if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
@@ -480,6 +481,7 @@ function AppMain() {
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
+                    {/* ALERT: Re-implemented correctly */}
                     {activeAlerts.length > 0 && (
                       <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
                         <div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14}/> 支払期日が迫っています</div>
@@ -561,7 +563,7 @@ function AppMain() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {settingTab === 'budget' && <SimpleCard className="p-5 space-y-4 animate-in slide-in-from-right-2"><div className="space-y-3"><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">手取り給与</label><input type="text" inputMode="decimal" defaultValue={monthlyData.salary?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{salary:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">生活費予算（総枠）</label><input type="text" inputMode="decimal" defaultValue={monthlyData.budget?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{budget:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">現金予算（口座用）</label><input type="text" inputMode="decimal" defaultValue={monthlyData.cashBudget?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{cashBudget:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div></div><div className="pt-4 border-t border-white/5 space-y-3"><p className="text-[10px] text-zinc-500 font-black uppercase">カード引き落とし額設定</p> {(config?.paymentMethods||[]).filter(m=>m!=='現金').map(m=>(<div key={m} className="flex gap-2 items-center"><span className="text-[10px] text-zinc-400 w-16 truncate">{m}</span><input type="text" inputMode="decimal" defaultValue={monthlyData.cardBills?.[m]?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{[`cardBills.${m}`]:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white tabular-nums outline-none"/><input type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m]} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{[`cardDueDates.${m}`]:e.target.value},{merge:true})} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg text-xs text-center text-white outline-none"/></div>))} </div></SimpleCard>}
+                    {settingTab === 'budget' && <SimpleCard className="p-5 space-y-4 animate-in slide-in-from-right-2"><div className="space-y-3"><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">手取り給与</label><input type="text" inputMode="decimal" defaultValue={monthlyData.salary?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{salary:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">生活費予算（総枠）</label><input type="text" inputMode="decimal" defaultValue={monthlyData.budget?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{budget:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 font-bold uppercase pl-1">現金予算（口座用）</label><input type="text" inputMode="decimal" defaultValue={monthlyData.cashBudget?.toLocaleString()} onBlur={e=>setDoc(doc(db,'users',user.uid,'months',month),{cashBudget:Number(e.target.value.replace(/,/g,''))},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold tabular-nums outline-none"/></div></div><div className="pt-4 border-t border-white/5 space-y-3"><p className="text-[10px] text-zinc-500 font-black uppercase">カード引き落とし額設定</p> {(config?.paymentMethods||[]).filter(m=>m!=='現金').map(m=>(<div key={m} className="flex gap-2 items-center"><span className="text-[10px] text-zinc-400 w-16 truncate">{m}</span><input type="text" inputMode="decimal" defaultValue={monthlyData.cardBills?.[m]?.toLocaleString()} onBlur={e=>{ const newBills = { ...monthlyData.cardBills, [m]: Number(e.target.value.replace(/,/g,'')) }; setDoc(doc(db,'users',user.uid,'months',month),{ cardBills: newBills },{merge:true}); }} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white tabular-nums outline-none"/><input type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m]} onBlur={e=>{ const newDates = { ...monthlyData.cardDueDates, [m]: e.target.value }; setDoc(doc(db,'users',user.uid,'months',month),{ cardDueDates: newDates },{merge:true}); }} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg text-xs text-center text-white outline-none"/></div>))} </div></SimpleCard>}
                     {settingTab === 'fixed' && <SimpleCard className="p-5 animate-in slide-in-from-right-2"><div className="divide-y divide-white/5">{(monthlyData.fixedCosts || []).map((f,idx)=>(<div key={idx} onClick={()=>setEditingItem({type:'fixed',data:f,index:idx})} className="flex justify-between items-center py-3 cursor-pointer"><div className="flex flex-col"><span className="text-xs text-zinc-200 font-bold">{f.name}</span><span className="text-[9px] text-zinc-500 uppercase">{f.method||'未設定'}</span></div><span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span></div>))}</div><button onClick={()=>setEditingItem({type:'fixed',data:{name:'',amount:'',method:'現金'},index:-1})} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-black uppercase shadow-lg active:scale-95">固定費を追加</button></SimpleCard>}
                     {settingTab === 'category' && <SimpleCard className="p-5 animate-in slide-in-from-right-2"><div className="divide-y divide-white/5">{(config?.categories || []).map((c,idx)=>{const n=c.name||c; const b=monthlyData?.catBudgets?.[n]||0; return(<div key={idx} onClick={()=>setEditingItem({type:'category',data:{name:n,icon:getCategoryIcon(n),budget:b},index:idx})} className="flex justify-between items-center py-3 cursor-pointer"><div className="flex items-center gap-3"><span className="text-xl w-8 text-center">{getCategoryIcon(n)}</span><span className="text-xs font-bold text-white">{n}</span></div><div className="flex items-center gap-2"><span className="text-[10px] text-zinc-500 font-mono">¥{b.toLocaleString()}</span><div className="flex gap-1"><button onClick={e=>{e.stopPropagation();handleMoveCategory(idx,'up',e)}} className="p-1 text-zinc-600 hover:text-white"><ArrowUp size={14}/></button><button onClick={e=>{e.stopPropagation();handleMoveCategory(idx,'down',e)}} className="p-1 text-zinc-600 hover:text-white"><ArrowDown size={14}/></button></div></div></div>)})}</div><button onClick={()=>setEditingItem({type:'category',data:{name:'',icon:'🏷',budget:''},index:-1})} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-black uppercase shadow-lg active:scale-95">カテゴリ追加</button></SimpleCard>}
                     {settingTab === 'template' && <SimpleCard className="p-5 animate-in slide-in-from-right-2"><div className="divide-y divide-white/5">{(config?.templates || []).map((t,idx)=>(<div key={idx} onClick={()=>setEditingItem({type:'template',data:t,index:idx})} className="flex justify-between items-center py-4 cursor-pointer"><div className="flex flex-col"><span className="text-xs font-bold text-white">{t.title}</span><span className="text-[9px] text-zinc-500 font-bold">¥{Number(t.amount).toLocaleString()} / {t.category}</span></div><ChevronRight size={14} className="text-zinc-800"/></div>))}</div><button onClick={()=>setEditingItem({type:'template',data:{title:'',amount:'',category:getCategoryNames()[0]||'食費',method:config?.paymentMethods?.[0]||'現金'},index:-1})} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-black uppercase shadow-lg active:scale-95">追加</button></SimpleCard>}
