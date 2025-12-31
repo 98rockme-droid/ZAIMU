@@ -167,7 +167,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ★ここが唯一の宣言箇所です★
+  // Ref for scroll control - ここで1回だけ宣言 (No Duplicates)
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -593,6 +593,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -629,24 +632,47 @@ export default function App() {
         
         {/* HEADER (Glassmorphism & Center Layout) */}
         <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
-          {/* 左：ロゴ（アイコンのみ） */}
-          <div className="flex items-center justify-start w-10">
-             <img src="/favicon.ico" alt="logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" onError={(e) => e.target.style.display = 'none'} />
-          </div>
-          
-          {/* 中央：年月ナビゲーター */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-4">
-              <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronLeft size={24}/></button>
-              <span className="text-sm font-bold text-white tracking-wider whitespace-nowrap tabular-nums">{formatMonthJP(month)}</span>
-              <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronRight size={24}/></button>
-          </div>
+          {(activeTab === 'settings' && settingTab !== 'menu') ? (
+            // Detail Header
+            <>
+                <button onClick={() => { 
+                    setSettingTab('menu'); 
+                    setTimeout(() => { if(mainRef.current) mainRef.current.scrollTop = 0; }, 0); 
+                }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
+                    <ArrowLeft size={24}/>
+                </button>
+                <span className="text-sm font-bold text-white tracking-wider absolute left-1/2 -translate-x-1/2">{
+                    (settingTab === 'budget' && '資金計画') || 
+                    (settingTab === 'fixed' && '固定費') || 
+                    (settingTab === 'category' && 'カテゴリ') || 
+                    (settingTab === 'template' && 'テンプレート') || 
+                    (settingTab === 'payment' && '支払方法')
+                }</span>
+                <div className="w-10"></div>
+            </>
+          ) : (
+            // Standard Header
+            <>
+                {/* 左：ロゴ（アイコンのみ） */}
+                <div className="flex items-center justify-start w-10">
+                    <img src="/favicon.ico" alt="logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" onError={(e) => e.target.style.display = 'none'} />
+                </div>
+                
+                {/* 中央：年月ナビゲーター */}
+                <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-4">
+                    <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronLeft size={24}/></button>
+                    <span className="text-sm font-bold text-white tracking-wider whitespace-nowrap tabular-nums">{formatMonthJP(month)}</span>
+                    <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronRight size={24}/></button>
+                </div>
 
-          {/* 右：今月へ戻るボタン（カレンダーアイコン） */}
-          <div className="flex items-center justify-end w-10">
-             <button onClick={() => setMonth(getMonthString(new Date()))} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
-                <Calendar size={22} />
-             </button>
-          </div>
+                {/* 右：今月へ戻るボタン（カレンダーアイコン） */}
+                <div className="flex items-center justify-end w-10">
+                    <button onClick={() => setMonth(getMonthString(new Date()))} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
+                        <Calendar size={22} />
+                    </button>
+                </div>
+            </>
+          )}
         </header>
 
         {/* MAIN SCROLL AREA (Padding for Header/Footer) */}
@@ -753,26 +779,30 @@ export default function App() {
                             <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
                         </div>
                     ) : filteredTransactions.map(t => {
-                      const icon = getCategoryIcon(t.category);
                       return (
                         <div 
                           key={t.id} 
                           onClick={() => startEditing(t)} 
-                          className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
+                          className="flex items-center justify-between py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
                         >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            {/* Date Column */}
-                            <div className="w-12 text-center font-bold text-zinc-400 text-xs font-mono">{formatDateShort(t.date)}</div>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {/* Date */}
+                            <div className="w-8 text-center font-mono text-xs text-zinc-500">{formatDateShort(t.date)}</div>
                             
-                            {/* Title & Category Column */}
-                            <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                                <div className="text-sm font-bold text-white truncate">{t.title}</div>
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase">
-                                    <span className="text-[10px]">{icon}</span>
-                                    <span>{t.category}</span>
+                            {/* Category Label */}
+                            <div className="w-16 flex-shrink-0">
+                                <div className="w-full text-center text-[10px] font-bold text-zinc-400 bg-white/5 rounded py-0.5 truncate">
+                                    {t.category}
                                 </div>
                             </div>
+
+                            {/* Title */}
+                            <div className="flex-1 truncate text-sm font-bold text-white">
+                                {t.title}
+                            </div>
                           </div>
+                          
+                          {/* Amount */}
                           <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
                         </div>
                       );
