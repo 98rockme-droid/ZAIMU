@@ -167,7 +167,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ※ここ以外には宣言しません！
+  // Ref for scroll control - ★ここが唯一の宣言箇所です★
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -593,10 +593,6 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  // --- スクロール制御用Ref ---
-  // mainRefはここで1回だけ宣言 (No Duplicates)
-  const mainRef = useRef(null);
-
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -1011,7 +1007,7 @@ export default function App() {
                                   <div key={idx} onClick={() => { setEditingItem({ type: 'template', data: t, index: idx }); }} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
                                     <div className="flex flex-col">
                                       <span className="text-xs font-bold text-white">{t.title}</span>
-                                      <span className="text-[10px] text-zinc-500">¥{Number(t.amount).toLocaleString()} / {t.category} / {t.method}</span>
+                                      <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
                                     </div>
                                   </div>
                                 ))}
