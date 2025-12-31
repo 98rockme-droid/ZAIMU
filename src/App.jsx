@@ -18,9 +18,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-/* --- CONSTANTS & UTILS --- */
-const CASH = '現金';
-
+/* --- UTILS --- */
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const formatMonthJP = (monthStr) => {
     if (!monthStr) return "";
@@ -38,57 +36,8 @@ const getTodayString = () => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-const toNumber = (val) => {
-  if (!val) return 0;
-  const num = Number(String(val).replace(/,/g, ''));
-  return isNaN(num) ? 0 : num;
-};
-
-// Data Normalizers (Crash Prevention)
-const normalizeMonthlyData = (data) => ({
-  salary: data?.salary || 0,
-  budget: data?.budget || 0,
-  cashBudget: data?.cashBudget || 0,
-  cardBills: data?.cardBills || {},
-  fixedCosts: data?.fixedCosts || [],
-  catBudgets: data?.catBudgets || {},
-  cardDueDates: data?.cardDueDates || {},
-  confirmedPayments: data?.confirmedPayments || []
-});
-
-const normalizeConfig = (data) => ({
-  categories: data?.categories || [{ name: '食費', icon: '🍔' }],
-  paymentMethods: data?.paymentMethods || [CASH],
-  templates: data?.templates || []
-});
 
 /* --- COMPONENTS --- */
-// ErrorBoundary
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-  componentDidCatch(error, errorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="h-screen w-full bg-[#121212] text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
-          <h1 className="text-xl font-bold text-red-400">エラーが発生しました</h1>
-          <p className="text-xs text-zinc-500">アプリを再読み込みしてください。</p>
-          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm uppercase">再読み込み</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 const SimpleCard = ({ children, className = "", onClick }) => (
   <div onClick={onClick} className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
     {children}
@@ -110,30 +59,40 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// Calculator Logic
+// 電卓ロジック
 const safeCalculate = (expression) => {
   if (!expression || /[^0-9+\-*/.]/.test(expression)) return '0';
   try {
-    // eslint-disable-next-line no-new-func
-    const res = new Function('return ' + expression)();
-    return isFinite(res) ? String(res) : 'Error';
+    const tokens = expression.match(/(\d+(\.\d+)?|[\+\-\*\/])/g);
+    if (!tokens) return 0;
+    let stack = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === '*' || token === '/') {
+        const prev = parseFloat(stack.pop());
+        const next = parseFloat(tokens[++i]);
+        if (token === '*') stack.push(prev * next);
+        if (token === '/') stack.push(prev / next);
+      } else { stack.push(token); }
+    }
+    let result = parseFloat(stack[0]);
+    for (let i = 1; i < stack.length; i += 2) {
+      const operator = stack[i];
+      const operand = parseFloat(stack[i + 1]);
+      if (operator === '+') result += operand;
+      if (operator === '-') result -= operand;
+    }
+    return isNaN(result) ? '0' : result;
   } catch (e) { return 'Error'; }
 };
 
 const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
-  
   const handlePush = (val) => {
-    if (isResult && !['+','-','*','/'].includes(val)) {
-      setDisplay(String(val));
-      setIsResult(false);
-    } else {
-      setDisplay(prev => (prev === '0' && !['+','-','*','/','.'].includes(val)) ? String(val) : prev + val);
-      setIsResult(false);
-    }
+    if (isResult && !['+','-','*','/'].includes(val)) { setDisplay(String(val)); setIsResult(false); } 
+    else { setDisplay(prev => (prev === '0' && !['+','-','*','/','.'] .includes(val)) ? String(val) : prev + val); setIsResult(false); }
   };
-
   const btns = [
     { l: 'C', act: () => setDisplay('0'), style: 'text-red-400' },
     { l: '/', act: () => handlePush('/'), style: 'text-emerald-400' },
@@ -142,10 +101,9 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
     { l: '7', act: () => handlePush('7') }, { l: '8', act: () => handlePush('8') }, { l: '9', act: () => handlePush('9') }, { l: '-', act: () => handlePush('-'), style: 'text-emerald-400' },
     { l: '4', act: () => handlePush('4') }, { l: '5', act: () => handlePush('5') }, { l: '6', act: () => handlePush('6') }, { l: '+', act: () => handlePush('+'), style: 'text-emerald-400' },
     { l: '1', act: () => handlePush('1') }, { l: '2', act: () => handlePush('2') }, { l: '3', act: () => handlePush('3') },
-    { l: '=', act: () => { const res = safeCalculate(display); setDisplay(res); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
+    { l: '=', act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
     { l: '0', act: () => handlePush('0'), style: 'col-span-2' }, { l: '.', act: () => handlePush('.') },
   ];
-
   return (
     <div className="w-full flex flex-col gap-3">
       <div className="bg-black/40 rounded-lg p-3 text-right border border-white/5 font-mono text-2xl text-white break-all">{display}</div>
@@ -154,14 +112,13 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
           <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
         ))}
       </div>
-      <button onClick={() => onConfirm(toNumber(display))} className="w-full h-12 bg-white text-black rounded-lg font-bold uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
+      <button onClick={() => onConfirm(isResult ? Number(display) : Number(safeCalculate(display)))} className="w-full h-12 bg-white text-black rounded-lg font-black uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
     </div>
   );
 };
 
-/* --- MAIN APP LOGIC --- */
-// FIX: Renamed from AppContent to AppMain to avoid ReferenceError
-function AppMain() {
+/* --- MAIN APP --- */
+function App() {
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
   const [loading, setLoading] = useState(true); 
@@ -184,9 +141,15 @@ function AppMain() {
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
-  const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
+  const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
-  const [config, setConfig] = useState(normalizeConfig({}));
+  
+  // 初期値を設定して undefined を防ぐ
+  const [config, setConfig] = useState({ 
+    categories: [{ name: '食費', icon: '🍔' }], 
+    paymentMethods: ['現金'], 
+    templates: [] 
+  });
 
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
@@ -200,84 +163,81 @@ function AppMain() {
     return () => unsubscribe();
   }, []);
 
-  // Firestore Subscriptions
   useEffect(() => {
-    if (!user) return;
+    if (!user) return; 
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
     const end = nextDate.toISOString();
-
-    const unsub = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
-      setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [month, user]);
-
-  useEffect(() => {
-    if (!user) return;
+    
     const prevDate = new Date(`${month}-01`);
     prevDate.setMonth(prevDate.getMonth() - 1);
     const prevStart = new Date(getMonthString(prevDate)+"-01T00:00:00").toISOString();
-    const currentStart = new Date(`${month}-01T00:00:00`).toISOString();
 
+    const unsubTx = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
+      setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
+      setLoading(false);
+    });
     const fetchLast = async () => {
-      const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', currentStart));
+      const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', start));
       const s = await getDocs(q);
       setLastMonthTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchLast();
+    const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
+      if(s.exists()) setMonthlyData(s.data());
+      else setMonthlyData({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
+    });
+    const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if(s.exists()) setCashBalance(s.data().balance); });
+    const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
+        if (s.exists()) {
+            const data = s.data();
+            setConfig({
+                categories: data.categories || [{ name: '食費', icon: '🍔' }],
+                paymentMethods: data.paymentMethods || ['現金'],
+                templates: data.templates || []
+            });
+        }
+    });
+    return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
   }, [month, user]);
 
-  useEffect(() => {
-    if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
-      setMonthlyData(normalizeMonthlyData(s.exists() ? s.data() : {}));
-    });
-  }, [month, user]);
-
-  useEffect(() => {
-    if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { 
-      if(s.exists()) setCashBalance(s.data().balance); 
-    });
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
-      setConfig(normalizeConfig(s.exists() ? s.data() : {}));
-    });
-  }, [user]);
-
-  // Summary Calculation
   const summary = useMemo(() => {
-    const fixedCosts = monthlyData.fixedCosts;
-    const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
-    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
+    // 徹底したガード処理
+    const safeCategories = config?.categories || [];
+    const fixedCosts = monthlyData?.fixedCosts || [];
+    
+    const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
+    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
     const fixedTotal = fixedCashTotal + fixedCardTotal;
 
-    const totalBudget = Number(monthlyData.budget) || 0;
-    const spentCard = transactions.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
+    const totalBudget = (Number(monthlyData?.budget) || 0);
+    const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
+    // カード残り = 総枠 - 全固定費 - カード支出
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
-    const cashBudgetTotal = Number(monthlyData.cashBudget) || 0;
-    const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
+    const cashBudgetTotal = (Number(monthlyData?.cashBudget) || 0);
+    const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
+    // 現金残り = 現金予算 - 現金支出 (固定費は引かない)
     const cashRemaining = cashBudgetTotal - spentCash;
 
-    const billTotal = Object.values(monthlyData.cardBills).reduce((s, v) => s + (Number(v) || 0), 0);
+    const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCashTotal + billTotal; 
-    const bankBalanceProjected = (Number(monthlyData.salary) || 0) - totalWithdrawal;
+    const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
-    const getCatTotals = (txs) => txs.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
-    const catBudgetSum = config.categories.reduce((sum, c) => sum + (monthlyData.catBudgets[c.name] || 0), 0);
+    const getCatTotals = (txs) => (txs || []).reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
+    const catBudgetSum = safeCategories.reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name || c] || 0), 0);
+
+    const now = new Date();
+    const isCurrentMonth = month === getMonthString(now);
+    const daysLeft = isCurrentMonth ? Math.max(1, new Date(now.getFullYear(), now.getMonth()+1, 0).getDate() - now.getDate() + 1) : 30;
 
     return { 
       cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget: cashBudgetTotal, bankBalanceProjected, 
       fixedTotal, totalWithdrawal, catBudgetSum,
       cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
       cashRemainingPercent: cashBudgetTotal > 0 ? Math.round((cashRemaining / cashBudgetTotal) * 100) : 0,
+      dailyBudget: daysLeft > 0 ? Math.floor(cardRemaining / daysLeft) : 0, daysLeft,
       catTotals: getCatTotals(transactions), lastCatTotals: getCatTotals(lastMonthTransactions),
       totalSpent: transactions.reduce((s,t)=>s+t.amount,0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+t.amount,0),
       dailyTotals: transactions.reduce((acc,t)=>{acc[new Date(t.date).getDate()] = (acc[new Date(t.date).getDate()]||0)+t.amount; return acc;}, {})
@@ -285,12 +245,79 @@ function AppMain() {
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
   const showToastMsg = (msg) => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 3000); };
-  const getCategoryIcon = (n) => { const c = config.categories.find(x => x.name === n); return c?.icon || '🏷'; };
-  const getCategoryNames = () => config.categories.map(c => c.name);
+  const getCategoryIcon = (n) => { const c = (config?.categories || []).find(x => (x.name||x) === n); return c?.icon || '🏷'; };
+  const getCategoryNames = () => (config?.categories || []).map(c => c.name || c);
 
-  // FIX: Implement Missing Functions
+  const handleTxSubmit = async (e) => {
+    e.preventDefault();
+    const data = { title: inputTitle || inputCategory, amount: Number(String(inputAmount).replace(/,/g,'')), category: inputCategory, paymentMethod: inputMethod, date: new Date(inputDate).toISOString() };
+    if (inputMethod === '現金') await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + (editingTx ? editingTx.amount - data.amount : -data.amount) }, { merge: true });
+    if (editingTx) await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data);
+    else await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() });
+    setIsModalOpen(false); showToastMsg('保存しました');
+  };
+
+  const handleSettingsSave = async () => {
+    if(!editingItem) return;
+    const { type, data, index } = editingItem;
+    // ガード：空配列の保証
+    if (type === 'category') {
+        const newCats = [...(config.categories || [])];
+        if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
+        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
+        if (data.budget) await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: { ...(monthlyData.catBudgets || {}), [data.name]: Number(data.budget) } }, { merge: true });
+    } else if (type === 'fixed') {
+        const newFixed = [...(monthlyData.fixedCosts || [])];
+        if (index === -1) newFixed.push({ id: Date.now(), ...data, amount: Number(data.amount) }); else newFixed[index] = { ...data, amount: Number(data.amount) };
+        await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts: newFixed},{merge:true});
+    } else if (type === 'template') {
+        const t = [...(config.templates || [])];
+        if (index === -1) t.push({ ...data, amount: Number(data.amount) }); else t[index] = { ...data, amount: Number(data.amount) };
+        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: t});
+    } else if (type === 'payment') {
+        const p = [...(config.paymentMethods || ['現金'])];
+        if (index === -1) p.push(data.name); else p[index] = data.name;
+        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: p});
+    }
+    setEditingItem(null); showToastMsg('保存しました');
+  };
+
+  const handleDeleteItem = async () => {
+    if (!editingItem || !window.confirm('削除しますか？')) return;
+    const { type, index } = editingItem;
+    // 削除時もNullチェック
+    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:(monthlyData.fixedCosts || []).filter((_, i) => i !== index)},{merge:true}); }
+    else if (type === 'category') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:(config.categories || []).filter((_, i) => i !== index)}); }
+    else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: (config.templates||[]).filter((_, i) => i !== index)}); }
+    else if (type === 'payment') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:(config.paymentMethods || []).filter((_, i) => i !== index)}); }
+    setEditingItem(null); showToastMsg('削除しました');
+  };
+
+  const startEditing = (t) => {
+    setEditingTx(t); setInputDate(t.date.split('T')[0]); setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.paymentMethod); setIsModalOpen(true);
+  };
+  const openModalWithDate = (dateStr) => {
+    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config?.paymentMethods?.[0] || '現金'); setShowCalculator(false); setIsModalOpen(true);
+  };
+  const applyTemplate = (tpl) => { setInputAmount(String(tpl.amount)); setInputTitle(tpl.title); setInputCategory(tpl.category); setInputMethod(tpl.method); };
+
+  const finalFilteredTx = transactions.filter(t => {
+      const matchSearch = searchText === '' || t.title.includes(searchText);
+      const matchCat = filter.category === 'ALL' || t.category === filter.category;
+      const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
+      return matchSearch && matchCat && matchMethod;
+  });
+
+  const calendarDaysList = (() => {
+    if(!month) return [];
+    const d = new Date(month + "-01");
+    const first = d.getDay();
+    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
+  })();
+
   const copyLastMonthSettings = async () => {
-    if(!user || !window.confirm('先月の設定をコピーしますか？')) return;
+    if(!window.confirm('先月の設定をコピーしますか？')) return;
     const d = new Date(month + "-01"); d.setMonth(d.getMonth() - 1);
     const lastMonthStr = getMonthString(d);
     try {
@@ -310,7 +337,7 @@ function AppMain() {
   };
 
   const handleExportCSV = async () => {
-      if(!user || !window.confirm('全データをCSV出力しますか？')) return;
+      if(!window.confirm('全データをCSV出力しますか？')) return;
       try {
           const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
           const s = await getDocs(q);
@@ -340,74 +367,7 @@ function AppMain() {
       await setDoc(doc(db,'users',user.uid,'settings','config'),{ ...config, categories: newCats }, { merge: true });
   };
 
-  const handleTxSubmit = async (e) => {
-    e.preventDefault();
-    const data = { title: inputTitle || inputCategory, amount: toNumber(inputAmount), category: inputCategory, paymentMethod: inputMethod, date: new Date(inputDate).toISOString() };
-    if (inputMethod === CASH) await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + (editingTx ? editingTx.amount - data.amount : -data.amount) }, { merge: true });
-    if (editingTx) await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data);
-    else await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() });
-    setIsModalOpen(false); showToastMsg('保存しました');
-  };
-
-  const handleSettingsSave = async () => {
-    if(!editingItem) return;
-    const { type, data, index } = editingItem;
-    // ... logic same as previous but robust with normalized config
-    if (type === 'category') {
-        const newCats = [...config.categories];
-        if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
-        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
-        if (data.budget) await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: { ...monthlyData.catBudgets, [data.name]: toNumber(data.budget) } }, { merge: true });
-    } else if (type === 'fixed') {
-        const newFixed = [...monthlyData.fixedCosts];
-        if (index === -1) newFixed.push({ id: Date.now(), ...data, amount: toNumber(data.amount) }); else newFixed[index] = { ...data, amount: toNumber(data.amount) };
-        await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts: newFixed},{merge:true});
-    } else if (type === 'template') {
-        const t = [...config.templates];
-        if (index === -1) t.push({ ...data, amount: toNumber(data.amount) }); else t[index] = { ...data, amount: toNumber(data.amount) };
-        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: t});
-    } else if (type === 'payment') {
-        const p = [...config.paymentMethods];
-        if (index === -1) p.push(data.name); else p[index] = data.name;
-        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: p});
-    }
-    setEditingItem(null); showToastMsg('保存しました');
-  };
-
-  const handleDeleteItem = async () => {
-    if (!editingItem || !window.confirm('削除しますか？')) return;
-    const { type, index } = editingItem;
-    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true}); }
-    else if (type === 'category') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== index)}); }
-    else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== index)}); }
-    else if (type === 'payment') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter((_, i) => i !== index)}); }
-    setEditingItem(null); showToastMsg('削除しました');
-  };
-
-  const startEditing = (t) => {
-    setEditingTx(t); setInputDate(t.date.split('T')[0]); setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.paymentMethod); setIsModalOpen(true);
-  };
-  const openModalWithDate = (dateStr) => {
-    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config.paymentMethods[0] || CASH); setShowCalculator(false); setIsModalOpen(true);
-  };
-  const applyTemplate = (tpl) => { setInputAmount(String(tpl.amount)); setInputTitle(tpl.title); setInputCategory(tpl.category); setInputMethod(tpl.method); };
-
-  const finalFilteredTx = transactions.filter(t => {
-      const matchSearch = searchText === '' || t.title.includes(searchText);
-      const matchCat = filter.category === 'ALL' || t.category === filter.category;
-      const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
-      return matchSearch && matchCat && matchMethod;
-  });
-
-  const calendarDaysList = (() => {
-    if(!month) return [];
-    const d = new Date(month + "-01");
-    const first = d.getDay();
-    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-    return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
-  })();
-
-  if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase">Loading...</div>;
+  if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase">Loading Auth...</div>;
   if (!user) return (
     <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in">
       <div className="text-center"><h1 className="text-4xl font-black text-white uppercase tracking-tighter">ZAIMU</h1></div>
@@ -440,7 +400,6 @@ function AppMain() {
                 </div>
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
-                    {/* Header Removed */}
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining<0?'text-red-400':'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{width:`${summary.cardRemainingPercent}%`}}/></div></SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{width:`${summary.cashRemainingPercent}%`}}/></div></SimpleCard>
                   </div>
@@ -547,7 +506,7 @@ function AppMain() {
                 <input type="text" value={inputTitle} onChange={e=>setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)"/>
                 <div className="flex gap-4"><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label><input type="date" value={inputDate} onChange={e=>setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold"/></div><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label><select value={inputCategory} onChange={e=>setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select></div></div>
                 <div className="flex flex-wrap gap-2">{config.paymentMethods.map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
-                <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('削除しますか？')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
+                <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('Delete?')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
               </form></div></>
             )}
           </div>
@@ -570,4 +529,8 @@ function AppMain() {
       )}
     </div>
   );
+}
+
+export default function AppWrapper() {
+  return <App />; 
 }
