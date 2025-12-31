@@ -144,7 +144,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ここで1回だけ宣言しています！
+  // Ref for scroll control
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -446,7 +446,7 @@ export default function App() {
         }
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
 
-        // 過去のトランザクションのカテゴリ名も更新する
+        // カテゴリ名変更時の履歴更新処理
         if (index !== -1 && data.originalName && data.originalName !== data.name) {
             const q = query(collection(db, 'users', user.uid, 'transactions'), where('category', '==', data.originalName));
             const snapshot = await getDocs(q);
@@ -559,6 +559,10 @@ export default function App() {
     setInputAmount(t.amount);
     setIsModalOpen(true);
   }
+
+  // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言 (No Duplicates)
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
@@ -1063,7 +1067,7 @@ export default function App() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-          <div className="w-full h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300" onClick={(e) => e.stopPropagation()}>
             {showCalculator ? (
               <div className="flex-1 p-5">
                 <div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-bold uppercase text-white tracking-widest">電卓</h2><button onClick={() => setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div>
