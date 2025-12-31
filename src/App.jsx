@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -35,10 +35,21 @@ const SimpleCard = ({ children, className = "", onClick }) => (
 );
 
 const NavButton = ({ active, onClick, icon }) => (
-  <button onClick={onClick} className={`flex items-center justify-center w-16 h-16 transition-all ${active ? 'text-white scale-110' : 'text-zinc-600'}`}>
+  <button onClick={onClick} className={`flex items-center justify-center w-16 h-16 transition-all duration-300 ${active ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-zinc-600 hover:text-zinc-400'}`}>
     {icon}
   </button>
 );
+
+const Skeleton = ({ className }) => (
+  <div className={`animate-pulse bg-white/5 rounded ${className}`} />
+);
+
+// Haptic Feedback Helper
+const triggerHaptic = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(15);
+    }
+};
 
 // Calculator Component
 const CalculatorPad = ({ initialValue, onConfirm }) => {
@@ -46,6 +57,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [isResult, setIsResult] = useState(false);
 
   const handlePush = (val) => {
+    triggerHaptic();
     if (isResult && !['+','-','*','/'].includes(val)) {
       setDisplay(String(val));
       setIsResult(false);
@@ -56,6 +68,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   };
 
   const handleCalc = () => {
+    triggerHaptic();
     try {
       // eslint-disable-next-line no-new-func
       const res = new Function('return ' + display)();
@@ -70,6 +83,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   };
 
   const handleDelete = () => {
+    triggerHaptic();
     setDisplay(prev => prev.length > 1 ? prev.slice(0, -1) : '0');
   };
 
@@ -107,6 +121,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
         ))}
       </div>
       <button onClick={() => {
+         triggerHaptic();
          let finalVal = Number(display);
          if (!isResult) {
             try {
@@ -144,7 +159,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control (宣言はここ1箇所のみ)
+  // Ref for scroll control - ※ここ以外でmainRefを宣言しないでください
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -179,6 +194,7 @@ export default function App() {
   }, []);
 
   const handleLogin = async () => {
+    triggerHaptic();
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
@@ -195,6 +211,7 @@ export default function App() {
 
   // CSVエクスポート機能
   const handleExportCSV = async () => {
+    triggerHaptic();
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
 
@@ -240,6 +257,7 @@ export default function App() {
 
   const handleMoveCategory = async (index, direction, e) => {
     e.stopPropagation();
+    triggerHaptic();
     const newCats = [...config.categories];
     if (direction === 'up' && index > 0) {
       [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
@@ -377,6 +395,7 @@ export default function App() {
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
   const confirmPayment = async (cardName) => {
+    triggerHaptic();
     const confirmed = monthlyData.confirmedPayments || [];
     if (!confirmed.includes(cardName)) {
       await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
@@ -385,6 +404,7 @@ export default function App() {
 
   const copyLastMonthSettings = async () => {
     if(!window.confirm('先月の予算・固定費・カテゴリ設定を今月にコピーしますか？')) return;
+    triggerHaptic();
     const d = new Date(month + "-01");
     d.setMonth(d.getMonth() - 1);
     const lastMonthStr = getMonthString(d);
@@ -411,6 +431,7 @@ export default function App() {
 
   const handleTxSubmit = async (e) => {
     e.preventDefault();
+    triggerHaptic();
     const method = e.target.method.value;
     const amount = Number(inputAmount); 
     const data = { 
@@ -434,6 +455,7 @@ export default function App() {
   };
 
   const handleSettingsSave = async () => {
+    triggerHaptic();
     if (!editingItem) return;
     const { type, data, index } = editingItem;
 
@@ -492,6 +514,7 @@ export default function App() {
 
   const handleDeleteItem = () => {
     if (!editingItem || !window.confirm('本当に削除しますか？')) return;
+    triggerHaptic();
     const { type, index } = editingItem;
     if (index === -1) { setEditingItem(null); return; }
 
@@ -508,6 +531,7 @@ export default function App() {
   };
 
   const applyTemplate = (tpl) => {
+    triggerHaptic();
     setInputAmount(tpl.amount);
     document.querySelector('input[name="title"]').value = tpl.title;
     document.querySelector('select[name="category"]').value = tpl.category;
@@ -547,6 +571,7 @@ export default function App() {
   }, [month]);
 
   const openModalWithDate = (dateStr) => {
+    triggerHaptic();
     setEditingTx(null);
     setInputDate(dateStr);
     setInputAmount('');
@@ -554,6 +579,7 @@ export default function App() {
   };
 
   const startEditing = (t) => {
+    triggerHaptic();
     setEditingTx(t);
     setInputDate(t.date.split('T')[0]);
     setInputAmount(t.amount);
@@ -591,34 +617,34 @@ export default function App() {
       {/* 画面中央に寄せるためのコンテナ (iPad対応) */}
       <div className="w-full max-w-md h-full flex flex-col relative bg-[#121212] shadow-2xl mx-auto">
         
-        {/* HEADER */}
-        <header className="flex-none h-16 border-b border-white/5 px-4 flex items-center justify-center bg-[#121212] z-50">
+        {/* HEADER (Glassmorphism) */}
+        <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-center bg-[#121212]/80 backdrop-blur-xl z-50">
           <div className="w-full flex justify-between items-center">
             <div className="flex items-center gap-2">
               <img src="/favicon.ico" alt="logo" className="w-6 h-6 rounded object-contain" onError={(e) => e.target.style.display = 'none'} />
               <h1 className="text-xl font-black tracking-tighter text-white uppercase">ZAIMU</h1>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setMonth(getMonthString(new Date()))} className="h-8 px-2.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400 flex items-center justify-center">今月</button>
+              <button onClick={() => { triggerHaptic(); setMonth(getMonthString(new Date())); }} className="h-8 px-2.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400 flex items-center justify-center active:scale-95 transition-transform">今月</button>
               <div className="h-8 flex items-center bg-white/5 rounded-lg px-1 border border-white/5 font-mono text-xs gap-1">
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={20}/></button>
-                <span className="px-1 font-bold text-sm">{month.replace('-','/')}</span>
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={20}/></button>
+                <button onClick={() => { triggerHaptic(); const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={20}/></button>
+                <span className="px-1 font-bold text-sm tabular-nums">{month.replace('-','/')}</span>
+                <button onClick={() => { triggerHaptic(); const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={20}/></button>
               </div>
             </div>
           </div>
         </header>
 
-        {/* MAIN SCROLL AREA */}
-        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pb-32">
+        {/* MAIN SCROLL AREA (Padding for Header/Footer) */}
+        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-20 pb-28">
           <div className="w-full max-w-md mx-auto">
             
             {/* HOME TAB */}
             {activeTab === 'home' && (
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 animate-in fade-in duration-500">
                 <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
-                  <button onClick={() => setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14}/> 支出管理</button>
-                  <button onClick={() => setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><ListChecks size={14}/> 収支・予定</button>
+                  <button onClick={() => { triggerHaptic(); setHomeView('spending'); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14}/> 支出管理</button>
+                  <button onClick={() => { triggerHaptic(); setHomeView('forecast'); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><ListChecks size={14}/> 収支・予定</button>
                 </div>
 
                 {homeView === 'spending' && (
@@ -630,11 +656,11 @@ export default function App() {
                       </div>
                     )}
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">現金残り</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400">¥{summary.cashBudget.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">現金残り</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                   </div>
@@ -689,7 +715,7 @@ export default function App() {
 
             {/* LOG TAB */}
             {activeTab === 'log' && (
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 animate-in fade-in duration-500">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="履歴を検索..." className="w-full h-10 bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none font-bold" />
@@ -697,8 +723,8 @@ export default function App() {
                     {searchText && <button onClick={() => setSearchText('')} className="absolute right-3 top-3 text-zinc-500"><X size={14}/></button>}
                   </div>
                   <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
-                    <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
-                    <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
+                    <button onClick={() => { triggerHaptic(); setLogView('list'); }} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
+                    <button onClick={() => { triggerHaptic(); setLogView('calendar'); }} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -707,7 +733,12 @@ export default function App() {
                 </div>
                 {logView === 'list' && (
                   <div className="space-y-1">
-                    {filteredTransactions.length === 0 ? <p className="text-center text-zinc-600 text-xs py-10">履歴が見つかりません</p> : filteredTransactions.map(t => {
+                    {filteredTransactions.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
+                            <Sparkles size={48} className="text-zinc-700" />
+                            <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
+                        </div>
+                    ) : filteredTransactions.map(t => {
                       const icon = getCategoryIcon(t.category);
                       return (
                         <div 
@@ -746,8 +777,8 @@ export default function App() {
                         const dateStr = month + '-' + String(day).padStart(2,'0');
                         return (
                           <div key={i} onClick={() => openModalWithDate(dateStr)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}>
-                            <span className={`text-[9px] font-bold ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
-                            {amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5">¥{(amt/1000).toFixed(1)}k</span>}
+                            <span className={`text-[9px] font-bold tabular-nums ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
+                            {amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5 tabular-nums">¥{(amt/1000).toFixed(1)}k</span>}
                             {isNMD && <span className="absolute text-xs">✨</span>}
                           </div>
                         );
@@ -761,7 +792,7 @@ export default function App() {
 
             {/* ANALYSIS TAB */}
             {activeTab === 'analysis' && (
-              <div className="p-4 space-y-4 animate-in fade-in duration-300">
+              <div className="p-4 space-y-4 animate-in fade-in duration-500">
                 <SimpleCard className="p-6">
                   <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mb-4">先月との比較</p>
                   <div className="flex items-end justify-between gap-4">
@@ -802,8 +833,9 @@ export default function App() {
             {activeTab === 'settings' && (
               <div key={month}>
                 {settingTab !== 'menu' && (
-                    <div className="sticky top-0 z-10 bg-[#121212] border-b border-white/5 px-4 py-2 w-full flex items-center">
+                    <div className="sticky top-0 z-10 bg-[#121212]/80 backdrop-blur-xl border-b border-white/5 px-4 py-2 w-full flex items-center">
                         <button onClick={() => { 
+                            triggerHaptic();
                             setSettingTab('menu'); 
                             setTimeout(() => { if(mainRef.current) mainRef.current.scrollTop = 0; }, 0); 
                         }} className="flex items-center gap-2 text-zinc-500 text-xs font-bold active:scale-95 transition-transform"><ArrowLeft size={16}/> 戻る</button>
@@ -811,7 +843,7 @@ export default function App() {
                 )}
                 
                 {/* Content Wrapper with Padding */}
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-4 animate-in fade-in duration-500">
                     {settingTab === 'menu' && (
                       <div className="space-y-6 pb-10">
                         {/* Account Info */}
@@ -832,13 +864,13 @@ export default function App() {
                         {/* Menu Items */}
                         <div className="space-y-3">
                             {[{ id: 'budget', label: '資金計画・引き落とし日', icon: <Landmark size={18}/> }, { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/>, value: `¥${((monthlyData.fixedCosts||[]).reduce((s,i)=>s+i.amount,0)).toLocaleString()}` }, { id: 'category', label: 'カテゴリ・予算管理', icon: <Tags size={18}/>, value: `¥${(config.categories.reduce((s,c)=>s+(Number(monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)])||0),0)).toLocaleString()}` }, { id: 'template', label: 'テンプレート編集', icon: <Zap size={18}/> }, { id: 'payment', label: '支払方法・カード編集', icon: <Wallet size={18}/> }].map(item => (
-                              <button key={item.id} onClick={() => setSettingTab(item.id)} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all text-zinc-300">
+                              <button key={item.id} onClick={() => { triggerHaptic(); setSettingTab(item.id); }} className="w-full flex items-center justify-between p-5 bg-[#1E1E1E] rounded-lg border border-white/5 text-sm font-bold active:scale-95 transition-all text-zinc-300">
                                 <div className="flex items-center gap-4">
                                   {item.icon}
                                   <span className="text-sm font-bold">{item.label}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    {item.value && <span className="text-[10px] text-zinc-500 font-mono mt-0.5">{item.value}</span>}
+                                    {item.value && <span className="text-[10px] text-zinc-500 font-mono mt-0.5 tabular-nums">{item.value}</span>}
                                 </div>
                               </button>
                             ))}
@@ -859,7 +891,10 @@ export default function App() {
 
                     {/* Loading State */}
                     {monthLoading ? (
-                       <div className="p-10 text-center text-zinc-600 text-xs animate-pulse">Loading data...</div>
+                       <div className="space-y-4">
+                           <Skeleton className="h-40 w-full" />
+                           <Skeleton className="h-40 w-full" />
+                       </div>
                     ) : (
                       <>
                         {settingTab === 'budget' && (
@@ -894,7 +929,7 @@ export default function App() {
                             </div>
                             <div className="divide-y divide-white/5">
                               {(monthlyData.fixedCosts || []).map((f, idx) => (
-                                <div key={f.id} onClick={() => setEditingItem({ type: 'fixed', data: f, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
+                                <div key={f.id} onClick={() => { triggerHaptic(); setEditingItem({ type: 'fixed', data: f, index: idx }); }} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
                                   <div className="flex flex-col">
                                       <span className="text-xs text-zinc-200 font-bold">{f.name}</span>
                                       <span className="text-[9px] text-zinc-500">{f.method || '未設定'}</span>
@@ -906,7 +941,7 @@ export default function App() {
                               ))}
                             </div>
                             <div className="pt-4 border-t border-white/5">
-                                <button onClick={() => setEditingItem({ type: 'fixed', data: { name: '', amount: '', method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 固定費を追加</button>
+                                <button onClick={() => { triggerHaptic(); setEditingItem({ type: 'fixed', data: { name: '', amount: '', method: config.paymentMethods[0] }, index: -1 }); }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 固定費を追加</button>
                             </div>
                           </SimpleCard>
                         )}
@@ -924,7 +959,7 @@ export default function App() {
                                   const cIcon = typeof c === 'string' ? '🏷' : c.icon;
                                   const budget = monthlyData.catBudgets?.[cName] || 0;
                                   return (
-                                    <div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
+                                    <div key={idx} onClick={() => { triggerHaptic(); setEditingItem({ type: 'category', data: { name: cName, icon: cIcon, budget, originalName: cName }, index: idx }); }} className="flex justify-between items-center py-3 cursor-pointer active:opacity-70 transition-opacity">
                                         <div className="flex items-center gap-3">
                                             <span className="text-xl w-8 text-center">{cIcon}</span>
                                             <span className="text-xs font-bold text-white">{cName}</span>
@@ -941,7 +976,7 @@ export default function App() {
                                 })}
                               </div>
                               <div className="pt-4 mt-2 border-t border-white/5">
-                                <button onClick={() => setEditingItem({ type: 'category', data: { name: '', icon: '🏷', budget: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> カテゴリを追加</button>
+                                <button onClick={() => { triggerHaptic(); setEditingItem({ type: 'category', data: { name: '', icon: '🏷', budget: '' }, index: -1 }); }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> カテゴリを追加</button>
                               </div>
                             </div>
                           </SimpleCard>
@@ -953,7 +988,7 @@ export default function App() {
                               <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">テンプレート一覧</p>
                               <div className="divide-y divide-white/5">
                                 {(config.templates || []).map((t, idx) => (
-                                  <div key={idx} onClick={() => setEditingItem({ type: 'template', data: t, index: idx })} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
+                                  <div key={idx} onClick={() => { triggerHaptic(); setEditingItem({ type: 'template', data: t, index: idx }); }} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
                                     <div className="flex flex-col">
                                       <span className="text-xs font-bold text-white">{t.title}</span>
                                       <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
@@ -962,7 +997,7 @@ export default function App() {
                                 ))}
                               </div>
                               <div className="pt-4 mt-2 border-t border-white/5">
-                                <button onClick={() => setEditingItem({ type: 'template', data: { title: '', amount: '', category: getCategoryNames()[0], method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> テンプレートを追加</button>
+                                <button onClick={() => { triggerHaptic(); setEditingItem({ type: 'template', data: { title: '', amount: '', category: getCategoryNames()[0], method: config.paymentMethods[0] }, index: -1 }); }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> テンプレートを追加</button>
                               </div>
                             </div>
                           </SimpleCard>
@@ -973,10 +1008,10 @@ export default function App() {
                              <div>
                                <p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">支払方法一覧</p>
                                <div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map((m, idx) => (
-                                 <div key={m} onClick={() => setEditingItem({ type: 'payment', data: { name: m }, index: idx })} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold cursor-pointer active:scale-95 transition-transform">{m}</div>
+                                 <div key={m} onClick={() => { triggerHaptic(); setEditingItem({ type: 'payment', data: { name: m }, index: idx }); }} className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold cursor-pointer active:scale-95 transition-transform">{m}</div>
                                ))}</div>
                                <div className="pt-4 border-t border-white/5">
-                                 <button onClick={() => setEditingItem({ type: 'payment', data: { name: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 支払方法を追加</button>
+                                 <button onClick={() => { triggerHaptic(); setEditingItem({ type: 'payment', data: { name: '' }, index: -1 }); }} className="w-full h-11 bg-zinc-200 text-black rounded-lg font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"><Plus size={14}/> 支払方法を追加</button>
                                </div>
                              </div>
                           </SimpleCard>
@@ -989,13 +1024,13 @@ export default function App() {
           </div>
         </main>
 
-        {/* FOOTER */}
-        <footer className="flex-none h-24 bg-[#121212] border-t border-white/5 flex justify-between items-center px-6 pb-6 z-40 w-full max-w-md left-0 right-0 mx-auto">
-          <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Home size={24}/>} />
-          <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
-          <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
-          <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={24}/>} />
-          <button onClick={() => { setEditingTx(null); setInputDate(getTodayString()); setInputAmount(''); setShowCalculator(false); setIsModalOpen(true); }} className="flex items-center justify-center w-14 h-14 bg-white text-black rounded-full shadow-lg active:scale-90 transition-transform ml-2">
+        {/* FOOTER (Glassmorphism) */}
+        <footer className="absolute bottom-0 w-full max-w-md h-24 border-t border-white/5 flex justify-between items-center px-6 pb-6 z-50 bg-[#121212]/80 backdrop-blur-xl">
+          <NavButton active={activeTab === 'home'} onClick={() => { triggerHaptic(); setActiveTab('home'); }} icon={<Home size={24}/>} />
+          <NavButton active={activeTab === 'log'} onClick={() => { triggerHaptic(); setActiveTab('log'); }} icon={<History size={24}/>} />
+          <NavButton active={activeTab === 'analysis'} onClick={() => { triggerHaptic(); setActiveTab('analysis'); }} icon={<BarChart3 size={24}/>} />
+          <NavButton active={activeTab === 'settings'} onClick={() => { triggerHaptic(); setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={24}/>} />
+          <button onClick={() => { triggerHaptic(); setEditingTx(null); setInputDate(getTodayString()); setInputAmount(''); setShowCalculator(false); setIsModalOpen(true); }} className="flex items-center justify-center w-14 h-14 bg-white text-black rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] active:scale-90 transition-transform ml-2">
             <Plus size={28}/>
           </button>
         </footer>
