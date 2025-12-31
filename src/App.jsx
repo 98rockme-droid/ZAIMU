@@ -143,7 +143,13 @@ export default function App() {
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
-  const [config, setConfig] = useState({ categories: [{ name: '食費', icon: '🍔' }], paymentMethods: ['現金'], templates: [] });
+  
+  // デフォルト値を設定
+  const [config, setConfig] = useState({ 
+    categories: [{ name: '食費', icon: '🍔' }], 
+    paymentMethods: ['現金'], 
+    templates: [] 
+  });
 
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
@@ -183,11 +189,23 @@ export default function App() {
       else setMonthlyData({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
     });
     const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if(s.exists()) setCashBalance(s.data().balance); });
-    const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { if (s.exists()) setConfig(s.data()); });
+    const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
+        if (s.exists()) {
+            // データが存在しても、必須フィールドが欠けている場合の対策
+            const d = s.data();
+            setConfig({
+                categories: d.categories || [{ name: '食費', icon: '🍔' }],
+                paymentMethods: d.paymentMethods || ['現金'],
+                templates: d.templates || []
+            });
+        }
+    });
     return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
   }, [month, user]);
 
   const summary = useMemo(() => {
+    // 徹底したNullチェック
+    const safeCategories = config?.categories || [];
     const fixedCosts = monthlyData?.fixedCosts || [];
     const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
     const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
@@ -195,10 +213,12 @@ export default function App() {
 
     const totalBudget = (Number(monthlyData?.budget) || 0);
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
+    // カード残り = 総枠 - 全固定費 - カード支出
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudgetTotal = (Number(monthlyData?.cashBudget) || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
+    // 現金残り = 現金予算 - 現金支出 (固定費は引かない)
     const cashRemaining = cashBudgetTotal - spentCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -206,7 +226,7 @@ export default function App() {
     const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
     const getCatTotals = (txs) => (txs || []).reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
-    const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name || c] || 0), 0);
+    const catBudgetSum = safeCategories.reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name || c] || 0), 0);
 
     const now = new Date();
     const isCurrentMonth = month === getMonthString(now);
@@ -222,7 +242,7 @@ export default function App() {
       totalSpent: transactions.reduce((s,t)=>s+t.amount,0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+t.amount,0),
       dailyTotals: transactions.reduce((acc,t)=>{acc[new Date(t.date).getDate()] = (acc[new Date(t.date).getDate()]||0)+t.amount; return acc;}, {})
     };
-  }, [monthlyData, transactions, lastMonthTransactions, month, config.categories]);
+  }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
   const showToastMsg = (msg) => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 3000); };
   const getCategoryIcon = (n) => { const c = (config?.categories || []).find(x => (x.name||x) === n); return c?.icon || '🏷'; };
@@ -240,8 +260,9 @@ export default function App() {
   const handleSettingsSave = async () => {
     if(!editingItem) return;
     const { type, data, index } = editingItem;
+    // 配列操作時のNullチェック追加
     if (type === 'category') {
-        const newCats = [...config.categories];
+        const newCats = [...(config.categories || [])];
         if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
         if (data.budget) await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: { ...monthlyData.catBudgets, [data.name]: Number(data.budget) } }, { merge: true });
@@ -254,7 +275,7 @@ export default function App() {
         if (index === -1) t.push({ ...data, amount: Number(data.amount) }); else t[index] = { ...data, amount: Number(data.amount) };
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: t});
     } else if (type === 'payment') {
-        const p = [...config.paymentMethods];
+        const p = [...(config.paymentMethods || ['現金'])];
         if (index === -1) p.push(data.name); else p[index] = data.name;
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: p});
     }
@@ -275,7 +296,7 @@ export default function App() {
     setEditingTx(t); setInputDate(t.date.split('T')[0]); setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.paymentMethod); setIsModalOpen(true);
   };
   const openModalWithDate = (dateStr) => {
-    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config.paymentMethods[0] || '現金'); setShowCalculator(false); setIsModalOpen(true);
+    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config?.paymentMethods?.[0] || '現金'); setShowCalculator(false); setIsModalOpen(true);
   };
 
   const finalFilteredTx = transactions.filter(t => {
@@ -285,13 +306,13 @@ export default function App() {
       return matchSearch && matchCat && matchMethod;
   });
 
-  const calendarDaysList = (() => {
+  const calendarDaysList = useMemo(() => {
     if(!month) return [];
     const d = new Date(month + "-01");
     const first = d.getDay();
     const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
     return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
-  })();
+  }, [month]);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase">Loading Auth...</div>;
   if (!user) return (
@@ -308,9 +329,9 @@ export default function App() {
         <header className="flex-none h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <><button onClick={() => setSettingTab('menu')} className="text-zinc-400"><ArrowLeft size={24}/></button>
-            <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-xs font-bold text-white uppercase">{(settingTab==='fixed'?'固定費':'設定')}</span><span className="text-[10px] text-zinc-500 font-mono">計 ¥{(settingTab==='fixed'?summary.fixedTotal:summary.catBudgetSum).toLocaleString()}</span></div><div className="w-6"/></>
+            <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-xs font-bold text-white uppercase">{(settingTab==='fixed'?'固定費':'設定')}</span><span className="text-[10px] text-zinc-500">計 ¥{(settingTab==='fixed'?summary.fixedTotal:summary.catBudgetSum).toLocaleString()}</span></div><div className="w-6"/></>
           ) : (
-            <><div className="w-8 h-8 rounded-xl bg-white/5 p-1"><img src="/favicon.ico" alt="logo" className="w-full h-full" /></div>
+            <><div className="w-8 h-8 rounded-xl bg-white/5 p-1"><img src="/favicon.ico" referrerPolicy="no-referrer" alt="logo" className="w-full h-full" /></div>
             <div className="flex items-center gap-4"><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()-1);setMonth(getMonthString(d))}}><ChevronLeft size={20}/></button><span className="text-sm font-bold text-white tabular-nums">{formatMonthJP(month)}</span><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()+1);setMonth(getMonthString(d))}}><ChevronRight size={20}/></button></div>
             <button onClick={()=>setMonth(getMonthString(new Date()))} className="text-zinc-500 active:text-white"><Calendar size={20}/></button></>
           )}
@@ -359,7 +380,7 @@ export default function App() {
                 </div>
                 <div className="pt-24">
                   {logView === 'list' ? (<SimpleCard>{finalFilteredTx.length === 0 ? <div className="py-20 flex flex-col items-center gap-3 text-zinc-600"><Sparkles size={48} className="opacity-20"/><p className="text-xs uppercase font-black">No Spending! 🎉</p></div> : <div className="divide-y divide-white/5">{finalFilteredTx.map(t=>(<div key={t.id} onClick={()=>startEditing(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors"><div className="flex items-center gap-3 flex-1 min-w-0"><div className="w-10 font-mono text-[10px] text-zinc-500">{formatDateShort(t.date)}</div><div className="w-12 text-center text-[9px] bg-white/5 text-zinc-400 rounded py-0.5 truncate">{t.category}</div><div className="flex-1 truncate text-sm font-bold text-white">{t.title}</div></div><span className="text-sm font-bold tabular-nums text-white pl-2">¥{t.amount.toLocaleString()}</span></div>))}</div>}</SimpleCard>) : (
-                    <SimpleCard className="p-4"><div className="grid grid-cols-7 gap-1 text-center mb-2 text-[10px] text-zinc-600 uppercase"> {['日','月','火','水','木','金','土'].map(d=><div key={d}>{d}</div>)} </div><div className="grid grid-cols-7 gap-1">{calendarDaysList.map((day,i)=>{if(!day)return <div key={i}/>; const a=summary.dailyTotals[day]||0; const isT=day===new Date().getDate()&&month===getMonthString(new Date()); return(<div key={i} onClick={()=>openModalWithDate(`${month}-${String(day).padStart(2,'0')}`)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative transition-transform active:scale-95 ${isT?'border-white bg-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]':'border-white/5 bg-black/20'}`}><span className={`text-[9px] ${isT?'text-white':'text-zinc-500'}`}>{day}</span>{a>0&&<span className="text-[8px] text-zinc-300 tabular-nums">¥{(a/1000).toFixed(1)}k</span>}{(a===0&&day<=new Date().getDate()&&!isT)&&<span className="absolute text-[10px]">✨</span>}</div>)})}</div></SimpleCard>)}
+                    <SimpleCard className="p-4"><div className="grid grid-cols-7 gap-1 text-center mb-2 text-[10px] text-zinc-600 uppercase"> {['日','月','火','水','木','金','土'].map(d=><div key={d}>{d}</div>)} </div><div className="grid grid-cols-7 gap-1">{calendarDaysList.map((day,i)=>{if(!day)return <div key={i}/>; const a=summary.dailyTotals[day]||0; const isT=day===new Date().getDate()&&month===getMonthString(new Date()); const isFuture = new Date(month + '-' + String(day).padStart(2,'0')) > new Date(); return(<div key={i} onClick={()=>openModalWithDate(`${month}-${String(day).padStart(2,'0')}`)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative transition-transform active:scale-95 ${isT?'border-white bg-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]':'border-white/5 bg-black/20'}`}><span className={`text-[9px] ${isT?'text-white':'text-zinc-500'}`}>{day}</span>{a>0&&<span className="text-[8px] text-zinc-300 tabular-nums">¥{(a/1000).toFixed(1)}k</span>}{(a===0&&!isT&&!isFuture)&&<span className="absolute text-[10px]">✨</span>}</div>)})}</div></SimpleCard>)}
                 </div>
               </div>
             )}
@@ -432,7 +453,7 @@ export default function App() {
                 <div className="flex gap-2 items-center"><div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span><input type="text" inputMode="decimal" value={inputAmount?Number(inputAmount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setInputAmount(v)}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold pl-8 pr-4 text-white tabular-nums outline-none" autoFocus required/></div><button type="button" onClick={()=>setShowCalculator(true)} className="w-12 h-12 bg-white/10 rounded-lg text-white flex items-center justify-center active:bg-white/20"><Calculator size={20}/></button></div>
                 <input type="text" value={inputTitle} onChange={e=>setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)"/>
                 <div className="flex gap-4"><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label><input type="date" value={inputDate} onChange={e=>setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold"/></div><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label><select value={inputCategory} onChange={e=>setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select></div></div>
-                <div className="flex flex-wrap gap-2">{(config?.paymentMethods||['現金']).map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
+                <div className="flex flex-wrap gap-2">{config.paymentMethods.map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
                 <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('Delete?')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
               </form></div></>
             )}
@@ -446,8 +467,8 @@ export default function App() {
             <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button onClick={()=>setEditingItem(null)} className="p-2 text-zinc-500"><X size={20}/></button></div>
             <div className="p-5 pb-8 space-y-6">
                 {editingItem.type === 'category' && (<><div className="flex gap-2"><input value={editingItem.data.icon} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,icon:e.target.value}})} className="w-12 h-12 text-center bg-black/20 border border-white/10 rounded-lg text-xl text-white outline-none"/><input value={editingItem.data.name} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="名前"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 font-bold uppercase pl-1">月間予算</label><input type="text" inputMode="decimal" value={editingItem.data.budget?Number(editingItem.data.budget).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,budget:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="0"/></div></>)}
-                {editingItem.type === 'fixed' && (<><input value={editingItem.data.name} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="固定費名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><select value={editingItem.data.method} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold">{(config?.paymentMethods||['現金']).map(m=><option key={m} value={m}>{m}</option>)}</select></>)}
-                {editingItem.type === 'template' && (<><input value={editingItem.data.title} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,title:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="テンプレート名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="flex gap-2"><select value={editingItem.data.category} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,category:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><select value={editingItem.data.method} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold">{(config?.paymentMethods||['現金']).map(m=><option key={m} value={m}>{m}</option>)}</select></div></>)}
+                {editingItem.type === 'fixed' && (<><input value={editingItem.data.name} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="固定費名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><select value={editingItem.data.method} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select></>)}
+                {editingItem.type === 'template' && (<><input value={editingItem.data.title} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,title:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="テンプレート名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="flex gap-2"><select value={editingItem.data.category} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,category:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><select value={editingItem.data.method} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select></div></>)}
                 {editingItem.type === 'payment' && (<input value={editingItem.data.name} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="支払方法名"/>)}
                 <div className="flex gap-2 pt-2 pb-8">{editingItem.index!==-1&&(<button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button></div>
             </div>
