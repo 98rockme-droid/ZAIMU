@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -19,6 +19,11 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
+// 日本語表記用のフォーマッター (例: 2023年 10月)
+const formatMonthJP = (monthStr) => {
+    const [y, m] = monthStr.split('-');
+    return `${y}年 ${Number(m)}月`;
+};
 const getTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -144,7 +149,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ここで1回だけ宣言 (No Duplicates)
+  // Ref for scroll control
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -560,9 +565,6 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  // --- スクロール制御用Ref ---
-  // mainRefはここで1回だけ宣言 (No Duplicates)
-
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -594,21 +596,25 @@ export default function App() {
       {/* 画面中央に寄せるためのコンテナ (iPad対応) */}
       <div className="w-full max-w-md h-full flex flex-col relative bg-[#121212] shadow-2xl mx-auto">
         
-        {/* HEADER (Glassmorphism) */}
-        <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-center bg-[#121212]/80 backdrop-blur-xl z-50">
-          <div className="w-full flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <img src="/favicon.ico" alt="logo" className="w-6 h-6 rounded object-contain" onError={(e) => e.target.style.display = 'none'} />
-              <h1 className="text-xl font-black tracking-tighter text-white uppercase">ZAIMU</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setMonth(getMonthString(new Date()))} className="h-8 px-2.5 bg-white/5 rounded-lg border border-white/5 text-[10px] font-bold text-zinc-400 flex items-center justify-center">今月</button>
-              <div className="h-8 flex items-center bg-white/5 rounded-lg px-1 border border-white/5 font-mono text-xs gap-1">
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronLeft size={20}/></button>
-                <span className="px-1 font-bold text-sm tabular-nums">{month.replace('-','/')}</span>
-                <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-full flex items-center justify-center active:bg-white/10 rounded"><ChevronRight size={20}/></button>
-              </div>
-            </div>
+        {/* HEADER (Glassmorphism & Center Layout) */}
+        <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
+          {/* 左：ロゴ（アイコンのみ） */}
+          <div className="flex items-center justify-start w-10">
+             <img src="/favicon.ico" alt="logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" onError={(e) => e.target.style.display = 'none'} />
+          </div>
+          
+          {/* 中央：年月ナビゲーター */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-4">
+              <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronLeft size={24}/></button>
+              <span className="text-sm font-bold text-white tracking-wider whitespace-nowrap tabular-nums">{formatMonthJP(month)}</span>
+              <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronRight size={24}/></button>
+          </div>
+
+          {/* 右：今月へ戻るボタン（カレンダーアイコン） */}
+          <div className="flex items-center justify-end w-10">
+             <button onClick={() => setMonth(getMonthString(new Date()))} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
+                <Calendar size={22} />
+             </button>
           </div>
         </header>
 
@@ -1013,7 +1019,7 @@ export default function App() {
       {/* EDIT SETTINGS MODAL */}
       {editingItem && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
-          <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
                 <h2 className="text-xs font-bold uppercase text-white tracking-widest">編集</h2>
                 <button onClick={() => setEditingItem(null)} className="p-2 -mr-2 text-zinc-500 hover:text-white"><X size={20}/></button>
