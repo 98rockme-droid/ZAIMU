@@ -59,7 +59,7 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// 電卓ロジック
+// 安全な電卓ロジック
 const safeCalculate = (expression) => {
   if (!expression || /[^0-9+\-*/.]/.test(expression)) return '0';
   try {
@@ -118,10 +118,11 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 /* --- MAIN APP --- */
-function App() {
+export default function App() {
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
   const [loading, setLoading] = useState(true); 
+  const [monthLoading, setMonthLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
   const [logView, setLogView] = useState('list');
@@ -155,7 +156,7 @@ function App() {
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const mainRef = useRef(null);
 
-  // 設定メニューの定義（動的タイトル用）
+  // 設定メニューの定義
   const SETTING_MENU_ITEMS = [
     { id: 'budget', label: '資金計画・引落日', icon: <Landmark size={18}/> },
     { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> },
@@ -174,6 +175,7 @@ function App() {
 
   useEffect(() => {
     if (!user) return; 
+    setMonthLoading(true);
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
@@ -196,6 +198,7 @@ function App() {
     const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
       if(s.exists()) setMonthlyData(s.data());
       else setMonthlyData({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
+      setMonthLoading(false);
     });
     const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if(s.exists()) setCashBalance(s.data().balance); });
     const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
@@ -212,7 +215,6 @@ function App() {
   }, [month, user]);
 
   const summary = useMemo(() => {
-    // 徹底したガード処理
     const safeCategories = config?.categories || [];
     const fixedCosts = monthlyData?.fixedCosts || [];
     
@@ -222,12 +224,10 @@ function App() {
 
     const totalBudget = (Number(monthlyData?.budget) || 0);
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
-    // カード残り = 総枠 - 全固定費 - カード支出
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudgetTotal = (Number(monthlyData?.cashBudget) || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
-    // 現金残り = 現金予算 - 現金支出 (固定費は引かない)
     const cashRemaining = cashBudgetTotal - spentCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -269,6 +269,7 @@ function App() {
   const handleSettingsSave = async () => {
     if(!editingItem) return;
     const { type, data, index } = editingItem;
+    // ガード：空配列の保証
     if (type === 'category') {
         const newCats = [...(config.categories || [])];
         if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
@@ -293,7 +294,8 @@ function App() {
   const handleDeleteItem = async () => {
     if (!editingItem || !window.confirm('削除しますか？')) return;
     const { type, index } = editingItem;
-    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true}); }
+    // 削除時もNullチェック
+    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:(monthlyData.fixedCosts || []).filter((_, i) => i !== index)},{merge:true}); }
     else if (type === 'category') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:(config.categories || []).filter((_, i) => i !== index)}); }
     else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: (config.templates||[]).filter((_, i) => i !== index)}); }
     else if (type === 'payment') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:(config.paymentMethods || []).filter((_, i) => i !== index)}); }
@@ -411,7 +413,7 @@ function App() {
         <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-4">
           <div className="p-4 pb-32">
             {activeTab === 'home' && (
-              <div className="space-y-4 animate-in fade-in">
+              <div className="space-y-4 animate-in fade-in duration-300">
                 <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-2 border border-white/5">
                   <button onClick={()=>setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView==='spending'?'bg-white text-black shadow-lg':'text-zinc-500'}`}><LayoutGrid size={14}/> 支出管理</button>
                   <button onClick={()=>setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView==='forecast'?'bg-white text-black shadow-lg':'text-zinc-500'}`}><ListChecks size={14}/> 収支・予定</button>
