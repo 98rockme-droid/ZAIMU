@@ -144,7 +144,7 @@ function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // 初期値を設定して undefined を防ぐ
+  // 初期値を設定
   const [config, setConfig] = useState({ 
     categories: [{ name: '食費', icon: '🍔' }], 
     paymentMethods: ['現金'], 
@@ -154,6 +154,15 @@ function App() {
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const mainRef = useRef(null);
+
+  // 設定メニューの定義（動的タイトル用）
+  const SETTING_MENU_ITEMS = [
+    { id: 'budget', label: '資金計画・引落日', icon: <Landmark size={18}/> },
+    { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> },
+    { id: 'category', label: 'カテゴリ予算', icon: <Tags size={18}/> },
+    { id: 'template', label: 'テンプレート', icon: <Zap size={18}/> },
+    { id: 'payment', label: '支払方法', icon: <Wallet size={18}/> },
+  ];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -260,7 +269,6 @@ function App() {
   const handleSettingsSave = async () => {
     if(!editingItem) return;
     const { type, data, index } = editingItem;
-    // ガード：空配列の保証
     if (type === 'category') {
         const newCats = [...(config.categories || [])];
         if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
@@ -285,8 +293,7 @@ function App() {
   const handleDeleteItem = async () => {
     if (!editingItem || !window.confirm('削除しますか？')) return;
     const { type, index } = editingItem;
-    // 削除時もNullチェック
-    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:(monthlyData.fixedCosts || []).filter((_, i) => i !== index)},{merge:true}); }
+    if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true}); }
     else if (type === 'category') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:(config.categories || []).filter((_, i) => i !== index)}); }
     else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: (config.templates||[]).filter((_, i) => i !== index)}); }
     else if (type === 'payment') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:(config.paymentMethods || []).filter((_, i) => i !== index)}); }
@@ -317,7 +324,7 @@ function App() {
   })();
 
   const copyLastMonthSettings = async () => {
-    if(!window.confirm('先月の設定をコピーしますか？')) return;
+    if(!user || !window.confirm('先月の設定をコピーしますか？')) return;
     const d = new Date(month + "-01"); d.setMonth(d.getMonth() - 1);
     const lastMonthStr = getMonthString(d);
     try {
@@ -359,7 +366,7 @@ function App() {
 
   const handleMoveCategory = async (index, direction, e) => {
       e.stopPropagation();
-      const newCats = [...config.categories];
+      const newCats = [...(config.categories || [])];
       if (direction === 'up' && index > 0) [newCats[index], newCats[index-1]] = [newCats[index-1], newCats[index]];
       else if (direction === 'down' && index < newCats.length-1) [newCats[index], newCats[index+1]] = [newCats[index+1], newCats[index]];
       else return;
@@ -375,6 +382,9 @@ function App() {
     </div>
   );
 
+  // 現在の設定タブ名を取得
+  const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
+
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -382,7 +392,15 @@ function App() {
         <header className="flex-none h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <><button onClick={() => setSettingTab('menu')} className="text-zinc-400"><ArrowLeft size={24}/></button>
-            <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-xs font-bold text-white uppercase">{(settingTab==='fixed'?'固定費':'設定')}</span><span className="text-[10px] text-zinc-500 font-mono">計 ¥{(settingTab==='fixed'?summary.fixedTotal:summary.catBudgetSum).toLocaleString()}</span></div><div className="w-6"/></>
+            <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+                <span className="text-xs font-bold text-white uppercase">{currentSettingTitle}</span>
+                {/* 合計金額は特定のタブでのみ表示 */}
+                {(settingTab === 'fixed' || settingTab === 'category') && (
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                        計 ¥{(settingTab==='fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}
+                    </span>
+                )}
+            </div><div className="w-6"/></>
           ) : (
             <><div className="w-8 h-8 rounded-xl bg-white/5 p-1"><img src="/favicon.ico" referrerPolicy="no-referrer" alt="logo" className="w-full h-full" /></div>
             <div className="flex items-center gap-4"><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()-1);setMonth(getMonthString(d))}}><ChevronLeft size={20}/></button><span className="text-sm font-bold text-white tabular-nums">{formatMonthJP(month)}</span><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()+1);setMonth(getMonthString(d))}}><ChevronRight size={20}/></button></div>
@@ -393,13 +411,14 @@ function App() {
         <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-4">
           <div className="p-4 pb-32">
             {activeTab === 'home' && (
-              <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="space-y-4 animate-in fade-in">
                 <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-2 border border-white/5">
                   <button onClick={()=>setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView==='spending'?'bg-white text-black shadow-lg':'text-zinc-500'}`}><LayoutGrid size={14}/> 支出管理</button>
                   <button onClick={()=>setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView==='forecast'?'bg-white text-black shadow-lg':'text-zinc-500'}`}><ListChecks size={14}/> 収支・予定</button>
                 </div>
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
+                    {/* Header Removed as requested */}
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining<0?'text-red-400':'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{width:`${summary.cardRemainingPercent}%`}}/></div></SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{width:`${summary.cashRemainingPercent}%`}}/></div></SimpleCard>
                   </div>
@@ -468,7 +487,7 @@ function App() {
                         <div className="flex items-center gap-3">{user.photoURL?<img src={user.photoURL} referrerPolicy="no-referrer" alt="icon" className="w-8 h-8 rounded-full border border-white/10"/>:<div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center"><User size={16}/></div>}<span className="text-xs font-bold text-white">{user.email}</span></div>
                         <button onClick={() => { if(window.confirm('Logout?')) signOut(auth); }} className="text-zinc-500 text-[10px] flex items-center gap-1.5 active:text-white uppercase"><LogOut size={14}/> Logout</button>
                     </div>
-                    <div className="bg-[#1E1E1E] rounded-xl border border-white/5 overflow-hidden"><div className="divide-y divide-white/5"> {[{id:'budget',label:'資金計画',icon:<Landmark size={18}/>},{id:'fixed',label:'固定費管理',icon:<CreditCard size={18}/>,v:`¥${summary.fixedTotal.toLocaleString()}`},{id:'category',label:'カテゴリ予算',icon:<Tags size={18}/>,v:`¥${summary.catBudgetSum.toLocaleString()}`},{id:'template',label:'テンプレート',icon:<Zap size={18}/>},{id:'payment',label:'支払方法',icon:<Wallet size={18}/>}].map(item=>(<button key={item.id} onClick={()=>setSettingTab(item.id)} className="w-full flex items-center justify-between p-4 active:bg-white/5 text-zinc-300 transition-colors"><div className="flex items-center gap-4">{item.icon}<span className="text-sm font-bold">{item.label}</span></div><div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">{item.v}<ChevronRight size={16} className="text-zinc-800"/></div></button>))} </div></div>
+                    <div className="bg-[#1E1E1E] rounded-xl border border-white/5 overflow-hidden"><div className="divide-y divide-white/5"> {SETTING_MENU_ITEMS.map(item=>(<button key={item.id} onClick={()=>setSettingTab(item.id)} className="w-full flex items-center justify-between p-4 active:bg-white/5 text-zinc-300 transition-colors"><div className="flex items-center gap-4">{item.icon}<span className="text-sm font-bold">{item.label}</span></div><div className="flex items-center gap-2 text-[10px] text-zinc-500 font-mono">{(item.id === 'fixed' ? `¥${summary.fixedTotal.toLocaleString()}` : item.id === 'category' ? `¥${summary.catBudgetSum.toLocaleString()}` : '')}<ChevronRight size={16} className="text-zinc-800"/></div></button>))} </div></div>
                     <div className="flex flex-col items-center gap-4 pt-4"><button onClick={copyLastMonthSettings} className="px-6 py-3 border border-white/10 text-zinc-300 rounded-full text-xs font-bold active:bg-white/5 transition-all"><CopyCheck className="inline mr-2" size={16}/> 先月の設定をコピー</button><button onClick={handleExportCSV} className="text-zinc-600 text-[10px] underline flex items-center gap-2 active:text-white"><FileText size={12}/> 全データをCSV出力</button></div>
                   </div>
                 ) : (
@@ -504,7 +523,7 @@ function App() {
               <div className="flex-1 overflow-y-auto p-5 pb-8"><form onSubmit={handleTxSubmit} className="space-y-6">
                 <div className="flex gap-2 items-center"><div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span><input type="text" inputMode="decimal" value={inputAmount?Number(inputAmount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setInputAmount(v)}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold pl-8 pr-4 text-white tabular-nums outline-none" autoFocus required/></div><button type="button" onClick={()=>setShowCalculator(true)} className="w-12 h-12 bg-white/10 rounded-lg text-white flex items-center justify-center active:bg-white/20"><Calculator size={20}/></button></div>
                 <input type="text" value={inputTitle} onChange={e=>setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)"/>
-                <div className="flex gap-4"><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label><input type="date" value={inputDate} onChange={e=>setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold"/></div><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label><select value={inputCategory} onChange={e=>setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select></div></div>
+                <div className="flex flex-row gap-4"><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label><input type="date" value={inputDate} onChange={e=>setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold"/></div><div className="flex-1 flex flex-col gap-1.5"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label><select value={inputCategory} onChange={e=>setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select></div></div>
                 <div className="flex flex-wrap gap-2">{config.paymentMethods.map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
                 <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('Delete?')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
               </form></div></>
@@ -529,8 +548,4 @@ function App() {
       )}
     </div>
   );
-}
-
-export default function AppWrapper() {
-  return <App />; 
 }
