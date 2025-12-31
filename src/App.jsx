@@ -367,10 +367,14 @@ export default function App() {
     const cardRemaining = cardBudgetTotal - fixedCardTotal - spentCard;
     const cardRemainingPercent = cardBudgetTotal > 0 ? Math.min(Math.round((cardRemaining / cardBudgetTotal) * 100), 100) : 0;
 
+    // ■ 現金側の計算（修正後）
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
+    // 予算 = 設定した現金予算そのもの。固定費は引かない。
+    const cashDisposable = cashBudgetTotal;
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
-    const cashRemaining = cashBudgetTotal - fixedCashTotal - spentCash;
-    const cashRemainingPercent = cashBudgetTotal > 0 ? Math.min(Math.round((cashRemaining / cashBudgetTotal) * 100), 100) : 0;
+    // 残り = 予算 - 使ったお金（変動費のみ）
+    const cashRemaining = cashDisposable - spentCash;
+    const cashRemainingPercent = cashDisposable > 0 ? Math.min(Math.round((cashRemaining / cashDisposable) * 100), 100) : 0;
 
     const totalRemaining = cardRemaining + cashRemaining;
     const dailyBudget = daysLeft > 0 ? Math.floor(totalRemaining / daysLeft) : 0;
@@ -390,7 +394,6 @@ export default function App() {
     }, {});
     
     const fixedTotal = fixedCashTotal + fixedCardTotal;
-    // Calculate total budgeted for categories (sum of all cat budgets)
     const catBudgetSum = config.categories.reduce((sum, c) => {
         const cName = typeof c === 'string' ? c : c.name;
         return sum + (monthlyData.catBudgets?.[cName] || 0);
@@ -403,7 +406,7 @@ export default function App() {
       dailyBudget, daysLeft, dailyTotals,
       fixedCostsBank: fixedCashTotal, 
       cardDisposable: cardBudgetTotal - fixedCardTotal, 
-      cashDisposable: cashBudgetTotal - fixedCashTotal,
+      cashDisposable,
       fixedTotal,
       catBudgetSum
     };
@@ -599,6 +602,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -636,7 +642,7 @@ export default function App() {
         {/* HEADER (Glassmorphism & Center Layout) */}
         <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
           {(activeTab === 'settings' && settingTab !== 'menu') ? (
-            // Detail Header with Total Amount
+            // Detail Header
             <>
                 <button onClick={() => { 
                     setSettingTab('menu'); 
@@ -704,11 +710,11 @@ export default function App() {
                       </div>
                     )}
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">生活費予算（総枠）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">現金予算（口座）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashDisposable.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                   </div>
@@ -1160,7 +1166,7 @@ export default function App() {
                       <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="支払方法名" />
                   )}
 
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-2 pb-8">
                       {editingItem.index !== -1 && (
                           <button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
                       )}
