@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -354,6 +354,7 @@ export default function App() {
 
     const salary = monthlyData.salary || 0;
     
+    // 【ロジック修正】 固定費を現金(口座振替)とカードに分離
     const fixedCosts = monthlyData.fixedCosts || [];
     const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
     const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
@@ -362,19 +363,17 @@ export default function App() {
     const totalWithdrawal = fixedCashTotal + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
+    // ■ カード側の計算（シンプル版）
     const cardBudgetTotal = (monthlyData.budget || 0);
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardBudgetTotal - fixedCardTotal - spentCard;
     const cardRemainingPercent = cardBudgetTotal > 0 ? Math.min(Math.round((cardRemaining / cardBudgetTotal) * 100), 100) : 0;
 
-    // ■ 現金側の計算（修正後）
+    // ■ 現金側の計算（再修正：予算 - 使った分のみ）
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
-    // 予算 = 設定した現金予算そのもの。固定費は引かない。
-    const cashDisposable = cashBudgetTotal;
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
-    // 残り = 予算 - 使ったお金（変動費のみ）
-    const cashRemaining = cashDisposable - spentCash;
-    const cashRemainingPercent = cashDisposable > 0 ? Math.min(Math.round((cashRemaining / cashDisposable) * 100), 100) : 0;
+    const cashRemaining = cashBudgetTotal - spentCash; // 固定費は引かない
+    const cashRemainingPercent = cashBudgetTotal > 0 ? Math.min(Math.round((cashRemaining / cashBudgetTotal) * 100), 100) : 0;
 
     const totalRemaining = cardRemaining + cashRemaining;
     const dailyBudget = daysLeft > 0 ? Math.floor(totalRemaining / daysLeft) : 0;
@@ -406,7 +405,7 @@ export default function App() {
       dailyBudget, daysLeft, dailyTotals,
       fixedCostsBank: fixedCashTotal, 
       cardDisposable: cardBudgetTotal - fixedCardTotal, 
-      cashDisposable,
+      cashDisposable: cashBudgetTotal, // 現金はそのまま
       fixedTotal,
       catBudgetSum
     };
@@ -602,9 +601,6 @@ export default function App() {
     setIsModalOpen(true);
   }
 
-  // --- スクロール制御用Ref ---
-  const mainRef = useRef(null);
-
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -714,7 +710,7 @@ export default function App() {
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashDisposable.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                   </div>
