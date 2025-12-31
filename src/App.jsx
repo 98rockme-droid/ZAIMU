@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
@@ -19,12 +19,10 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
-// 日本語表記用のフォーマッター (例: 2023年 10月)
 const formatMonthJP = (monthStr) => {
     const [y, m] = monthStr.split('-');
     return `${y}年 ${Number(m)}月`;
 };
-// 日付フォーマッター (例: 12/01)
 const formatDateShort = (dateStr) => {
     const d = new Date(dateStr);
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -50,7 +48,6 @@ const NavButton = ({ active, onClick, icon }) => (
   </button>
 );
 
-// Toast Component
 const Toast = ({ message, isVisible }) => (
   <div className={`fixed bottom-28 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 pointer-events-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
     <div className="bg-zinc-800/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl border border-white/10 flex items-center gap-2">
@@ -60,7 +57,37 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// Calculator Component
+// Calculator
+const safeCalculate = (expression) => {
+  if (/[^0-9+\-*/.]/.test(expression)) return 'Error';
+  try {
+    const tokens = expression.match(/(\d+(\.\d+)?|[\+\-\*\/])/g);
+    if (!tokens) return 0;
+    let stack = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token === '*' || token === '/') {
+        const prev = parseFloat(stack.pop());
+        const next = parseFloat(tokens[++i]);
+        if (token === '*') stack.push(prev * next);
+        if (token === '/') stack.push(prev / next);
+      } else {
+        stack.push(token);
+      }
+    }
+    let result = parseFloat(stack[0]);
+    for (let i = 1; i < stack.length; i += 2) {
+      const operator = stack[i];
+      const operand = parseFloat(stack[i + 1]);
+      if (operator === '+') result += operand;
+      if (operator === '-') result -= operand;
+    }
+    return isNaN(result) ? 'Error' : result;
+  } catch (e) {
+    return 'Error';
+  }
+};
+
 const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
@@ -76,17 +103,10 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   };
 
   const handleCalc = () => {
-    try {
-      // eslint-disable-next-line no-new-func
-      const res = new Function('return ' + display)();
-      setDisplay(String(res));
-      setIsResult(true);
-      return res;
-    } catch(e) {
-      setDisplay('Error');
-      setIsResult(true);
-      return 0;
-    }
+    const res = safeCalculate(display);
+    setDisplay(String(res));
+    setIsResult(true);
+    return res;
   };
 
   const handleDelete = () => {
@@ -129,10 +149,8 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
       <button onClick={() => {
          let finalVal = Number(display);
          if (!isResult) {
-            try {
-               // eslint-disable-next-line no-new-func
-               finalVal = Number(new Function('return ' + display)());
-            } catch {}
+             const calcRes = safeCalculate(display);
+             if(calcRes !== 'Error') finalVal = Number(calcRes);
          }
          onConfirm(finalVal);
       }} className="w-full h-12 bg-white text-black rounded-lg font-bold text-sm uppercase tracking-widest flex items-center justify-center active:scale-95 shadow-lg">
@@ -156,18 +174,23 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
-  // Toast State
   const [toast, setToast] = useState({ visible: false, message: '' });
-  
-  // 編集用state
   const [editingItem, setEditingItem] = useState(null); 
+  const [editingTx, setEditingTx] = useState(null);
+
+  // Controlled Inputs
+  const [inputDate, setInputDate] = useState(getTodayString()); 
+  const [inputAmount, setInputAmount] = useState(''); 
+  const [inputTitle, setInputTitle] = useState('');
+  const [inputCategory, setInputCategory] = useState('');
+  const [inputMethod, setInputMethod] = useState('');
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ※ここが唯一の宣言箇所です
+  // Ref for scroll control
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -185,10 +208,7 @@ export default function App() {
       { title: 'ランチ', amount: 1000, category: '食費', method: 'PayPay' },
     ]
   });
-  
-  const [editingTx, setEditingTx] = useState(null);
-  const [inputDate, setInputDate] = useState(getTodayString()); 
-  const [inputAmount, setInputAmount] = useState(''); 
+
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const [searchText, setSearchText] = useState('');
 
@@ -221,25 +241,15 @@ export default function App() {
     }
   };
 
-  // CSVエクスポート機能
+  // CSVエクスポート
   const handleExportCSV = async () => {
     if(!user) return;
     if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
-
     try {
       const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
       const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        alert('出力するデータがありません。');
-        return;
-      }
-
-      // CSVヘッダー
-      let csvContent = "\uFEFF"; 
-      csvContent += "日付,タイトル,カテゴリ,金額,支払方法\n";
-
-      // データ行
+      if (snapshot.empty) { alert('出力するデータがありません。'); return; }
+      let csvContent = "\uFEFF日付,タイトル,カテゴリ,金額,支払方法\n";
       snapshot.forEach(doc => {
         const data = doc.data();
         const date = data.date ? data.date.split('T')[0] : '';
@@ -247,10 +257,8 @@ export default function App() {
         const category = data.category || '';
         const amount = data.amount || 0;
         const method = data.paymentMethod || '';
-        
         csvContent += `${date},${title},${category},${amount},${method}\n`;
       });
-
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -259,7 +267,6 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
     } catch(e) {
       console.error(e);
       alert('エクスポートに失敗しました');
@@ -293,14 +300,11 @@ export default function App() {
   // データ取得
   useEffect(() => {
     if (!user) return; 
-
     setMonthLoading(true);
-
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
     const end = nextDate.toISOString();
-
     const prevDate = new Date(`${month}-01`);
     prevDate.setMonth(prevDate.getMonth() - 1);
     const prevMonthStr = getMonthString(prevDate);
@@ -311,19 +315,16 @@ export default function App() {
       setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoading(false);
     });
-
     const fetchLastMonth = async () => {
       const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', prevEnd));
       const s = await getDocs(q);
       setLastMonthTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchLastMonth();
-
     const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
       setMonthlyData(s.exists() ? s.data() : { salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
       setMonthLoading(false);
     });
-    
     const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => {
       setCashBalance(s.exists() ? s.data().balance : 0);
     });
@@ -336,7 +337,6 @@ export default function App() {
         setConfig(data);
       }
     });
-
     return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
   }, [month, user]);
 
@@ -344,7 +344,6 @@ export default function App() {
     const now = new Date();
     const currentMonthStr = getMonthString(now);
     let daysLeft = 0;
-    
     if (month === currentMonthStr) {
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
         daysLeft = Math.max(1, lastDay - now.getDate() + 1);
@@ -356,25 +355,27 @@ export default function App() {
     const salary = monthlyData.salary || 0;
     
     const fixedCosts = monthlyData.fixedCosts || [];
-    const fixedTotal = fixedCosts.reduce((s, i) => s + i.amount, 0);
-    const fixedCostsBank = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
+    // 現金固定費（method未指定 または '現金'）
+    const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
+    // カード固定費（method指定あり かつ '現金'以外）
+    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-    
-    const totalWithdrawal = fixedCostsBank + billTotal; 
+    const totalWithdrawal = fixedCashTotal + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
     const cardBudgetTotal = (monthlyData.budget || 0);
-    const cardDisposable = cardBudgetTotal - fixedTotal; 
+    const cardDisposable = cardBudgetTotal - fixedCardTotal; // カード予算からはカード固定費のみ引く
     
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
     const cardRemaining = cardDisposable - spentCard;
     const cardRemainingPercent = cardDisposable > 0 ? Math.min(Math.round((cardRemaining / cardDisposable) * 100), 100) : 0;
 
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
+    const cashDisposable = cashBudgetTotal - fixedCashTotal; // 現金予算からは現金固定費のみ引く
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
-    const cashRemaining = cashBudgetTotal - spentCash;
-    const cashRemainingPercent = cashBudgetTotal > 0 ? Math.min(Math.round((cashRemaining / cashBudgetTotal) * 100), 100) : 0;
+    const cashRemaining = cashDisposable - spentCash;
+    const cashRemainingPercent = cashDisposable > 0 ? Math.min(Math.round((cashRemaining / cashDisposable) * 100), 100) : 0;
 
     const totalRemaining = cardRemaining + cashRemaining;
     const dailyBudget = daysLeft > 0 ? Math.floor(totalRemaining / daysLeft) : 0;
@@ -383,7 +384,6 @@ export default function App() {
       acc[t.category] = (acc[t.category] || 0) + t.amount;
       return acc;
     }, {});
-
     const catTotals = getCatTotals(transactions);
     const lastCatTotals = getCatTotals(lastMonthTransactions);
     const totalSpent = transactions.reduce((s, t) => s + t.amount, 0);
@@ -394,13 +394,17 @@ export default function App() {
       acc[day] = (acc[day] || 0) + t.amount;
       return acc;
     }, {});
+    
+    const fixedTotal = fixedCashTotal + fixedCardTotal;
 
     return { 
       salary, totalWithdrawal, bankBalanceProjected,
       cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
-      fixedCostsBank, cardDisposable, fixedTotal
+      fixedCostsBank: fixedCashTotal, 
+      cardDisposable, cashDisposable,
+      fixedTotal
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
@@ -440,16 +444,15 @@ export default function App() {
 
   const handleTxSubmit = async (e) => {
     e.preventDefault();
-    const method = e.target.method.value;
     const amount = Number(String(inputAmount).replace(/,/g, ''));
     const data = { 
-      title: e.target.title.value || e.target.category.value, 
+      title: inputTitle || inputCategory, 
       amount, 
-      category: e.target.category.value, 
-      paymentMethod: method, 
+      category: inputCategory, 
+      paymentMethod: inputMethod, 
       date: inputDate ? new Date(inputDate).toISOString() : new Date().toISOString() 
     };
-    if (method === '現金') { 
+    if (inputMethod === '現金') { 
       const diff = editingTx ? editingTx.amount - amount : -amount; 
       await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + diff }, { merge: true }); 
     }
@@ -476,8 +479,6 @@ export default function App() {
             newCats[index] = { name: data.name, icon: data.icon || '🏷' };
         }
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
-
-        // 過去のトランザクションのカテゴリ名も更新する
         if (index !== -1 && data.originalName && data.originalName !== data.name) {
             const q = query(collection(db, 'users', user.uid, 'transactions'), where('category', '==', data.originalName));
             const snapshot = await getDocs(q);
@@ -487,12 +488,10 @@ export default function App() {
             });
             await batch.commit();
         }
-
         const newBudgets = { ...monthlyData.catBudgets };
         if (index !== -1 && data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
         if (data.budget) newBudgets[data.name] = Number(data.budget);
         await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: newBudgets }, { merge: true });
-
     } else if (type === 'template') {
         const newTpls = [...(config.templates || [])];
         if (index === -1) {
@@ -541,11 +540,10 @@ export default function App() {
   };
 
   const applyTemplate = (tpl) => {
-    setInputAmount(tpl.amount);
-    document.querySelector('input[name="title"]').value = tpl.title;
-    document.querySelector('select[name="category"]').value = tpl.category;
-    const radios = document.querySelectorAll('input[name="method"]');
-    radios.forEach(r => { if(r.value === tpl.method) r.checked = true; });
+    setInputAmount(String(tpl.amount));
+    setInputTitle(tpl.title);
+    setInputCategory(tpl.category);
+    setInputMethod(tpl.method);
   };
 
   const activeAlerts = useMemo(() => {
@@ -583,18 +581,24 @@ export default function App() {
     setEditingTx(null);
     setInputDate(dateStr);
     setInputAmount('');
+    setInputTitle('');
+    setInputCategory(getCategoryNames()[0]);
+    setInputMethod(config.paymentMethods[0]);
     setIsModalOpen(true);
   };
 
   const startEditing = (t) => {
     setEditingTx(t);
     setInputDate(t.date.split('T')[0]);
-    setInputAmount(t.amount);
+    setInputAmount(String(t.amount));
+    setInputTitle(t.title);
+    setInputCategory(t.category);
+    setInputMethod(t.paymentMethod);
     setIsModalOpen(true);
   }
 
   // --- スクロール制御用Ref ---
-  // mainRefはここで1回だけ宣言 (No Duplicates)
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
@@ -696,11 +700,11 @@ export default function App() {
                       </div>
                     )}
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">カード残り</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（実質）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardDisposable).toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">現金残り</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（実質）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashDisposable.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                   </div>
@@ -723,11 +727,12 @@ export default function App() {
                       </SimpleCard>
                     )}
                     <SimpleCard className="p-5">
-                      <div className="flex justify-between items-end mb-3"><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座に残るお金 (見込み)</p><Banknote size={16} className="text-zinc-600"/></div>
+                      <div className="flex justify-between items-end mb-3"><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600"/></div>
                       <div className="flex justify-between items-center mb-1"><span className="text-xs text-zinc-400">給与収入</span><span className="text-sm font-bold text-white tabular-nums">+ ¥{summary.salary.toLocaleString()}</span></div>
                       <div className="flex justify-between items-center mb-3 pb-3 border-b border-white/5"><span className="text-xs text-zinc-400">引き落とし計</span><span className="text-sm font-bold text-red-400 tabular-nums">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div>
                       <div className="flex justify-between items-end"><span className="text-xs font-bold text-zinc-500">残高予想</span><span className="text-2xl font-black text-white tabular-nums">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
                     </SimpleCard>
+                    <div className="text-[10px] text-zinc-600 px-2">※ カード残りは今月の利用枠、カード請求は今月の引落額です</div>
                     <div className="grid grid-cols-2 gap-3">
                       {config.categories.filter(c => monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)]).map(c => {
                         const catName = typeof c === 'string' ? c : c.name;
@@ -995,6 +1000,7 @@ export default function App() {
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span>
+                                    {(!f.method || f.method === '現金') ? <span className="text-xs">🏦</span> : <span className="text-xs">💳</span>}
                                   </div>
                                 </div>
                               ))}
