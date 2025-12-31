@@ -167,7 +167,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ここで1回だけ宣言 (No Duplicates)
+  // Ref for scroll control - ※ここが唯一の宣言箇所です
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -594,6 +594,7 @@ export default function App() {
   }
 
   // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言 (No Duplicates)
   const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
@@ -787,7 +788,7 @@ export default function App() {
                         >
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             {/* Date */}
-                            <div className="w-8 text-center font-mono text-xs text-zinc-500">{formatDateShort(t.date)}</div>
+                            <div className="w-12 text-center font-black text-zinc-500 text-xs font-mono tracking-tighter">{formatDateShort(t.date)}</div>
                             
                             {/* Category Label */}
                             <div className="w-16 flex-shrink-0">
