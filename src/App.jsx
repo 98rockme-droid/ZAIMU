@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Calculator, Delete, LogOut, Lock, User, FileText, ArrowUp, ArrowDown, Home, Sparkles } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -18,7 +18,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-/* --- UTILS --- */
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const formatMonthJP = (monthStr) => {
     const [y, m] = monthStr.split('-');
@@ -36,7 +35,7 @@ const getTodayString = () => {
   return `${year}-${month}-${day}`;
 };
 
-/* --- COMPONENTS --- */
+/* --- UI COMPONENTS --- */
 const SimpleCard = ({ children, className = "", onClick }) => (
   <div onClick={onClick} className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
     {children}
@@ -58,14 +57,12 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// 安全な電卓ロジック (new Function廃止)
+// Calculator
 const safeCalculate = (expression) => {
   if (/[^0-9+\-*/.]/.test(expression)) return 'Error';
   try {
     const tokens = expression.match(/(\d+(\.\d+)?|[\+\-\*\/])/g);
     if (!tokens) return 0;
-    
-    // 乗算・除算を先に処理
     let stack = [];
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
@@ -78,8 +75,6 @@ const safeCalculate = (expression) => {
         stack.push(token);
       }
     }
-    
-    // 加算・減算を処理
     let result = parseFloat(stack[0]);
     for (let i = 1; i < stack.length; i += 2) {
       const operator = stack[i];
@@ -165,34 +160,43 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   );
 };
 
-/* --- MAIN APP COMPONENT --- */
 export default function App() {
-  // --- Auth & Loading State ---
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
   const [loading, setLoading] = useState(true); 
   const [monthLoading, setMonthLoading] = useState(false);
-  
-  // --- UI State ---
   const [activeTab, setActiveTab] = useState('home');
   const [homeView, setHomeView] = useState('spending');
   const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  
   const [toast, setToast] = useState({ visible: false, message: '' });
+  const [editingItem, setEditingItem] = useState(null); 
+  const [editingTx, setEditingTx] = useState(null);
 
-  // --- Data State ---
+  const [inputDate, setInputDate] = useState(getTodayString()); 
+  const [inputAmount, setInputAmount] = useState(''); 
+  const [inputTitle, setInputTitle] = useState('');
+  const [inputCategory, setInputCategory] = useState('');
+  const [inputMethod, setInputMethod] = useState('');
+
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
+  
   const [config, setConfig] = useState({ 
     categories: [
-      { name: '食費', icon: '🍔' }, { name: '日用品', icon: '🧻' },
-      { name: '交通費', icon: '🚃' }, { name: '交際費', icon: '🍻' },
-      { name: '趣味', icon: '🎮' }, { name: 'その他', icon: '📦' }
+      { name: '食費', icon: '🍔' },
+      { name: '日用品', icon: '🧻' },
+      { name: '交通費', icon: '🚃' },
+      { name: '交際費', icon: '🍻' },
+      { name: '趣味', icon: '🎮' },
+      { name: 'その他', icon: '📦' }
     ],
     paymentMethods: ['現金', '三井住友', '楽天', 'PayPay'],
     templates: [
@@ -201,25 +205,11 @@ export default function App() {
     ]
   });
 
-  // --- Input State (Controlled) ---
-  const [inputDate, setInputDate] = useState(getTodayString()); 
-  const [inputAmount, setInputAmount] = useState(''); 
-  const [inputTitle, setInputTitle] = useState('');
-  const [inputCategory, setInputCategory] = useState('');
-  const [inputMethod, setInputMethod] = useState('');
-  
-  // --- Edit State ---
-  const [editingItem, setEditingItem] = useState(null); // Settings edit
-  const [editingTx, setEditingTx] = useState(null); // Transaction edit
-
-  // --- Filter State ---
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const [searchText, setSearchText] = useState('');
 
-  // --- Refs ---
   const mainRef = useRef(null);
 
-  // --- EFFECTS ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -228,6 +218,81 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const showToast = (message) => {
+    setToast({ visible: true, message });
+    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+  };
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    if(window.confirm('ログアウトしますか？')) {
+        await signOut(auth);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if(!user) return;
+    if(!window.confirm('すべての支出履歴をCSV形式でダウンロードしますか？')) return;
+    try {
+      const q = query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) { alert('出力するデータがありません。'); return; }
+      let csvContent = "\uFEFF日付,タイトル,カテゴリ,金額,支払方法\n";
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const date = data.date ? data.date.split('T')[0] : '';
+        const title = data.title ? `"${data.title.replace(/"/g, '""')}"` : '';
+        const category = data.category || '';
+        const amount = data.amount || 0;
+        const method = data.paymentMethod || '';
+        csvContent += `${date},${title},${category},${amount},${method}\n`;
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `zaimu_backup_${getTodayString()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(e) {
+      console.error(e);
+      alert('エクスポートに失敗しました');
+    }
+  };
+
+  const handleMoveCategory = async (index, direction, e) => {
+    e.stopPropagation();
+    const newCats = [...config.categories];
+    if (direction === 'up' && index > 0) {
+      [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
+    } else if (direction === 'down' && index < newCats.length - 1) {
+      [newCats[index], newCats[index + 1]] = [newCats[index + 1], newCats[index]];
+    } else {
+      return;
+    }
+    setConfig({ ...config, categories: newCats });
+    await setDoc(doc(db, 'users', user.uid, 'settings', 'config'), { ...config, categories: newCats }, { merge: true });
+  };
+
+  const getCategoryIcon = (catName) => {
+    if (!config.categories) return '🏷';
+    const cat = config.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
+    return cat ? (typeof cat === 'string' ? '🏷' : cat.icon) : '🏷';
+  };
+
+  const getCategoryNames = () => {
+    return config.categories.map(c => typeof c === 'string' ? c : c.name);
+  };
+
   useEffect(() => {
     if (!user) return; 
     setMonthLoading(true);
@@ -235,8 +300,6 @@ export default function App() {
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
     const end = nextDate.toISOString();
-    
-    // Previous Month Range
     const prevDate = new Date(`${month}-01`);
     prevDate.setMonth(prevDate.getMonth() - 1);
     const prevMonthStr = getMonthString(prevDate);
@@ -247,14 +310,12 @@ export default function App() {
       setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoading(false);
     });
-    
     const fetchLastMonth = async () => {
       const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', prevEnd));
       const s = await getDocs(q);
       setLastMonthTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchLastMonth();
-
     const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
       setMonthlyData(s.exists() ? s.data() : { salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
       setMonthLoading(false);
@@ -274,7 +335,6 @@ export default function App() {
     return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
   }, [month, user]);
 
-  // --- LOGIC: SUMMARY ---
   const summary = useMemo(() => {
     const now = new Date();
     const currentMonthStr = getMonthString(now);
@@ -289,41 +349,30 @@ export default function App() {
 
     const salary = monthlyData.salary || 0;
     
-    // 1. 固定費の合計 (All Fixed Costs)
+    // 【ロジック修正】 固定費を現金(口座振替)とカードに分離
     const fixedCosts = monthlyData.fixedCosts || [];
-    const fixedTotal = fixedCosts.reduce((s, i) => s + i.amount, 0);
-
-    // 2. 固定費の分別 (現金 vs カード)
     const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
-    // const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
+    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
 
-    // 3. 今月のカード支出合計 (Transactions where method != 現金)
-    const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
-
-    // 4. 今月カードであと使える額 (最重要)
-    // ルール: budget(生活費総枠) - fixedTotal(全固定費) - spentCard(カード変動費)
-    const totalBudget = (monthlyData.budget || 0); // 生活費総枠
-    const cardRemaining = totalBudget - fixedTotal - spentCard;
-    // 分母は「総枠 - 全固定費」(=今月の可処分予算) とする
-    const disposableBudget = totalBudget - fixedTotal;
-    const cardRemainingPercent = disposableBudget > 0 ? Math.min(Math.round((cardRemaining / disposableBudget) * 100), 100) : 0;
-
-    // 5. 口座残高見込み (Forecast)
-    // ルール: salary - fixedCashTotal - billTotal
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-    const totalWithdrawal = fixedCashTotal + billTotal; // 表示用：引き落とし計
-    const bankBalanceProjected = salary - fixedCashTotal - billTotal;
+    const totalWithdrawal = fixedCashTotal + billTotal; 
+    const bankBalanceProjected = salary - totalWithdrawal;
 
-    // (Cash Wallet Logic - Keep independent for wallet tracking)
+    // ■ カード側の計算（シンプル版）
+    const cardBudgetTotal = (monthlyData.budget || 0);
+    const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
+    const cardRemaining = cardBudgetTotal - fixedCardTotal - spentCard;
+    const cardRemainingPercent = cardBudgetTotal > 0 ? Math.min(Math.round((cardRemaining / cardBudgetTotal) * 100), 100) : 0;
+
+    // ■ 現金側の計算（シンプル版）
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
-    const cashRemaining = cashBudgetTotal - spentCash;
+    const cashRemaining = cashBudgetTotal - fixedCashTotal - spentCash;
     const cashRemainingPercent = cashBudgetTotal > 0 ? Math.min(Math.round((cashRemaining / cashBudgetTotal) * 100), 100) : 0;
 
-    // Daily Budget (based on Card Remaining)
-    const dailyBudget = daysLeft > 0 ? Math.floor(cardRemaining / daysLeft) : 0;
+    const totalRemaining = cardRemaining + cashRemaining;
+    const dailyBudget = daysLeft > 0 ? Math.floor(totalRemaining / daysLeft) : 0;
 
-    // Categorization
     const getCatTotals = (txs) => txs.reduce((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + t.amount;
       return acc;
@@ -337,28 +386,50 @@ export default function App() {
       acc[day] = (acc[day] || 0) + t.amount;
       return acc;
     }, {});
-
+    
     return { 
       salary, totalWithdrawal, bankBalanceProjected,
-      cardRemaining, cashRemaining, 
-      totalBudget, cashBudget: cashBudgetTotal, 
-      cardRemainingPercent, cashRemainingPercent, 
-      catTotals, lastCatTotals, totalSpent, lastTotalSpent,
+      cardRemaining, cashRemaining, cardBudget: cardBudgetTotal, cashBudget: cashBudgetTotal, 
+      cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
-      disposableBudget
+      cardDisposable: cardBudgetTotal - fixedCardTotal, 
+      cashDisposable: cashBudgetTotal - fixedCashTotal
     };
   }, [monthlyData, transactions, lastMonthTransactions, month]);
 
-  // --- ACTIONS ---
-  const showToast = (message) => {
-    setToast({ visible: true, message });
-    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+  const confirmPayment = async (cardName) => {
+    const confirmed = monthlyData.confirmedPayments || [];
+    if (!confirmed.includes(cardName)) {
+      await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
+      showToast('支払いを完了しました');
+    }
   };
 
-  const handleLogin = async () => {
-    try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (error) { console.error(error); }
+  const copyLastMonthSettings = async () => {
+    if(!window.confirm('先月の予算・固定費・カテゴリ設定を今月にコピーしますか？')) return;
+    const d = new Date(month + "-01");
+    d.setMonth(d.getMonth() - 1);
+    const lastMonthStr = getMonthString(d);
+    try {
+        const lastMonthDoc = await getDoc(doc(db, 'users', user.uid, 'months', lastMonthStr));
+        if (lastMonthDoc.exists()) {
+            const data = lastMonthDoc.data();
+            const newData = {
+                budget: data.budget || 0,
+                cashBudget: data.cashBudget || 0,
+                fixedCosts: data.fixedCosts || [], 
+                catBudgets: data.catBudgets || {},
+                cardDueDates: data.cardDueDates || {}, 
+            };
+            await setDoc(doc(db, 'users', user.uid, 'months', month), newData, { merge: true });
+            showToast('設定をコピーしました');
+        } else {
+            alert('先月のデータが見つかりませんでした');
+        }
+    } catch (e) {
+        alert('エラーが発生しました');
+    }
   };
-  const handleLogout = async () => { if(window.confirm('ログアウトしますか？')) await signOut(auth); };
 
   const handleTxSubmit = async (e) => {
     e.preventDefault();
@@ -385,14 +456,76 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  const startEditing = (t) => {
-    setEditingTx(t);
-    setInputDate(t.date.split('T')[0]);
-    setInputAmount(String(t.amount));
-    setInputTitle(t.title);
-    setInputCategory(t.category);
-    setInputMethod(t.paymentMethod);
-    setIsModalOpen(true);
+  const handleSettingsSave = async () => {
+    if (!editingItem) return;
+    const { type, data, index } = editingItem;
+
+    if (type === 'category') {
+        const newCats = [...config.categories];
+        if (index === -1) {
+            newCats.push({ name: data.name, icon: data.icon || '🏷' });
+        } else {
+            newCats[index] = { name: data.name, icon: data.icon || '🏷' };
+        }
+        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
+        if (index !== -1 && data.originalName && data.originalName !== data.name) {
+            const q = query(collection(db, 'users', user.uid, 'transactions'), where('category', '==', data.originalName));
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { category: data.name });
+            });
+            await batch.commit();
+        }
+        const newBudgets = { ...monthlyData.catBudgets };
+        if (index !== -1 && data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
+        if (data.budget) newBudgets[data.name] = Number(data.budget);
+        await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: newBudgets }, { merge: true });
+    } else if (type === 'template') {
+        const newTpls = [...(config.templates || [])];
+        if (index === -1) {
+            newTpls.push({ title: data.title, amount: Number(data.amount), category: data.category, method: data.method });
+        } else {
+            newTpls[index] = { title: data.title, amount: Number(data.amount), category: data.category, method: data.method };
+        }
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: newTpls});
+    } else if (type === 'fixed') {
+        const newFixed = [...(monthlyData.fixedCosts || [])];
+        if (index === -1) {
+            newFixed.push({ id: Date.now(), name: data.name, amount: Number(data.amount), method: data.method });
+        } else {
+            newFixed[index] = { ...newFixed[index], name: data.name, amount: Number(data.amount), method: data.method };
+        }
+        setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts: newFixed},{merge:true});
+    } else if (type === 'payment') {
+        const newMethods = [...config.paymentMethods];
+        if (index === -1) {
+            if (data.name) newMethods.push(data.name);
+        } else {
+            newMethods[index] = data.name;
+        }
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: newMethods});
+    }
+    setEditingItem(null);
+    showToast('設定を保存しました');
+  };
+
+  const handleDeleteItem = () => {
+    if (!editingItem || !window.confirm('本当に削除しますか？')) return;
+    const { type, index } = editingItem;
+    if (index === -1) { setEditingItem(null); return; }
+
+    if (type === 'category') {
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:config.categories.filter((_, i) => i !== index)});
+    } else if (type === 'template') {
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: config.templates.filter((_, i) => i !== index)});
+    } else if (type === 'fixed') {
+        setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:monthlyData.fixedCosts.filter((_, i) => i !== index)},{merge:true});
+    } else if (type === 'payment') {
+        setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter((_, i) => i !== index)});
+    }
+    setEditingItem(null);
+    showToast('削除しました');
   };
 
   const applyTemplate = (tpl) => {
@@ -402,15 +535,6 @@ export default function App() {
     setInputMethod(tpl.method);
   };
 
-  // Helper Functions for Settings
-  const getCategoryIcon = (catName) => {
-    if (!config.categories) return '🏷';
-    const cat = config.categories.find(c => (typeof c === 'string' ? c : c.name) === catName);
-    return cat ? (typeof cat === 'string' ? '🏷' : cat.icon) : '🏷';
-  };
-  const getCategoryNames = () => config.categories.map(c => typeof c === 'string' ? c : c.name);
-
-  // Filtered Data
   const activeAlerts = useMemo(() => {
     const today = new Date().getDate();
     return Object.entries(monthlyData.cardDueDates || {}).filter(([card, day]) => {
@@ -442,8 +566,28 @@ export default function App() {
     return days;
   }, [month]);
 
-  // --- RENDER ---
+  const openModalWithDate = (dateStr) => {
+    setEditingTx(null);
+    setInputDate(dateStr);
+    setInputAmount('');
+    setInputTitle('');
+    setInputCategory(getCategoryNames()[0]);
+    setInputMethod(config.paymentMethods[0]);
+    setIsModalOpen(true);
+  };
+
+  const startEditing = (t) => {
+    setEditingTx(t);
+    setInputDate(t.date.split('T')[0]);
+    setInputAmount(String(t.amount));
+    setInputTitle(t.title);
+    setInputCategory(t.category);
+    setInputMethod(t.paymentMethod);
+    setIsModalOpen(true);
+  }
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
+
   if (!user) {
     return (
       <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in duration-500">
@@ -456,48 +600,81 @@ export default function App() {
             <p className="text-zinc-500 text-xs font-bold tracking-widest mt-1">Simple Financial Management</p>
           </div>
         </div>
-        <button onClick={handleLogin} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold text-sm uppercase tracking-widest hover:bg-zinc-200 transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-xl"><Lock size={18} /> Googleでログイン</button>
+        <button onClick={handleLogin} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold text-sm uppercase tracking-widest hover:bg-zinc-200 transition-transform active:scale-95 flex items-center justify-center gap-3 shadow-xl">
+          <Lock size={18} />
+          Googleでログイン
+        </button>
       </div>
     );
   }
+
+  // --- RENDER: MAIN APP ---
+
   if (loading && !monthlyData.budget) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Syncing Data...</div>;
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center">
+      {/* Toast Notification */}
       <Toast message={toast.message} isVisible={toast.visible} />
+
+      {/* 画面中央に寄せるためのコンテナ (iPad対応) */}
       <div className="w-full max-w-md h-full flex flex-col relative bg-[#121212] shadow-2xl mx-auto">
         
-        {/* HEADER */}
+        {/* HEADER (Glassmorphism & Center Layout) */}
         <header className="absolute top-0 w-full max-w-md h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
           {(activeTab === 'settings' && settingTab !== 'menu') ? (
+            // Detail Header
             <>
-                <button onClick={() => { setSettingTab('menu'); setTimeout(() => { if(mainRef.current) mainRef.current.scrollTop = 0; }, 0); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ArrowLeft size={24}/></button>
-                <span className="text-sm font-bold text-white tracking-wider absolute left-1/2 -translate-x-1/2">
-                    {(settingTab === 'budget' && '資金計画') || (settingTab === 'fixed' && '固定費') || (settingTab === 'category' && 'カテゴリ') || (settingTab === 'template' && 'テンプレート') || (settingTab === 'payment' && '支払方法')}
-                </span>
+                <button onClick={() => { 
+                    setSettingTab('menu'); 
+                    setTimeout(() => { if(mainRef.current) mainRef.current.scrollTop = 0; }, 0); 
+                }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
+                    <ArrowLeft size={24}/>
+                </button>
+                <span className="text-sm font-bold text-white tracking-wider absolute left-1/2 -translate-x-1/2">{
+                    (settingTab === 'budget' && '資金計画') || 
+                    (settingTab === 'fixed' && '固定費') || 
+                    (settingTab === 'category' && 'カテゴリ') || 
+                    (settingTab === 'template' && 'テンプレート') || 
+                    (settingTab === 'payment' && '支払方法')
+                }</span>
                 <div className="w-10"></div>
             </>
           ) : (
+            // Standard Header
             <>
-                <div className="flex items-center justify-start w-10"><img src="/favicon.ico" alt="logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" onError={(e) => e.target.style.display = 'none'} /></div>
+                {/* 左：ロゴ（アイコンのみ） */}
+                <div className="flex items-center justify-start w-10">
+                    <img src="/favicon.ico" alt="logo" className="w-8 h-8 rounded-xl object-contain shadow-lg" onError={(e) => e.target.style.display = 'none'} />
+                </div>
+                
+                {/* 中央：年月ナビゲーター */}
                 <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-4">
                     <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()-1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronLeft size={24}/></button>
                     <span className="text-sm font-bold text-white tracking-wider whitespace-nowrap tabular-nums">{formatMonthJP(month)}</span>
                     <button onClick={() => { const d=new Date(`${month}-01`); d.setMonth(d.getMonth()+1); setMonth(getMonthString(d)); }} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><ChevronRight size={24}/></button>
                 </div>
-                <div className="flex items-center justify-end w-10"><button onClick={() => setMonth(getMonthString(new Date()))} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors"><Calendar size={22} /></button></div>
+
+                {/* 右：今月へ戻るボタン（カレンダーアイコン） */}
+                <div className="flex items-center justify-end w-10">
+                    <button onClick={() => setMonth(getMonthString(new Date()))} className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 text-zinc-400 transition-colors">
+                        <Calendar size={22} />
+                    </button>
+                </div>
             </>
           )}
         </header>
 
-        {/* MAIN */}
+        {/* MAIN SCROLL AREA (Padding for Header/Footer) */}
         <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-20 pb-28">
           <div className="w-full max-w-md mx-auto">
+            
+            {/* HOME TAB */}
             {activeTab === 'home' && (
               <div className="p-4 space-y-4 animate-in fade-in duration-500">
                 <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-4 border border-white/5">
-                  <button onClick={() => setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14}/> 支出管理</button>
-                  <button onClick={() => setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><ListChecks size={14}/> 収支・予定</button>
+                  <button onClick={() => { setHomeView('spending'); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><LayoutGrid size={14}/> 支出管理</button>
+                  <button onClick={() => { setHomeView('forecast'); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}><ListChecks size={14}/> 収支・予定</button>
                 </div>
 
                 {homeView === 'spending' && (
@@ -509,15 +686,37 @@ export default function App() {
                       </div>
                     )}
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">生活費予算（総枠）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.totalBudget.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">生活費予算（総枠）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
                       <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">現金予算（口座）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
+                    
+                    <div className="grid grid-cols-2 gap-3 mt-4">
+                      {config.categories.filter(c => monthlyData.catBudgets?.[(typeof c==='string'?c:c.name)]).map(c => {
+                        const catName = typeof c === 'string' ? c : c.name;
+                        const icon = getCategoryIcon(catName);
+                        const spent = summary.catTotals[catName] || 0;
+                        const budget = monthlyData.catBudgets[catName];
+                        const per = Math.max(Math.round(((budget - spent) / budget) * 100), 0);
+                        return (
+                          <SimpleCard key={catName} className="p-3 space-y-2">
+                            <div className="flex flex-col gap-1 text-[9px] font-bold">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-1.5"><span className="text-sm">{icon}</span><span className="text-zinc-400">{catName}</span></div>
+                                <span className="text-[9px] font-bold text-zinc-200 tabular-nums">¥{spent.toLocaleString()} / ¥{budget.toLocaleString()}</span>
+                              </div>
+                            </div>
+                            <div className="h-0.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full ${per < 15 ? 'bg-red-500' : 'bg-zinc-500'}`} style={{ width: `${per}%` }} /></div>
+                          </SimpleCard>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
+
                 {homeView === 'forecast' && (
                   <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
                     {activeAlerts.length > 0 && (
@@ -528,7 +727,7 @@ export default function App() {
                             <div key={card} className="flex justify-between items-center bg-black/20 p-2.5 rounded border border-white/5">
                               <div className="flex flex-col"><span className="text-[11px] font-bold text-zinc-200">{card}</span>
                               <div className="flex items-center gap-2"><span className="text-[9px] font-bold text-zinc-500 uppercase">{day}日に引き落とし</span><span className="text-[9px] font-bold text-white tabular-nums">¥{(monthlyData.cardBills[card]||0).toLocaleString()}</span></div></div>
-                              <button onClick={() => { if(!monthlyData.confirmedPayments?.includes(card)) { setDoc(doc(db,'users',user.uid,'months',month),{confirmedPayments:[...(monthlyData.confirmedPayments||[]), card]},{merge:true}); showToast('完了しました'); } }} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-black uppercase transition-all"><CheckCircle2 size={12}/> 完了</button>
+                              <button onClick={() => confirmPayment(card)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-black uppercase transition-all"><CheckCircle2 size={12}/> 完了</button>
                             </div>
                           ))}
                         </div>
@@ -558,8 +757,8 @@ export default function App() {
                          {searchText && <button onClick={() => setSearchText('')} className="absolute right-3 top-3 text-zinc-500"><X size={14}/></button>}
                        </div>
                        <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
-                         <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
-                         <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
+                         <button onClick={() => { setLogView('list'); }} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
+                         <button onClick={() => { setLogView('calendar'); }} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
                        </div>
                      </div>
                      <div className="flex gap-2">
@@ -594,6 +793,7 @@ export default function App() {
                         {calendarDays.map((day, i) => {
                           if (day === null) return <div key={i} />;
                           const amt = summary.dailyTotals[day] || 0;
+                          const targetDate = new Date(month + '-' + String(day).padStart(2,'0'));
                           const isToday = day === new Date().getDate() && month === getMonthString(new Date());
                           return <div key={i} onClick={() => openModalWithDate(`${month}-${String(day).padStart(2,'0')}`)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}><span className={`text-[9px] font-bold tabular-nums ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>{amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5 tabular-nums">¥{(amt/1000).toFixed(1)}k</span>}</div>;
                         })}
@@ -672,12 +872,25 @@ export default function App() {
                     {/* Other settings tabs ... simplified for brevity but functionally identical to previous versions */}
                     {settingTab === 'fixed' && <SimpleCard className="p-5 space-y-2"><div className="flex justify-between items-center mb-2"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">固定費管理</p></div><div className="divide-y divide-white/5">{(monthlyData.fixedCosts || []).map((f, idx) => (<div key={idx} onClick={() => setEditingItem({ type: 'fixed', data: f, index: idx })} className="flex justify-between items-center py-3 cursor-pointer"><div className="flex flex-col"><span className="text-xs text-zinc-200 font-bold">{f.name}</span><span className="text-[9px] text-zinc-500">{f.method||'未設定'}</span></div><span className="text-sm font-bold tabular-nums text-white">¥{f.amount.toLocaleString()}</span></div>))}</div><button onClick={() => setEditingItem({ type: 'fixed', data: { name: '', amount: '', method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14}/> 固定費を追加</button></SimpleCard>}
                     {/* Same for category, template, payment... reusing existing edit modal logic */}
+                    {settingTab === 'category' && <SimpleCard className="p-5 space-y-2"><div className="flex justify-between items-center mb-2"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">カテゴリ設定</p></div><div className="divide-y divide-white/5">{config.categories.map((c, idx) => (<div key={idx} onClick={() => setEditingItem({ type: 'category', data: { name: c.name, icon: c.icon }, index: idx })} className="flex justify-between items-center py-3 cursor-pointer"><div className="flex items-center gap-3"><span className="text-xl w-8 text-center">{c.icon}</span><span className="text-xs font-bold text-white">{c.name}</span></div><div className="flex gap-1"><button onClick={(e) => handleMoveCategory(idx, 'up', e)} className="p-1 text-zinc-400"><ArrowUp size={14}/></button><button onClick={(e) => handleMoveCategory(idx, 'down', e)} className="p-1 text-zinc-400"><ArrowDown size={14}/></button></div></div>))}</div><button onClick={() => setEditingItem({ type: 'category', data: { name: '', icon: '🏷' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14}/> カテゴリを追加</button></SimpleCard>}
+                    {settingTab === 'template' && <SimpleCard className="p-5 space-y-2"><div><p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">テンプレート一覧</p><div className="divide-y divide-white/5">{(config.templates || []).map((t, idx) => (<div key={idx} onClick={() => setEditingItem({ type: 'template', data: t, index: idx })} className="flex justify-between py-3 cursor-pointer"><div className="flex flex-col"><span className="text-xs font-bold text-white">{t.title}</span><span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category}</span></div></div>))}</div><button onClick={() => setEditingItem({ type: 'template', data: { title: '', amount: '', category: getCategoryNames()[0], method: config.paymentMethods[0] }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14}/> テンプレートを追加</button></div></SimpleCard>}
+                    {settingTab === 'payment' && <SimpleCard className="p-5 space-y-6"><div><p className="text-[10px] text-zinc-500 uppercase font-bold mb-4 tracking-widest">支払方法一覧</p><div className="flex flex-wrap gap-2 mb-6">{config.paymentMethods.map((m, idx) => (<div key={m} onClick={() => setEditingItem({ type: 'payment', data: { name: m }, index: idx })} className="px-3 py-1.5 bg-white/5 rounded-lg border border-white/10 text-xs text-zinc-300 font-bold cursor-pointer">{m}</div>))}</div><button onClick={() => setEditingItem({ type: 'payment', data: { name: '' }, index: -1 })} className="w-full h-11 bg-zinc-200 text-black rounded-lg mt-4 text-[10px] font-bold flex items-center justify-center gap-2"><Plus size={14}/> 支払方法を追加</button></div></SimpleCard>}
                   </>
                 )}
               </div>
             )}
           </div>
         </main>
+        {/* FOOTER */}
+        <footer className="absolute bottom-0 w-full max-w-md h-24 border-t border-white/5 flex justify-between items-center px-6 pb-6 z-50 bg-[#121212]/80 backdrop-blur-xl">
+          <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Home size={24}/>} />
+          <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={24}/>} />
+          <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={24}/>} />
+          <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<Settings size={24}/>} />
+          <button onClick={() => { setEditingTx(null); setInputDate(getTodayString()); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0]); setInputMethod(config.paymentMethods[0]); setShowCalculator(false); setIsModalOpen(true); }} className="flex items-center justify-center w-14 h-14 bg-white text-black rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] active:scale-90 transition-transform ml-2">
+            <Plus size={28}/>
+          </button>
+        </footer>
       </div>
 
       {/* MODAL */}
@@ -711,7 +924,10 @@ export default function App() {
                <div className="space-y-4">
                  {/* Dynamic form based on type */}
                  {editingItem.type === 'fixed' && <><input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, name: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="名称" /><input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, amount: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="金額" /><select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, method: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select></>}
-                 {/* Add other types logic here as needed (category, etc) - simplified for brevity */}
+                 {editingItem.type === 'category' && <><div className="flex gap-2"><input value={editingItem.data.icon} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, icon: e.target.value}})} className="w-12 h-12 text-center bg-black/20 border border-white/10 rounded-lg text-xl text-white"/><input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, name: e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="カテゴリ名"/></div><input type="number" value={editingItem.data.budget||''} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, budget: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="予算" /></>}
+                 {editingItem.type === 'template' && <><input value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, title: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="タイトル"/><input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, amount: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="金額"/><div className="flex gap-2"><select value={editingItem.data.category} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, category: e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-white">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, method: e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-white">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select></div></>}
+                 {editingItem.type === 'payment' && <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, name: e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-white" placeholder="名称"/>}
+                 
                  <div className="flex gap-2">{editingItem.index !== -1 && <button onClick={handleDeleteItem} className="w-12 h-12 bg-red-900/20 text-red-500 rounded-lg flex items-center justify-center"><Trash2 size={18}/></button>}<button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black font-bold rounded-lg">保存</button></div>
                </div>
             </div>
