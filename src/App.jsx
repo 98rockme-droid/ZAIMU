@@ -595,6 +595,7 @@ export default function App() {
 
   // --- スクロール制御用Ref ---
   // mainRefはここで1回だけ宣言 (No Duplicates)
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
@@ -753,94 +754,103 @@ export default function App() {
               </div>
             )}
 
-            {/* LOG TAB */}
+            {/* LOG TAB (Fixed Header & List) */}
             {activeTab === 'log' && (
-              <div className="p-4 space-y-3 animate-in fade-in duration-500">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="履歴を検索..." className="w-full h-10 bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none font-bold" />
-                    <Search size={14} className="absolute left-3 top-3 text-zinc-500"/>
-                    {searchText && <button onClick={() => setSearchText('')} className="absolute right-3 top-3 text-zinc-500"><X size={14}/></button>}
-                  </div>
-                  <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
-                    <button onClick={() => { setLogView('list'); }} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
-                    <button onClick={() => { setLogView('calendar'); }} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
-                  </div>
+              <div className="animate-in fade-in duration-500">
+                {/* Fixed Search & Filter Header (Sticky below main header) */}
+                <div className="fixed top-16 left-0 right-0 z-40 bg-[#121212]/95 backdrop-blur w-full max-w-md mx-auto border-b border-white/5 px-4 py-3 shadow-lg">
+                   <div className="space-y-3">
+                     <div className="flex gap-2">
+                       <div className="flex-1 relative">
+                         <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="履歴を検索..." className="w-full h-10 bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none font-bold" />
+                         <Search size={14} className="absolute left-3 top-3 text-zinc-500"/>
+                         {searchText && <button onClick={() => setSearchText('')} className="absolute right-3 top-3 text-zinc-500"><X size={14}/></button>}
+                       </div>
+                       <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
+                         <button onClick={() => { setLogView('list'); }} className={`p-2 rounded ${logView==='list'?'bg-white text-black':'text-zinc-500'}`}><AlignJustify size={16}/></button>
+                         <button onClick={() => { setLogView('calendar'); }} className={`p-2 rounded ${logView==='calendar'?'bg-white text-black':'text-zinc-500'}`}><CalendarDays size={16}/></button>
+                       </div>
+                     </div>
+                     <div className="flex gap-2">
+                       <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全てのカテゴリ</option>{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select>
+                       <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
+                     </div>
+                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <select onChange={e => setFilter({...filter, category: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全てのカテゴリ</option>{getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}</select>
-                  <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
-                </div>
-                {logView === 'list' && (
-                  <SimpleCard>
-                    {filteredTransactions.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
-                            <Sparkles size={48} className="text-zinc-700" />
-                            <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-white/5">
-                            {filteredTransactions.map(t => {
-                                return (
-                                    <div 
-                                      key={t.id} 
-                                      onClick={() => startEditing(t)} 
-                                      className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors hover:bg-white/[0.02]"
-                                    >
-                                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        {/* Date */}
-                                        <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
-                                        
-                                        {/* Category Label */}
-                                        <div className="w-16 flex-shrink-0 flex justify-center">
-                                           <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
-                                             {t.category}
-                                           </span>
-                                        </div>
 
-                                        {/* Title */}
-                                        <div className="flex-1 truncate text-sm font-bold text-white">
-                                            {t.title}
-                                        </div>
-                                      </div>
-                                      
-                                      {/* Amount */}
-                                      <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                  </SimpleCard>
-                )}
-                {logView === 'calendar' && (
-                  <SimpleCard className="p-4">
-                    <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                      {['日','月','火','水','木','金','土'].map(d => <div key={d} className="text-[10px] text-zinc-600 font-bold">{d}</div>)}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {calendarDays.map((day, i) => {
-                        if (day === null) return <div key={i} />;
-                        const amt = summary.dailyTotals[day] || 0;
-                        const targetDate = new Date(month + '-' + String(day).padStart(2,'0'));
-                        const today = new Date();
-                        today.setHours(0,0,0,0);
-                        const isToday = day === today.getDate() && month === getMonthString(today);
-                        const isFuture = targetDate > today;
-                        const isNMD = amt === 0 && !isFuture;
-                        const dateStr = month + '-' + String(day).padStart(2,'0');
-                        return (
-                          <div key={i} onClick={() => openModalWithDate(dateStr)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}>
-                            <span className={`text-[9px] font-bold tabular-nums ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
-                            {amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5 tabular-nums">¥{(amt/1000).toFixed(1)}k</span>}
-                            {isNMD && <span className="absolute text-xs">✨</span>}
+                {/* Content (Padded for fixed header) */}
+                <div className="pt-28 px-4 pb-4">
+                  {logView === 'list' && (
+                    <SimpleCard>
+                      {filteredTransactions.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
+                              <Sparkles size={48} className="text-zinc-700" />
+                              <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
                           </div>
-                        );
-                      })}
-                    </div>
-                    <p className="text-center text-[9px] text-zinc-600 mt-4">✨ = No Money Day (支出ゼロ)</p>
-                  </SimpleCard>
-                )}
+                      ) : (
+                          <div className="divide-y divide-white/5">
+                              {filteredTransactions.map(t => {
+                                  return (
+                                      <div 
+                                        key={t.id} 
+                                        onClick={() => startEditing(t)} 
+                                        className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors hover:bg-white/[0.02]"
+                                      >
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                          {/* Date */}
+                                          <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
+                                          
+                                          {/* Category Label */}
+                                          <div className="w-16 flex-shrink-0 flex justify-center">
+                                             <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
+                                               {t.category}
+                                             </span>
+                                          </div>
+
+                                          {/* Title */}
+                                          <div className="flex-1 truncate text-sm font-bold text-white">
+                                              {t.title}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Amount */}
+                                        <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      )}
+                    </SimpleCard>
+                  )}
+                  {logView === 'calendar' && (
+                    <SimpleCard className="p-4">
+                      <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                        {['日','月','火','水','木','金','土'].map(d => <div key={d} className="text-[10px] text-zinc-600 font-bold">{d}</div>)}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {calendarDays.map((day, i) => {
+                          if (day === null) return <div key={i} />;
+                          const amt = summary.dailyTotals[day] || 0;
+                          const targetDate = new Date(month + '-' + String(day).padStart(2,'0'));
+                          const today = new Date();
+                          today.setHours(0,0,0,0);
+                          const isToday = day === today.getDate() && month === getMonthString(today);
+                          const isFuture = targetDate > today;
+                          const isNMD = amt === 0 && !isFuture;
+                          const dateStr = month + '-' + String(day).padStart(2,'0');
+                          return (
+                            <div key={i} onClick={() => openModalWithDate(dateStr)} className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative active:scale-95 transition-transform cursor-pointer ${isToday ? 'border-white bg-white/10' : 'border-white/5 bg-black/20'}`}>
+                              <span className={`text-[9px] font-bold tabular-nums ${isToday ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
+                              {amt > 0 && <span className="text-[8px] font-bold text-zinc-300 tracking-tighter mt-0.5 tabular-nums">¥{(amt/1000).toFixed(1)}k</span>}
+                              {isNMD && <span className="absolute text-xs">✨</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-center text-[9px] text-zinc-600 mt-4">✨ = No Money Day (支出ゼロ)</p>
+                    </SimpleCard>
+                  )}
+                </div>
               </div>
             )}
 
