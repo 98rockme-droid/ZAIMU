@@ -593,6 +593,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言 (No Duplicates)
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -797,8 +800,8 @@ export default function App() {
                                           <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
                                           
                                           {/* Category Label */}
-                                          <div className="w-16 flex-shrink-0 flex justify-center">
-                                             <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
+                                          <div className="w-12 flex-shrink-0 flex justify-center">
+                                             <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-0.5 py-0.5 rounded flex items-center justify-center w-full truncate">
                                                {t.category}
                                              </span>
                                           </div>
