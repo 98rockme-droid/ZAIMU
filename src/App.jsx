@@ -565,6 +565,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -1019,7 +1022,7 @@ export default function App() {
       {/* EDIT SETTINGS MODAL */}
       {editingItem && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
-          <div className="w-full h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col animate-in slide-in-from-bottom duration-300" onClick={(e) => e.stopPropagation()}>
             <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
                 <h2 className="text-xs font-bold uppercase text-white tracking-widest">編集</h2>
                 <button onClick={() => setEditingItem(null)} className="p-2 -mr-2 text-zinc-500 hover:text-white"><X size={20}/></button>
