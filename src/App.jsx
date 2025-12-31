@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc, serverTimestamp, where, updateDoc, writeBatch, getDocs, getDoc, orderBy } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
-import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Calculator, Delete, LogOut, Lock, User, FileText, ArrowUp, ArrowDown, Home, Sparkles } from 'lucide-react';
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut, deleteUser } from 'firebase/auth';
+import { Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History, ChevronLeft, ChevronRight, Edit3, X, Tags, ArrowLeft, CopyCheck, Calendar, CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote, LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap, Image as ImageIcon, Calculator, Delete, LogOut, Lock, Import, UserX, User, FileText, ArrowUp, ArrowDown, Home, Sparkles, Coffee, RotateCcw } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
@@ -19,6 +19,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 const getMonthString = (date) => date.toISOString().slice(0, 7);
+// 日本語表記用のフォーマッター (例: 2023年 10月)
 const formatMonthJP = (monthStr) => {
     const [y, m] = monthStr.split('-');
     return `${y}年 ${Number(m)}月`;
@@ -42,16 +43,6 @@ const NavButton = ({ active, onClick, icon }) => (
   <button onClick={onClick} className={`flex items-center justify-center w-16 h-16 transition-all duration-300 ${active ? 'text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'text-zinc-600 hover:text-zinc-400'}`}>
     {icon}
   </button>
-);
-
-// Toast Component
-const Toast = ({ message, isVisible }) => (
-  <div className={`fixed bottom-28 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 pointer-events-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-    <div className="bg-zinc-800/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl border border-white/10 flex items-center gap-2">
-      <CheckCircle2 size={16} className="text-emerald-400" />
-      <span className="text-xs font-bold tracking-wider">{message}</span>
-    </div>
-  </div>
 );
 
 // Calculator Component
@@ -150,9 +141,6 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   
-  // Toast State
-  const [toast, setToast] = useState({ visible: false, message: '' });
-  
   // 編集用state
   const [editingItem, setEditingItem] = useState(null); 
 
@@ -161,7 +149,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control (ONLY DECLARATION)
+  // Ref for scroll control - ここで1回だけ宣言 (これ以外にはありません)
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -194,11 +182,6 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
-
-  const showToast = (message) => {
-    setToast({ visible: true, message });
-    setTimeout(() => setToast({ visible: false, message: '' }), 3000);
-  };
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
@@ -402,7 +385,6 @@ export default function App() {
     const confirmed = monthlyData.confirmedPayments || [];
     if (!confirmed.includes(cardName)) {
       await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
-      showToast('支払いを完了しました');
     }
   };
 
@@ -423,7 +405,7 @@ export default function App() {
                 cardDueDates: data.cardDueDates || {}, 
             };
             await setDoc(doc(db, 'users', user.uid, 'months', month), newData, { merge: true });
-            showToast('設定をコピーしました');
+            alert('コピーしました');
         } else {
             alert('先月のデータが見つかりませんでした');
         }
@@ -435,7 +417,7 @@ export default function App() {
   const handleTxSubmit = async (e) => {
     e.preventDefault();
     const method = e.target.method.value;
-    const amount = Number(String(inputAmount).replace(/,/g, ''));
+    const amount = Number(inputAmount); 
     const data = { 
       title: e.target.title.value || e.target.category.value, 
       amount, 
@@ -450,10 +432,8 @@ export default function App() {
     if (editingTx) { 
       await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data); 
       setEditingTx(null); 
-      showToast('履歴を更新しました');
     } else { 
       await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() }); 
-      showToast('支出を記録しました');
     }
     setIsModalOpen(false);
   };
@@ -513,7 +493,6 @@ export default function App() {
         setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: newMethods});
     }
     setEditingItem(null);
-    showToast('設定を保存しました');
   };
 
   const handleDeleteItem = () => {
@@ -531,7 +510,6 @@ export default function App() {
         setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:config.paymentMethods.filter((_, i) => i !== index)});
     }
     setEditingItem(null);
-    showToast('削除しました');
   };
 
   const applyTemplate = (tpl) => {
@@ -561,19 +539,6 @@ export default function App() {
     });
   }, [transactions, searchText, filter]);
 
-  const groupedTransactions = useMemo(() => {
-    const groups = {};
-    filteredTransactions.forEach(t => {
-      const dateKey = t.date.split('T')[0];
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(t);
-    });
-    return Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)).map(date => ({
-      date,
-      items: groups[date]
-    }));
-  }, [filteredTransactions]);
-
   const calendarDays = useMemo(() => {
     const d = new Date(month + "-01");
     const year = d.getFullYear();
@@ -601,6 +566,7 @@ export default function App() {
   }
 
   // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言 (No Duplicates)
   const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
@@ -631,9 +597,6 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center">
-      {/* Toast Notification */}
-      <Toast message={toast.message} isVisible={toast.visible} />
-
       {/* 画面中央に寄せるためのコンテナ (iPad対応) */}
       <div className="w-full max-w-md h-full flex flex-col relative bg-[#121212] shadow-2xl mx-auto">
         
@@ -756,41 +719,31 @@ export default function App() {
                   <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
                 </div>
                 {logView === 'list' && (
-                  <div className="space-y-4">
-                    {groupedTransactions.length === 0 ? (
+                  <div className="space-y-1">
+                    {filteredTransactions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
                             <Sparkles size={48} className="text-zinc-700" />
                             <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
                         </div>
-                    ) : groupedTransactions.map(group => (
-                        <div key={group.date}>
-                            <div className="sticky top-[-1px] bg-[#121212]/95 backdrop-blur py-2 px-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/5 z-10 flex justify-between items-center">
-                                <span>{group.date.replace(/-/g, '/')}</span>
-                                <span className="tabular-nums text-zinc-600">¥{group.items.reduce((s,t)=>s+t.amount,0).toLocaleString()}</span>
+                    ) : filteredTransactions.map(t => {
+                      const icon = getCategoryIcon(t.category);
+                      return (
+                        <div 
+                          key={t.id} 
+                          onClick={() => startEditing(t)} 
+                          className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="text-xl w-8 flex justify-center flex-shrink-0">{icon}</div>
+                            <div className="text-left flex-1 min-w-0">
+                              <div className="text-sm font-bold text-white truncate">{t.title}</div>
+                              <div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category} • {t.date.split('T')[0]}</div>
                             </div>
-                            <div>
-                                {group.items.map(t => {
-                                    const icon = getCategoryIcon(t.category);
-                                    return (
-                                        <div 
-                                          key={t.id} 
-                                          onClick={() => startEditing(t)} 
-                                          className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
-                                        >
-                                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <div className="text-xl w-8 flex justify-center flex-shrink-0">{icon}</div>
-                                            <div className="text-left flex-1 min-w-0">
-                                              <div className="text-sm font-bold text-white truncate">{t.title}</div>
-                                              <div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category}</div>
-                                            </div>
-                                          </div>
-                                          <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                          </div>
+                          <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
                         </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {logView === 'calendar' && (
@@ -1146,24 +1099,7 @@ export default function App() {
                   <div className="flex-1 overflow-y-auto p-5 pb-32">
                     <form onSubmit={handleTxSubmit} className="space-y-6">
                         <div className="flex gap-2 items-center">
-                        {/* Real-time Formatting Input */}
-                        <div className="relative flex-1">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span>
-                            <input 
-                                name="amount" 
-                                type="text" 
-                                inputMode="decimal"
-                                value={inputAmount ? Number(inputAmount).toLocaleString() : ''} 
-                                onChange={(e) => {
-                                    const val = e.target.value.replace(/,/g, '');
-                                    if (!isNaN(val) && val.length < 15) setInputAmount(val);
-                                }} 
-                                className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left pl-8 pr-4 text-white outline-none tabular-nums font-bold" 
-                                placeholder="0" 
-                                autoFocus 
-                                required 
-                            />
-                        </div>
+                        <input name="amount" type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="flex-1 w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold text-left px-4 text-white outline-none tabular-nums font-bold" placeholder="0" autoFocus required />
                         <button type="button" onClick={() => setShowCalculator(true)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-lg text-white hover:bg-white/20 active:scale-95 transition-all"><Calculator size={20}/></button>
                         </div>
                         <input name="title" type="text" defaultValue={editingTx?.title || ''} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold" placeholder="タイトル (例: ランチ)" />
