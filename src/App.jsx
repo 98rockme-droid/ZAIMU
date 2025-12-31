@@ -144,7 +144,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control
+  // Ref for scroll control (宣言はここ1箇所のみ)
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -446,7 +446,7 @@ export default function App() {
         }
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
 
-        // カテゴリ名変更時の履歴更新処理
+        // 過去のトランザクションのカテゴリ名も更新する
         if (index !== -1 && data.originalName && data.originalName !== data.name) {
             const q = query(collection(db, 'users', user.uid, 'transactions'), where('category', '==', data.originalName));
             const snapshot = await getDocs(q);
@@ -559,10 +559,6 @@ export default function App() {
     setInputAmount(t.amount);
     setIsModalOpen(true);
   }
-
-  // --- スクロール制御用Ref ---
-  // mainRefはここで1回だけ宣言 (No Duplicates)
-  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
