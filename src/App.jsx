@@ -788,13 +788,13 @@ export default function App() {
                         >
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             {/* Date */}
-                            <div className="w-12 text-center font-black text-zinc-500 text-xs font-mono tracking-tighter">{formatDateShort(t.date)}</div>
+                            <div className="w-10 text-center font-mono text-xs text-zinc-500">{formatDateShort(t.date)}</div>
                             
-                            {/* Category Label */}
-                            <div className="w-16 flex-shrink-0">
-                                <div className="w-full text-center text-[10px] font-bold text-zinc-400 bg-white/5 rounded py-0.5 truncate">
-                                    {t.category}
-                                </div>
+                            {/* Category Label (New) */}
+                            <div className="w-14 flex-shrink-0 flex justify-center">
+                               <span className="bg-white/10 text-zinc-300 text-[10px] px-1 rounded h-5 flex items-center justify-center w-full truncate">
+                                 {t.category}
+                               </span>
                             </div>
 
                             {/* Title */}
@@ -1038,7 +1038,7 @@ export default function App() {
                                   <div key={idx} onClick={() => { setEditingItem({ type: 'template', data: t, index: idx }); }} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
                                     <div className="flex flex-col">
                                       <span className="text-xs font-bold text-white">{t.title}</span>
-                                      <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
+                                      <span className="text-[10px] text-zinc-500">¥{Number(t.amount).toLocaleString()} / {t.category} / {t.method}</span>
                                     </div>
                                   </div>
                                 ))}
