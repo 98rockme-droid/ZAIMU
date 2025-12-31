@@ -19,6 +19,8 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 /* --- UTILS --- */
+const CASH = '現金';
+
 const getMonthString = (date) => date.toISOString().slice(0, 7);
 const formatMonthJP = (monthStr) => {
     if (!monthStr) return "";
@@ -36,8 +38,56 @@ const getTodayString = () => {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+const toNumber = (val) => {
+  if (!val) return 0;
+  const num = Number(String(val).replace(/,/g, ''));
+  return isNaN(num) ? 0 : num;
+};
+
+// Data Normalizers
+const normalizeMonthlyData = (data) => ({
+  salary: data?.salary || 0,
+  budget: data?.budget || 0,
+  cashBudget: data?.cashBudget || 0,
+  cardBills: data?.cardBills || {},
+  fixedCosts: data?.fixedCosts || [],
+  catBudgets: data?.catBudgets || {},
+  cardDueDates: data?.cardDueDates || {},
+  confirmedPayments: data?.confirmedPayments || []
+});
+
+const normalizeConfig = (data) => ({
+  categories: data?.categories || [{ name: '食費', icon: '🍔' }],
+  paymentMethods: data?.paymentMethods || [CASH],
+  templates: data?.templates || []
+});
 
 /* --- COMPONENTS --- */
+// ErrorBoundary
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-screen w-full bg-[#121212] text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
+          <h1 className="text-xl font-bold text-red-400">エラーが発生しました</h1>
+          <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm uppercase">再読み込み</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const SimpleCard = ({ children, className = "", onClick }) => (
   <div onClick={onClick} className={`bg-[#1E1E1E] rounded-lg border border-white/5 shadow-lg overflow-hidden w-full box-border ${className}`}>
     {children}
@@ -59,7 +109,7 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// 電卓ロジック
+// Calculator Logic
 const safeCalculate = (expression) => {
   if (!expression || /[^0-9+\-*/.]/.test(expression)) return '0';
   try {
@@ -90,9 +140,15 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
   const handlePush = (val) => {
-    if (isResult && !['+','-','*','/'].includes(val)) { setDisplay(String(val)); setIsResult(false); } 
-    else { setDisplay(prev => (prev === '0' && !['+','-','*','/','.'] .includes(val)) ? String(val) : prev + val); setIsResult(false); }
+    if (isResult && !['+','-','*','/'].includes(val)) {
+      setDisplay(String(val));
+      setIsResult(false);
+    } else {
+      setDisplay(prev => (prev === '0' && !['+','-','*','/','.'].includes(val)) ? String(val) : prev + val);
+      setIsResult(false);
+    }
   };
+
   const btns = [
     { l: 'C', act: () => setDisplay('0'), style: 'text-red-400' },
     { l: '/', act: () => handlePush('/'), style: 'text-emerald-400' },
@@ -101,9 +157,10 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
     { l: '7', act: () => handlePush('7') }, { l: '8', act: () => handlePush('8') }, { l: '9', act: () => handlePush('9') }, { l: '-', act: () => handlePush('-'), style: 'text-emerald-400' },
     { l: '4', act: () => handlePush('4') }, { l: '5', act: () => handlePush('5') }, { l: '6', act: () => handlePush('6') }, { l: '+', act: () => handlePush('+'), style: 'text-emerald-400' },
     { l: '1', act: () => handlePush('1') }, { l: '2', act: () => handlePush('2') }, { l: '3', act: () => handlePush('3') },
-    { l: '=', act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
+    { l: '=', act: () => { const res = safeCalculate(display); setDisplay(res); setIsResult(true); }, style: 'bg-emerald-500/20 text-emerald-400 row-span-2' },
     { l: '0', act: () => handlePush('0'), style: 'col-span-2' }, { l: '.', act: () => handlePush('.') },
   ];
+
   return (
     <div className="w-full flex flex-col gap-3">
       <div className="bg-black/40 rounded-lg p-3 text-right border border-white/5 font-mono text-2xl text-white break-all">{display}</div>
@@ -112,13 +169,13 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
           <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
         ))}
       </div>
-      <button onClick={() => onConfirm(isResult ? Number(display) : Number(safeCalculate(display)))} className="w-full h-12 bg-white text-black rounded-lg font-black uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
+      <button onClick={() => onConfirm(toNumber(display))} className="w-full h-12 bg-white text-black rounded-lg font-bold uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
     </div>
   );
 };
 
-/* --- MAIN APP --- */
-export default function App() {
+/* --- MAIN APP LOGIC --- */
+function AppMain() {
   const [user, setUser] = useState(null); 
   const [authLoading, setAuthLoading] = useState(true); 
   const [loading, setLoading] = useState(true); 
@@ -141,28 +198,13 @@ export default function App() {
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
-  const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
+  const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
   const [cashBalance, setCashBalance] = useState(0);
-  
-  // 初期値を設定して undefined を防ぐ
-  const [config, setConfig] = useState({ 
-    categories: [{ name: '食費', icon: '🍔' }], 
-    paymentMethods: ['現金'], 
-    templates: [] 
-  });
+  const [config, setConfig] = useState(normalizeConfig({}));
 
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
   const mainRef = useRef(null);
-
-  // 設定メニューの定義
-  const SETTING_MENU_ITEMS = [
-    { id: 'budget', label: '資金計画・引落日', icon: <Landmark size={18}/> },
-    { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> },
-    { id: 'category', label: 'カテゴリ予算', icon: <Tags size={18}/> },
-    { id: 'template', label: 'テンプレート', icon: <Zap size={18}/> },
-    { id: 'payment', label: '支払方法', icon: <Wallet size={18}/> },
-  ];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -173,69 +215,75 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return; 
+    if (!user) return;
     const start = new Date(`${month}-01T00:00:00`).toISOString();
     const nextDate = new Date(`${month}-01`);
     nextDate.setMonth(nextDate.getMonth() + 1);
     const end = nextDate.toISOString();
-    
-    const prevDate = new Date(`${month}-01`);
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevStart = new Date(getMonthString(prevDate)+"-01T00:00:00").toISOString();
 
-    const unsubTx = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
+    const unsub = onSnapshot(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', end)), (s) => {
       setTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)));
       setLoading(false);
     });
+    return () => unsub();
+  }, [month, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const prevDate = new Date(`${month}-01`);
+    prevDate.setMonth(prevDate.getMonth() - 1);
+    const prevStart = new Date(getMonthString(prevDate)+"-01T00:00:00").toISOString();
+    const currentStart = new Date(`${month}-01T00:00:00`).toISOString();
+
     const fetchLast = async () => {
-      const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', start));
+      const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', prevStart), where('date', '<', currentStart));
       const s = await getDocs(q);
       setLastMonthTransactions(s.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchLast();
-    const unsubMonth = onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
-      if(s.exists()) setMonthlyData(s.data());
-      else setMonthlyData({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
-    });
-    const unsubCash = onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if(s.exists()) setCashBalance(s.data().balance); });
-    const unsubConfig = onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
-        if (s.exists()) {
-            const data = s.data();
-            setConfig({
-                categories: data.categories || [{ name: '食費', icon: '🍔' }],
-                paymentMethods: data.paymentMethods || ['現金'],
-                templates: data.templates || []
-            });
-        }
-    });
-    return () => { unsubTx(); unsubMonth(); unsubCash(); unsubConfig(); };
   }, [month, user]);
 
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(doc(db, 'users', user.uid, 'months', month), (s) => {
+      setMonthlyData(normalizeMonthlyData(s.exists() ? s.data() : {}));
+    });
+  }, [month, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { 
+      if(s.exists()) setCashBalance(s.data().balance); 
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(doc(db, 'users', user.uid, 'settings', 'config'), (s) => { 
+      setConfig(normalizeConfig(s.exists() ? s.data() : {}));
+    });
+  }, [user]);
+
   const summary = useMemo(() => {
-    // 徹底したガード処理
-    const safeCategories = config?.categories || [];
-    const fixedCosts = monthlyData?.fixedCosts || [];
-    
-    const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
-    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + (Number(i.amount)||0), 0);
+    const fixedCosts = monthlyData.fixedCosts || [];
+    const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
+    const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== CASH).reduce((s, i) => s + (Number(i.amount)||0), 0);
     const fixedTotal = fixedCashTotal + fixedCardTotal;
 
-    const totalBudget = (Number(monthlyData?.budget) || 0);
-    const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
-    // カード残り = 総枠 - 全固定費 - カード支出
+    const totalBudget = Number(monthlyData.budget) || 0;
+    const spentCard = transactions.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
-    const cashBudgetTotal = (Number(monthlyData?.cashBudget) || 0);
-    const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + (Number(t.amount)||0), 0);
-    // 現金残り = 現金予算 - 現金支出 (固定費は引かない)
+    const cashBudgetTotal = Number(monthlyData.cashBudget) || 0;
+    const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
     const cashRemaining = cashBudgetTotal - spentCash;
 
-    const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+    const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCashTotal + billTotal; 
-    const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
+    const bankBalanceProjected = (Number(monthlyData.salary) || 0) - totalWithdrawal;
 
-    const getCatTotals = (txs) => (txs || []).reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
-    const catBudgetSum = safeCategories.reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name || c] || 0), 0);
+    const getCatTotals = (txs) => txs.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
+    const catBudgetSum = (config.categories || []).reduce((sum, c) => sum + (monthlyData.catBudgets?.[c.name] || 0), 0);
 
     const now = new Date();
     const isCurrentMonth = month === getMonthString(now);
@@ -246,42 +294,51 @@ export default function App() {
       fixedTotal, totalWithdrawal, catBudgetSum,
       cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
       cashRemainingPercent: cashBudgetTotal > 0 ? Math.round((cashRemaining / cashBudgetTotal) * 100) : 0,
-      dailyBudget: daysLeft > 0 ? Math.floor(cardRemaining / daysLeft) : 0, daysLeft,
       catTotals: getCatTotals(transactions), lastCatTotals: getCatTotals(lastMonthTransactions),
       totalSpent: transactions.reduce((s,t)=>s+t.amount,0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+t.amount,0),
       dailyTotals: transactions.reduce((acc,t)=>{acc[new Date(t.date).getDate()] = (acc[new Date(t.date).getDate()]||0)+t.amount; return acc;}, {})
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
-  const showToastMsg = (msg) => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 3000); };
-  const getCategoryIcon = (n) => { const c = (config?.categories || []).find(x => (x.name||x) === n); return c?.icon || '🏷'; };
-  const getCategoryNames = () => (config?.categories || []).map(c => c.name || c);
+  const activeAlerts = useMemo(() => {
+    const today = new Date().getDate();
+    return Object.entries(monthlyData?.cardDueDates || {}).filter(([card, day]) => {
+      const dueDay = Number(day);
+      const isConfirmed = (monthlyData?.confirmedPayments || []).includes(card);
+      const hasBill = (monthlyData?.cardBills?.[card] || 0) > 0;
+      return hasBill && !isConfirmed && dueDay >= today && (dueDay - today) <= 7;
+    });
+  }, [monthlyData]);
 
-  const handleTxSubmit = async (e) => {
-    e.preventDefault();
-    const data = { title: inputTitle || inputCategory, amount: Number(String(inputAmount).replace(/,/g,'')), category: inputCategory, paymentMethod: inputMethod, date: new Date(inputDate).toISOString() };
-    if (inputMethod === '現金') await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + (editingTx ? editingTx.amount - data.amount : -data.amount) }, { merge: true });
-    if (editingTx) await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data);
-    else await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() });
-    setIsModalOpen(false); showToastMsg('保存しました');
+  const confirmPayment = async (cardName) => {
+    const confirmed = monthlyData.confirmedPayments || [];
+    if (!confirmed.includes(cardName)) {
+      await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
+      showToastMsg('支払いを完了しました');
+    }
   };
 
+  const showToastMsg = (msg) => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 3000); };
+  const getCategoryIcon = (n) => { const c = (config.categories || []).find(x => x.name === n); return c?.icon || '🏷'; };
+  const getCategoryNames = () => (config.categories || []).map(c => c.name);
+
+  // FIX: Safe Handlers
   const handleSettingsSave = async () => {
     if(!editingItem) return;
     const { type, data, index } = editingItem;
-    // ガード：空配列の保証
+    // 配列操作時のundefined対策 (|| [])
     if (type === 'category') {
         const newCats = [...(config.categories || [])];
         if (index === -1) newCats.push({ name: data.name, icon: data.icon }); else newCats[index] = { name: data.name, icon: data.icon };
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
-        if (data.budget) await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: { ...(monthlyData.catBudgets || {}), [data.name]: Number(data.budget) } }, { merge: true });
+        if (data.budget) await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: { ...(monthlyData.catBudgets || {}), [data.name]: toNumber(data.budget) } }, { merge: true });
     } else if (type === 'fixed') {
         const newFixed = [...(monthlyData.fixedCosts || [])];
-        if (index === -1) newFixed.push({ id: Date.now(), ...data, amount: Number(data.amount) }); else newFixed[index] = { ...data, amount: Number(data.amount) };
+        if (index === -1) newFixed.push({ id: Date.now(), ...data, amount: toNumber(data.amount) }); else newFixed[index] = { ...data, amount: toNumber(data.amount) };
         await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts: newFixed},{merge:true});
     } else if (type === 'template') {
         const t = [...(config.templates || [])];
-        if (index === -1) t.push({ ...data, amount: Number(data.amount) }); else t[index] = { ...data, amount: Number(data.amount) };
+        if (index === -1) t.push({ ...data, amount: toNumber(data.amount) }); else t[index] = { ...data, amount: toNumber(data.amount) };
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: t});
     } else if (type === 'payment') {
         const p = [...(config.paymentMethods || ['現金'])];
@@ -294,36 +351,13 @@ export default function App() {
   const handleDeleteItem = async () => {
     if (!editingItem || !window.confirm('削除しますか？')) return;
     const { type, index } = editingItem;
-    // 削除時もNullチェック
+    // 配列操作時のundefined対策 (|| [])
     if (type === 'fixed') { await setDoc(doc(db,'users',user.uid,'months',month),{fixedCosts:(monthlyData.fixedCosts || []).filter((_, i) => i !== index)},{merge:true}); }
     else if (type === 'category') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,categories:(config.categories || []).filter((_, i) => i !== index)}); }
-    else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: (config.templates||[]).filter((_, i) => i !== index)}); }
+    else if (type === 'template') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, templates: (config.templates || []).filter((_, i) => i !== index)}); }
     else if (type === 'payment') { await setDoc(doc(db,'users',user.uid,'settings','config'),{...config,paymentMethods:(config.paymentMethods || []).filter((_, i) => i !== index)}); }
     setEditingItem(null); showToastMsg('削除しました');
   };
-
-  const startEditing = (t) => {
-    setEditingTx(t); setInputDate(t.date.split('T')[0]); setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.paymentMethod); setIsModalOpen(true);
-  };
-  const openModalWithDate = (dateStr) => {
-    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config?.paymentMethods?.[0] || '現金'); setShowCalculator(false); setIsModalOpen(true);
-  };
-  const applyTemplate = (tpl) => { setInputAmount(String(tpl.amount)); setInputTitle(tpl.title); setInputCategory(tpl.category); setInputMethod(tpl.method); };
-
-  const finalFilteredTx = transactions.filter(t => {
-      const matchSearch = searchText === '' || t.title.includes(searchText);
-      const matchCat = filter.category === 'ALL' || t.category === filter.category;
-      const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
-      return matchSearch && matchCat && matchMethod;
-  });
-
-  const calendarDaysList = (() => {
-    if(!month) return [];
-    const d = new Date(month + "-01");
-    const first = d.getDay();
-    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
-    return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
-  })();
 
   const copyLastMonthSettings = async () => {
     if(!user || !window.confirm('先月の設定をコピーしますか？')) return;
@@ -376,6 +410,48 @@ export default function App() {
       await setDoc(doc(db,'users',user.uid,'settings','config'),{ ...config, categories: newCats }, { merge: true });
   };
 
+  const handleTxSubmit = async (e) => {
+    e.preventDefault();
+    const data = { title: inputTitle || inputCategory, amount: toNumber(inputAmount), category: inputCategory, paymentMethod: inputMethod, date: new Date(inputDate).toISOString() };
+    if (inputMethod === CASH) await setDoc(doc(db, 'users', user.uid, 'wallet', 'cash'), { balance: cashBalance + (editingTx ? editingTx.amount - data.amount : -data.amount) }, { merge: true });
+    if (editingTx) await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), data);
+    else await setDoc(doc(collection(db, 'users', user.uid, 'transactions')), { ...data, createdAt: serverTimestamp() });
+    setIsModalOpen(false); showToastMsg('保存しました');
+  };
+
+  const startEditing = (t) => {
+    setEditingTx(t); setInputDate(t.date.split('T')[0]); setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.paymentMethod); setIsModalOpen(true);
+  };
+  const openModalWithDate = (dateStr) => {
+    setEditingTx(null); setInputDate(dateStr); setInputAmount(''); setInputTitle(''); setInputCategory(getCategoryNames()[0] || '食費'); setInputMethod(config.paymentMethods[0] || CASH); setShowCalculator(false); setIsModalOpen(true);
+  };
+  const applyTemplate = (tpl) => { setInputAmount(String(tpl.amount)); setInputTitle(tpl.title); setInputCategory(tpl.category); setInputMethod(tpl.method); };
+
+  const finalFilteredTx = transactions.filter(t => {
+      const matchSearch = searchText === '' || t.title.includes(searchText);
+      const matchCat = filter.category === 'ALL' || t.category === filter.category;
+      const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
+      return matchSearch && matchCat && matchMethod;
+  });
+
+  const calendarDaysList = (() => {
+    if(!month) return [];
+    const d = new Date(month + "-01");
+    const first = d.getDay();
+    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
+  })();
+
+  // 設定メニュー
+  const SETTING_MENU_ITEMS = [
+    { id: 'budget', label: '資金計画・引落日', icon: <Landmark size={18}/> },
+    { id: 'fixed', label: '固定費管理', icon: <CreditCard size={18}/> },
+    { id: 'category', label: 'カテゴリ予算', icon: <Tags size={18}/> },
+    { id: 'template', label: 'テンプレート', icon: <Zap size={18}/> },
+    { id: 'payment', label: '支払方法', icon: <Wallet size={18}/> },
+  ];
+  const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase">Loading Auth...</div>;
   if (!user) return (
     <div className="h-screen w-full bg-[#121212] flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in">
@@ -383,9 +459,6 @@ export default function App() {
       <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="w-full max-w-xs h-14 bg-white text-black rounded-full font-bold uppercase flex items-center justify-center gap-3"><Lock size={18} /> Google Login</button>
     </div>
   );
-
-  // 現在の設定タブ名を取得
-  const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-bold flex flex-col justify-center overflow-hidden">
@@ -396,11 +469,8 @@ export default function App() {
             <><button onClick={() => setSettingTab('menu')} className="text-zinc-400"><ArrowLeft size={24}/></button>
             <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
                 <span className="text-xs font-bold text-white uppercase">{currentSettingTitle}</span>
-                {/* 合計金額は特定のタブでのみ表示 */}
                 {(settingTab === 'fixed' || settingTab === 'category') && (
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                        計 ¥{(settingTab==='fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}
-                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">計 ¥{(settingTab==='fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}</span>
                 )}
             </div><div className="w-6"/></>
           ) : (
@@ -420,12 +490,25 @@ export default function App() {
                 </div>
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
-                    {/* Header Removed as requested */}
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining<0?'text-red-400':'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{width:`${summary.cardRemainingPercent}%`}}/></div></SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{width:`${summary.cashRemainingPercent}%`}}/></div></SimpleCard>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
+                    {/* ALERT: Re-implemented Payment Due Alert */}
+                    {activeAlerts.length > 0 && (
+                      <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
+                        <div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14}/> 支払期日が迫っています</div>
+                        <div className="space-y-2">
+                          {activeAlerts.map(([card, day]) => (
+                            <div key={card} className="flex justify-between items-center bg-black/20 p-2 rounded">
+                              <span className="text-xs">{card} ({day}日)</span>
+                              <button onClick={() => confirmPayment(card)} className="text-[10px] bg-red-500 text-white px-2 py-1 rounded">完了</button>
+                            </div>
+                          ))}
+                        </div>
+                      </SimpleCard>
+                    )}
                     <SimpleCard className="p-5 space-y-3"><div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600"/></div><div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div><div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div></SimpleCard>
                     <div className="grid grid-cols-2 gap-3">
                       {getCategoryNames().map(n => {
@@ -549,5 +632,14 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// Appコンポーネントをエクスポート (Wrapper for ErrorBoundary)
+export default function AppWrapper() {
+  return (
+    <ErrorBoundary>
+      <AppMain />
+    </ErrorBoundary>
   );
 }
