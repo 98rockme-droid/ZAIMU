@@ -121,7 +121,6 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
       </div>
       <div className="grid grid-cols-4 gap-2 h-64">
         {btns.map((b, i) => (
-          // ここを修正: bg-white/5 -> bg-zinc-800 にして不透明化
           <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center shadow-sm ${b.style || 'text-white'}`}>
             {b.l}
           </button>
@@ -568,19 +567,6 @@ export default function App() {
     });
   }, [transactions, searchText, filter]);
 
-  const groupedTransactions = useMemo(() => {
-    const groups = {};
-    filteredTransactions.forEach(t => {
-      const dateKey = t.date.split('T')[0];
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(t);
-    });
-    return Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)).map(date => ({
-      date,
-      items: groups[date]
-    }));
-  }, [filteredTransactions]);
-
   const calendarDays = useMemo(() => {
     const d = new Date(month + "-01");
     const year = d.getFullYear();
@@ -608,7 +594,7 @@ export default function App() {
   }
 
   // --- スクロール制御用Ref ---
-  // mainRefはここで1回だけ宣言 (No Duplicates)
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
@@ -786,44 +772,46 @@ export default function App() {
                   <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
                 </div>
                 {logView === 'list' && (
-                  <div className="space-y-1">
+                  <SimpleCard>
                     {filteredTransactions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
                             <Sparkles size={48} className="text-zinc-700" />
                             <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
                         </div>
-                    ) : filteredTransactions.map(t => {
-                      return (
-                         <SimpleCard 
-                            key={t.id} 
-                            onClick={() => startEditing(t)} 
-                            className="bg-[#1E1E1E] mb-2 cursor-pointer border border-white/5 active:scale-98 transition-transform"
-                          >
-                           <div className="flex items-center justify-between p-3">
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {/* Date */}
-                                <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
-                                
-                                {/* Category Label (New) */}
-                                <div className="w-16 flex-shrink-0 flex justify-center">
-                                   <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
-                                     {t.category}
-                                   </span>
-                                </div>
+                    ) : (
+                        <div className="divide-y divide-white/5">
+                            {filteredTransactions.map(t => {
+                                return (
+                                    <div 
+                                      key={t.id} 
+                                      onClick={() => startEditing(t)} 
+                                      className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors hover:bg-white/[0.02]"
+                                    >
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        {/* Date */}
+                                        <div className="w-10 text-center font-mono text-xs text-zinc-500 font-bold tracking-tighter">{formatDateShort(t.date)}</div>
+                                        
+                                        {/* Category Label */}
+                                        <div className="w-16 flex-shrink-0 flex justify-center">
+                                           <span className="bg-white/5 border border-white/5 text-zinc-400 text-[10px] font-bold px-1 rounded h-6 flex items-center justify-center w-full truncate">
+                                             {t.category}
+                                           </span>
+                                        </div>
 
-                                {/* Title */}
-                                <div className="flex-1 truncate text-sm font-bold text-white">
-                                    {t.title}
-                                </div>
-                              </div>
-                              
-                              {/* Amount */}
-                              <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
-                            </div>
-                          </SimpleCard>
-                      );
-                    })}
-                  </div>
+                                        {/* Title */}
+                                        <div className="flex-1 truncate text-sm font-bold text-white">
+                                            {t.title}
+                                        </div>
+                                      </div>
+                                      
+                                      {/* Amount */}
+                                      <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                  </SimpleCard>
                 )}
                 {logView === 'calendar' && (
                   <SimpleCard className="p-4">
