@@ -190,7 +190,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control
+  // Ref for scroll control - ここで1回だけ宣言 (No Duplicates)
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -354,22 +354,24 @@ export default function App() {
 
     const salary = monthlyData.salary || 0;
     
-    // 【ロジック修正】 固定費を現金(口座振替)とカードに分離
+    // ■ 固定費の集計
     const fixedCosts = monthlyData.fixedCosts || [];
     const fixedCashTotal = fixedCosts.filter(f => !f.method || f.method === '現金').reduce((s, i) => s + i.amount, 0);
     const fixedCardTotal = fixedCosts.filter(f => f.method && f.method !== '現金').reduce((s, i) => s + i.amount, 0);
+    const fixedTotal = fixedCashTotal + fixedCardTotal;
 
     const billTotal = Object.values(monthlyData.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCashTotal + billTotal; 
     const bankBalanceProjected = salary - totalWithdrawal;
 
-    // ■ カード側の計算（シンプル版）
+    // ■ カード側の計算（修正版：総枠から全固定費を引く）
     const cardBudgetTotal = (monthlyData.budget || 0);
     const spentCard = transactions.filter(t => t.paymentMethod !== '現金').reduce((s, t) => s + t.amount, 0);
-    const cardRemaining = cardBudgetTotal - fixedCardTotal - spentCard;
+    // 予算(総枠) - 固定費(全額) - カード変動費
+    const cardRemaining = cardBudgetTotal - fixedTotal - spentCard;
     const cardRemainingPercent = cardBudgetTotal > 0 ? Math.min(Math.round((cardRemaining / cardBudgetTotal) * 100), 100) : 0;
 
-    // ■ 現金側の計算（再修正：予算 - 使った分のみ）
+    // ■ 現金側の計算（予算 - 使った分のみ）
     const cashBudgetTotal = (monthlyData.cashBudget || 0);
     const spentCash = transactions.filter(t => t.paymentMethod === '現金').reduce((s, t) => s + t.amount, 0);
     const cashRemaining = cashBudgetTotal - spentCash; // 固定費は引かない
@@ -392,7 +394,6 @@ export default function App() {
       return acc;
     }, {});
     
-    const fixedTotal = fixedCashTotal + fixedCardTotal;
     const catBudgetSum = config.categories.reduce((sum, c) => {
         const cName = typeof c === 'string' ? c : c.name;
         return sum + (monthlyData.catBudgets?.[cName] || 0);
@@ -404,8 +405,8 @@ export default function App() {
       cardRemainingPercent, cashRemainingPercent, catTotals, lastCatTotals, totalSpent, lastTotalSpent,
       dailyBudget, daysLeft, dailyTotals,
       fixedCostsBank: fixedCashTotal, 
-      cardDisposable: cardBudgetTotal - fixedCardTotal, 
-      cashDisposable: cashBudgetTotal, // 現金はそのまま
+      cardDisposable: cardBudgetTotal - fixedTotal, 
+      cashDisposable: cashBudgetTotal,
       fixedTotal,
       catBudgetSum
     };
@@ -601,6 +602,9 @@ export default function App() {
     setIsModalOpen(true);
   }
 
+  // --- スクロール制御用Ref ---
+  const mainRef = useRef(null);
+
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
   if (!user) {
@@ -706,11 +710,11 @@ export default function App() {
                       </div>
                     )}
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">生活費予算（総枠）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{(summary.cardBudget).toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cardRemainingPercent <= 15 ? 'bg-red-500' : 'bg-white'}`} style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     <SimpleCard className="p-6">
-                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">軍資金（予算）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
+                      <div className="flex justify-between items-start mb-4"><div><p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 tabular-nums ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right"><p className="text-[8px] text-zinc-600 font-bold uppercase">現金予算（口座）</p><p className="text-xs font-bold text-zinc-400 tabular-nums">¥{summary.cashBudget.toLocaleString()}</p></div></div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${summary.cashRemainingPercent <= 15 ? 'bg-red-500' : 'bg-zinc-400'}`} style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                   </div>
