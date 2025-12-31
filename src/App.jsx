@@ -433,7 +433,7 @@ export default function App() {
     setIsModalOpen(false);
   };
 
-  const handleSettingsSave = () => {
+  const handleSettingsSave = async () => {
     if (!editingItem) return;
     const { type, data, index } = editingItem;
 
@@ -444,11 +444,24 @@ export default function App() {
         } else {
             newCats[index] = { name: data.name, icon: data.icon || '🏷' };
         }
-        setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
+        await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: newCats});
+
+        // 過去のトランザクションのカテゴリ名も更新する
+        if (index !== -1 && data.originalName && data.originalName !== data.name) {
+            const q = query(collection(db, 'users', user.uid, 'transactions'), where('category', '==', data.originalName));
+            const snapshot = await getDocs(q);
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(doc => {
+                batch.update(doc.ref, { category: data.name });
+            });
+            await batch.commit();
+        }
+
         const newBudgets = { ...monthlyData.catBudgets };
         if (index !== -1 && data.originalName && data.originalName !== data.name && newBudgets[data.originalName]) delete newBudgets[data.originalName];
         if (data.budget) newBudgets[data.name] = Number(data.budget);
-        setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: newBudgets }, { merge: true });
+        await setDoc(doc(db,'users',user.uid,'months',month), { catBudgets: newBudgets }, { merge: true });
+
     } else if (type === 'template') {
         const newTpls = [...(config.templates || [])];
         if (index === -1) {
@@ -546,6 +559,10 @@ export default function App() {
     setInputAmount(t.amount);
     setIsModalOpen(true);
   }
+
+  // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
