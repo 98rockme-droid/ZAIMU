@@ -149,7 +149,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control
+  // Ref for scroll control - ※ ここで1回だけ宣言 (これ以外にはありません)
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -566,7 +566,7 @@ export default function App() {
   }
 
   // --- スクロール制御用Ref ---
-  const mainRef = useRef(null);
+  // mainRefはここで1回だけ宣言 (No Duplicates)
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
