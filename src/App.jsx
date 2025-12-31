@@ -24,6 +24,11 @@ const formatMonthJP = (monthStr) => {
     const [y, m] = monthStr.split('-');
     return `${y}年 ${Number(m)}月`;
 };
+// 日付フォーマッター (例: 12/01)
+const formatDateShort = (dateStr) => {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+};
 const getTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -162,7 +167,7 @@ export default function App() {
   const [monthlyData, setMonthlyData] = useState({ salary: 0, budget: 0, cashBudget: 0, cardBills: {}, fixedCosts: [], catBudgets: {}, cardDueDates: {}, confirmedPayments: [] });
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Ref for scroll control - ここで1回だけ宣言 (これ以外にはありません)
+  // Ref for scroll control - ※ここ以外には宣言しません！
   const mainRef = useRef(null);
 
   const [config, setConfig] = useState({ 
@@ -562,19 +567,6 @@ export default function App() {
     });
   }, [transactions, searchText, filter]);
 
-  const groupedTransactions = useMemo(() => {
-    const groups = {};
-    filteredTransactions.forEach(t => {
-      const dateKey = t.date.split('T')[0];
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(t);
-    });
-    return Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)).map(date => ({
-      date,
-      items: groups[date]
-    }));
-  }, [filteredTransactions]);
-
   const calendarDays = useMemo(() => {
     const d = new Date(month + "-01");
     const year = d.getFullYear();
@@ -603,6 +595,7 @@ export default function App() {
 
   // --- スクロール制御用Ref ---
   // mainRefはここで1回だけ宣言 (No Duplicates)
+  const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
 
@@ -757,41 +750,37 @@ export default function App() {
                   <select onChange={e => setFilter({...filter, method: e.target.value})} className="bg-white/5 border border-white/10 rounded-lg px-3 h-10 text-[10px] flex-1 text-zinc-300 appearance-none outline-none font-bold"><option value="ALL">全ての支払方法</option>{config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select>
                 </div>
                 {logView === 'list' && (
-                  <div className="space-y-4">
-                    {groupedTransactions.length === 0 ? (
+                  <div className="space-y-1">
+                    {filteredTransactions.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-zinc-600 gap-3">
                             <Sparkles size={48} className="text-zinc-700" />
                             <p className="text-xs font-bold tracking-widest uppercase">No Spending! 🎉</p>
                         </div>
-                    ) : groupedTransactions.map(group => (
-                        <div key={group.date}>
-                            <div className="sticky top-[-1px] bg-[#121212]/95 backdrop-blur py-2 px-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/5 z-10 flex justify-between items-center">
-                                <span>{group.date.replace(/-/g, '/')}</span>
-                                <span className="tabular-nums text-zinc-600">¥{group.items.reduce((s,t)=>s+t.amount,0).toLocaleString()}</span>
+                    ) : filteredTransactions.map(t => {
+                      const icon = getCategoryIcon(t.category);
+                      return (
+                        <div 
+                          key={t.id} 
+                          onClick={() => startEditing(t)} 
+                          className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            {/* Date Column */}
+                            <div className="w-12 text-center font-bold text-zinc-400 text-xs font-mono">{formatDateShort(t.date)}</div>
+                            
+                            {/* Title & Category Column */}
+                            <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                <div className="text-sm font-bold text-white truncate">{t.title}</div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase">
+                                    <span className="text-[10px]">{icon}</span>
+                                    <span>{t.category}</span>
+                                </div>
                             </div>
-                            <div>
-                                {group.items.map(t => {
-                                    const icon = getCategoryIcon(t.category);
-                                    return (
-                                        <div 
-                                          key={t.id} 
-                                          onClick={() => startEditing(t)} 
-                                          className="flex justify-between items-center py-3 px-2 border-b border-white/5 active:bg-white/5 transition-colors cursor-pointer"
-                                        >
-                                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <div className="text-xl w-8 flex justify-center flex-shrink-0">{icon}</div>
-                                            <div className="text-left flex-1 min-w-0">
-                                              <div className="text-sm font-bold text-white truncate">{t.title}</div>
-                                              <div className="text-[9px] font-bold text-zinc-500 uppercase">{t.category}</div>
-                                            </div>
-                                          </div>
-                                          <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                          </div>
+                          <span className="text-sm font-bold tabular-nums text-white whitespace-nowrap pl-2">¥{t.amount.toLocaleString()}</span>
                         </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {logView === 'calendar' && (
@@ -933,9 +922,9 @@ export default function App() {
                             <SimpleCard className="p-5 space-y-4">
                               <div className="flex justify-between items-center"><p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">給与・軍資金設定</p></div>
                               <div className="space-y-3">
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="number" defaultValue={monthlyData.salary} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{salary:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="number" defaultValue={monthlyData.budget} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{budget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
-                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="number" defaultValue={monthlyData.cashBudget} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cashBudget:Number(e.target.value)},{merge:true})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">今月の給与 (手取り)</label><input key={month} type="text" inputMode="decimal" defaultValue={monthlyData.salary ? monthlyData.salary.toLocaleString() : ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{salary:Number(e.target.value.replace(/,/g,''))},{merge:true})} onChange={(e)=>{const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) e.target.value=Number(v).toLocaleString();}} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold tabular-nums" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">カード軍資金</label><input key={month} type="text" inputMode="decimal" defaultValue={monthlyData.budget ? monthlyData.budget.toLocaleString() : ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{budget:Number(e.target.value.replace(/,/g,''))},{merge:true})} onChange={(e)=>{const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) e.target.value=Number(v).toLocaleString();}} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold tabular-nums" /></div>
+                                <div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-600 pl-1 font-bold">現金軍資金</label><input key={month} type="text" inputMode="decimal" defaultValue={monthlyData.cashBudget ? monthlyData.cashBudget.toLocaleString() : ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cashBudget:Number(e.target.value.replace(/,/g,''))},{merge:true})} onChange={(e)=>{const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) e.target.value=Number(v).toLocaleString();}} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white outline-none font-bold tabular-nums" /></div>
                               </div>
                             </SimpleCard>
                             <SimpleCard className="p-5 space-y-4">
@@ -945,7 +934,7 @@ export default function App() {
                               </div>
                               <div className="space-y-3">
                                 {config.paymentMethods.filter(m => m !== '現金').map(m => (
-                                  <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="number" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] || 0} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value)}},{merge:true})} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
+                                  <div key={m} className="flex gap-2 items-center"><span className="text-[9px] text-zinc-500 w-14 truncate font-bold">{m}</span><input key={`${month}-${m}-bill`} type="text" inputMode="decimal" placeholder="金額" defaultValue={monthlyData.cardBills?.[m] ? monthlyData.cardBills[m].toLocaleString() : ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardBills:{...monthlyData.cardBills,[m]:Number(e.target.value.replace(/,/g,''))}},{merge:true})} onChange={(e)=>{const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) e.target.value=Number(v).toLocaleString();}} className="flex-1 h-10 bg-black/20 border border-white/10 rounded-lg px-3 text-xs text-white tabular-nums" /><input key={`${month}-${m}-date`} type="number" placeholder="日" defaultValue={monthlyData.cardDueDates?.[m] || ''} onBlur={e => setDoc(doc(db,'users',user.uid,'months',month),{cardDueDates:{...monthlyData.cardDueDates,[m]:e.target.value}},{merge:true})} className="w-12 h-10 bg-black/20 border border-white/10 rounded-lg px-1 text-xs text-center text-white" /></div>
                                 ))}
                               </div>
                             </SimpleCard>
@@ -1022,7 +1011,7 @@ export default function App() {
                                   <div key={idx} onClick={() => { setEditingItem({ type: 'template', data: t, index: idx }); }} className="flex items-center justify-between py-3 cursor-pointer active:opacity-70 transition-opacity">
                                     <div className="flex flex-col">
                                       <span className="text-xs font-bold text-white">{t.title}</span>
-                                      <span className="text-[10px] text-zinc-500">¥{t.amount} / {t.category} / {t.method}</span>
+                                      <span className="text-[10px] text-zinc-500">¥{Number(t.amount).toLocaleString()} / {t.category} / {t.method}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -1086,7 +1075,7 @@ export default function App() {
                           </div>
                           <div className="flex flex-col gap-1">
                               <label className="text-[9px] text-zinc-500 font-bold">月間予算</label>
-                              <input type="number" value={editingItem.data.budget} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, budget: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="0" />
+                              <input type="text" inputMode="decimal" value={editingItem.data.budget ? Number(editingItem.data.budget).toLocaleString() : ''} onChange={e => {const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) setEditingItem({...editingItem, data: { ...editingItem.data, budget: v }}); }} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums" placeholder="0" />
                           </div>
                       </>
                   )}
@@ -1094,14 +1083,14 @@ export default function App() {
                   {editingItem.type === 'fixed' && (
                       <>
                           <input value={editingItem.data.name} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, name: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="固定費名" />
-                          <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
+                          <input type="text" inputMode="decimal" value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''} onChange={e => {const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) setEditingItem({...editingItem, data: { ...editingItem.data, amount: v }}); }} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums" placeholder="金額" />
                           <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
                       </>
                   )}
                   {editingItem.type === 'template' && (
                       <>
                           <input value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, title: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="テンプレート名" />
-                          <input type="number" value={editingItem.data.amount} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, amount: e.target.value }})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none" placeholder="金額" />
+                          <input type="text" inputMode="decimal" value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''} onChange={e => {const v=e.target.value.replace(/,/g,''); if(!isNaN(v)) setEditingItem({...editingItem, data: { ...editingItem.data, amount: v }}); }} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums" placeholder="金額" />
                           <div className="flex gap-2">
                               <select value={editingItem.data.category} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, category: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select>
                               <select value={editingItem.data.method} onChange={e => setEditingItem({...editingItem, data: { ...editingItem.data, method: e.target.value }})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select>
@@ -1188,6 +1177,7 @@ export default function App() {
                                     if(window.confirm('削除しますか？')) {
                                         deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));
                                         setIsModalOpen(false);
+                                        showToast('削除しました');
                                     }
                                 }} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg hover:bg-red-900/30 transition-colors"><Trash2 size={18}/></button>
                             )}
