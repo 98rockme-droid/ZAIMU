@@ -561,6 +561,7 @@ export default function App() {
   }
 
   // --- スクロール制御用Ref ---
+  // mainRefはここで1回だけ宣言 (No Duplicates)
   const mainRef = useRef(null);
 
   if (authLoading) return <div className="h-screen bg-[#121212] flex items-center justify-center text-zinc-600 font-bold uppercase tracking-widest">Loading...</div>;
