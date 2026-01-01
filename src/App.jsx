@@ -364,12 +364,14 @@ function AppMain() {
     const bankBalanceProjected = (Number(monthlyData?.salary)||0) - totalWithdrawal;
 
     const catTotals = transactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
+    const lastCatTotals = lastMonthTransactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
     const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name]||0), 0);
 
     return { cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget, bankBalanceProjected, fixedTotal, totalWithdrawal, catBudgetSum, 
              cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
              cashRemainingPercent: cashBudget > 0 ? Math.round((cashRemaining / cashBudget) * 100) : 0,
-             catTotals, totalSpent: transactions.reduce((s,t)=>s+(Number(t.amount)||0),0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+(Number(t.amount)||0),0),
+             catTotals, lastCatTotals,
+             totalSpent: transactions.reduce((s,t)=>s+(Number(t.amount)||0),0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+(Number(t.amount)||0),0),
              dailyTotals: transactions.reduce((acc,t)=>{const d=new Date(t.date).getDate(); acc[d]=(acc[d]||0)+(Number(t.amount)||0); return acc;}, {})
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
