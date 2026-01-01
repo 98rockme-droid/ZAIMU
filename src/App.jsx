@@ -224,18 +224,19 @@ const ModalOverlay = ({ onClose, children, z = 60 }) => (
   </div>
 );
 
+// ✅ 設定リストの上下パディング +4px（py-3 → py-4）
 const RowItem = ({ title, right, sub, onClick, showChevron = true }) => (
   <button
     type="button"
     onClick={onClick}
-    className="w-full flex items-center justify-between px-4 py-3 active:bg-white/5 transition-colors text-left"
+    className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 transition-colors text-left"
   >
     <div className="min-w-0">
-      <div className="text-sm font-semibold text-white truncate">{title}</div>
+      <div className="text-sm text-white truncate">{title}</div>
       {sub && <div className="text-[10px] text-zinc-500 mt-1 truncate">{sub}</div>}
     </div>
     <div className="flex items-center gap-2">
-      {right && <div className="text-xs font-semibold text-zinc-300 tabular-nums">{right}</div>}
+      {right && <div className="text-xs text-zinc-300 tabular-nums">{right}</div>}
       {showChevron && <ChevronRight size={16} className="text-zinc-400" />}
     </div>
   </button>
@@ -1073,7 +1074,7 @@ function AppMain() {
               </button>
 
               <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
-                <span className="text-xs font-semibold text-white">{currentSettingTitle}</span>
+                <span className="text-xs text-white">{currentSettingTitle}</span>
                 {(settingTab === 'fixed' || settingTab === 'category') && (
                   <span className="text-[10px] text-zinc-500 tabular-nums">
                     計 ¥{(settingTab === 'fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}
@@ -1093,7 +1094,7 @@ function AppMain() {
                   <ChevronLeft size={20} />
                 </button>
 
-                <span className="text-sm font-semibold text-white tabular-nums">{formatMonthJP(month)}</span>
+                <span className="text-sm text-white tabular-nums">{formatMonthJP(month)}</span>
 
                 <button type="button" onClick={() => setMonth((m) => shiftMonth(m, +1))}>
                   <ChevronRight size={20} />
@@ -1561,7 +1562,7 @@ function AppMain() {
                             key={item.id}
                             type="button"
                             onClick={() => setSettingTab(item.id)}
-                            className="w-full flex items-center justify-between px-4 py-3 active:bg-white/5 text-zinc-300 transition-colors"
+                            className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors"
                           >
                             <div className="flex items-center gap-4">
                               {item.icon}
@@ -1600,9 +1601,10 @@ function AppMain() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* ✅ 資金（カード削除→リスト風 / 注釈削除 / 矢印削除） */}
+                    {/* ✅ 資金：見出しごとにエリア分け（カード内上下パディングはRowItemで+4px済み） */}
                     {settingTab === 'budget' && (
-                      <div className="space-y-3 animate-in slide-in-from-right-2">
+                      <div className="space-y-4 animate-in slide-in-from-right-2">
+                        <div className="text-[10px] text-zinc-500 px-1">基本</div>
                         <SimpleCard className="overflow-hidden">
                           <div className="divide-y divide-white/5">
                             <RowItem
@@ -1623,9 +1625,12 @@ function AppMain() {
                               onClick={() => openEditBudgetField('cashBudget')}
                               showChevron={false}
                             />
+                          </div>
+                        </SimpleCard>
 
-                            <div className="px-4 py-2 text-[10px] text-zinc-500 bg-black/10">カード引き落とし</div>
-
+                        <div className="text-[10px] text-zinc-500 px-1">カード引き落とし</div>
+                        <SimpleCard className="overflow-hidden">
+                          <div className="divide-y divide-white/5">
                             {paymentMethodsSafe
                               .filter((m) => m !== CASH)
                               .map((m) => {
@@ -1641,6 +1646,9 @@ function AppMain() {
                                   />
                                 );
                               })}
+                            {paymentMethodsSafe.filter((m) => m !== CASH).length === 0 && (
+                              <div className="px-4 py-8 text-center text-xs text-zinc-600">カードがありません</div>
+                            )}
                           </div>
                         </SimpleCard>
                       </div>
@@ -1650,7 +1658,7 @@ function AppMain() {
                       <div className="space-y-3 animate-in slide-in-from-right-2">
                         <button
                           type="button"
-                          onClick={openAddFixed}
+                          onClick={() => setEditingItem({ type: 'fixed', index: -1, data: { id: Date.now(), name: '', amount: '', method: CASH } })}
                           className="w-full h-11 bg-zinc-200 text-black rounded-lg text-[10px] font-semibold shadow-lg active:scale-95"
                         >
                           固定費を追加
@@ -1665,8 +1673,8 @@ function AppMain() {
                                 <button
                                   key={f.id || idx}
                                   type="button"
-                                  onClick={() => openEditFixed(idx)}
-                                  className="w-full flex justify-between items-center px-4 py-3 active:bg-white/5 transition-colors text-left"
+                                  onClick={() => setEditingItem({ type: 'fixed', index: idx, data: { ...f } })}
+                                  className="w-full flex justify-between items-center px-4 py-4 active:bg-white/5 transition-colors text-left"
                                 >
                                   <div className="min-w-0">
                                     <div className="text-xs text-zinc-200 font-semibold truncate">{f.name}</div>
@@ -1685,7 +1693,7 @@ function AppMain() {
                       <div className="space-y-3 animate-in slide-in-from-right-2">
                         <button
                           type="button"
-                          onClick={openAddCategory}
+                          onClick={() => setEditingItem({ type: 'category', index: -1, data: { name: '', icon: '🏷', budget: '' } })}
                           className="w-full h-11 bg-zinc-200 text-black rounded-lg text-[10px] font-semibold shadow-lg active:scale-95"
                         >
                           カテゴリを追加
@@ -1697,15 +1705,15 @@ function AppMain() {
                               const n = c.name;
                               const b = Number(monthlyData.catBudgets?.[n] || 0);
                               return (
-                                <div key={n} className="flex items-center justify-between px-4 py-3">
+                                <div key={n} className="flex items-center justify-between px-4 py-4">
                                   <button
                                     type="button"
-                                    onClick={() => openEditCategory(idx)}
-                                    className="flex items-center gap-3 flex-1 min-w-0 active:bg-white/5 rounded-md px-2 py-2 -mx-2 transition-colors text-left"
+                                    onClick={() => setEditingItem({ type: 'category', index: idx, data: { name: n, icon: c?.icon || '🏷', budget: b } })}
+                                    className="flex items-center gap-3 flex-1 min-w-0 active:bg-white/5 rounded-md px-2 py-3 -mx-2 transition-colors text-left"
                                   >
                                     <span className="text-xl w-8 text-center">{c.icon || '🏷'}</span>
                                     <div className="min-w-0">
-                                      <div className="text-xs font-semibold text-white truncate">{n}</div>
+                                      <div className="text-xs text-white truncate">{n}</div>
                                       <div className="text-[10px] text-zinc-500 tabular-nums truncate">
                                         月間予算：¥{b.toLocaleString()}
                                       </div>
@@ -1738,12 +1746,22 @@ function AppMain() {
                       </div>
                     )}
 
-                    {/* ✅ テンプレ：もっとシンプル / 矢印なし */}
                     {settingTab === 'template' && (
                       <div className="space-y-3 animate-in slide-in-from-right-2">
                         <button
                           type="button"
-                          onClick={openAddTemplate}
+                          onClick={() =>
+                            setEditingItem({
+                              type: 'template',
+                              index: -1,
+                              data: {
+                                title: '',
+                                amount: '',
+                                category: getCategoryNames()[0] || '食費',
+                                method: paymentMethodsSafe[0] || CASH,
+                              },
+                            })
+                          }
                           className="w-full h-11 bg-zinc-200 text-black rounded-lg text-[10px] font-semibold shadow-lg active:scale-95"
                         >
                           テンプレートを追加
@@ -1758,11 +1776,11 @@ function AppMain() {
                                 <button
                                   key={`${t.title}-${idx}`}
                                   type="button"
-                                  onClick={() => openEditTemplate(idx)}
-                                  className="w-full flex justify-between items-center px-4 py-3 active:bg-white/5 transition-colors text-left"
+                                  onClick={() => setEditingItem({ type: 'template', index: idx, data: { ...t } })}
+                                  className="w-full flex justify-between items-center px-4 py-4 active:bg-white/5 transition-colors text-left"
                                 >
                                   <div className="min-w-0">
-                                    <div className="text-xs font-semibold text-white truncate">{t.title}</div>
+                                    <div className="text-xs text-white truncate">{t.title}</div>
                                     <div className="text-[10px] text-zinc-500 tabular-nums truncate">
                                       ¥{Number(t.amount || 0).toLocaleString()} / {t.category} / {t.method}
                                     </div>
@@ -1775,12 +1793,11 @@ function AppMain() {
                       </div>
                     )}
 
-                    {/* ✅ 支払方法：ラベル→リスト */}
                     {settingTab === 'payment' && (
                       <div className="space-y-3 animate-in slide-in-from-right-2">
                         <button
                           type="button"
-                          onClick={openAddPayment}
+                          onClick={() => setEditingItem({ type: 'payment', index: -1, data: { name: '' } })}
                           className="w-full h-11 bg-zinc-200 text-black rounded-lg text-[10px] font-semibold shadow-lg active:scale-95"
                         >
                           支払方法を追加
@@ -1792,10 +1809,10 @@ function AppMain() {
                               <button
                                 key={m}
                                 type="button"
-                                onClick={() => openEditPayment(idx)}
-                                className="w-full flex items-center justify-between px-4 py-3 active:bg-white/5 transition-colors text-left"
+                                onClick={() => setEditingItem({ type: 'payment', index: idx, data: { name: m } })}
+                                className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 transition-colors text-left"
                               >
-                                <span className="text-sm text-white font-semibold">{m}</span>
+                                <span className="text-sm text-white">{m}</span>
                                 <span className="text-[10px] text-zinc-500">編集</span>
                               </button>
                             ))}
@@ -1902,7 +1919,7 @@ function AppMain() {
                     required
                   />
 
-                  {/* date & category */}
+                  {/* date & category (gapを入れてる) */}
                   <div className="grid grid-cols-2 gap-4 w-full">
                     <div className="flex flex-col">
                       <label className="text-[9px] text-zinc-500 pl-1 mb-2">日付</label>
