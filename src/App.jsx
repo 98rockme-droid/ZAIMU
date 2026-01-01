@@ -180,12 +180,12 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
+// ✅ FIX: 矢印アイコンを削除
 const SettingsRow = ({ left, right, onClick }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors">
     <div className="flex items-center gap-3 text-left min-w-0 flex-1 font-bold text-zinc-200">{left}</div>
     <div className="flex items-center gap-2 shrink-0 ml-3">
       {right ? <div className="text-[11px] text-zinc-500 font-normal">{right}</div> : null}
-      <ChevronRight size={16} className="text-zinc-600" />
     </div>
   </button>
 );
@@ -236,7 +236,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
       <div className="bg-black/40 rounded-lg p-3 text-right border border-white/5 font-mono text-2xl text-white break-all tabular-nums">{display}</div>
       <div className="grid grid-cols-4 gap-2 h-64">
         {btns.map((b, i) => (
-          <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
+          <button type="button" key={i} onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
         ))}
       </div>
       <button type="button" onClick={() => onConfirm(toNumber(display))} className="w-full h-12 bg-white text-black rounded-lg font-bold uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
@@ -455,12 +455,14 @@ function AppMain() {
     if(!user || !editingItem) return;
     const { type, data, index } = editingItem;
     try {
-      if (type === 'budget') {
-        await setDoc(doc(db, 'users', user.uid, 'months', month), {
-          salary: toNumber(data.salary), budget: toNumber(data.budget), cashBudget: toNumber(data.cashBudget)
-        }, { merge: true });
+      // ✅ FIX: 個別保存（モーダルから呼ばれる）
+      if (type === 'salary') {
+        await setDoc(doc(db, 'users', user.uid, 'months', month), { salary: toNumber(data.value) }, { merge: true });
+      } else if (type === 'totalBudget') {
+        await setDoc(doc(db, 'users', user.uid, 'months', month), { budget: toNumber(data.value) }, { merge: true });
+      } else if (type === 'cashBudget') {
+        await setDoc(doc(db, 'users', user.uid, 'months', month), { cashBudget: toNumber(data.value) }, { merge: true });
       } else if (type === 'bill') {
-        // カードデータは展開して結合してから保存（updateDocの不具合回避）
         const newBills = { ...(monthlyData.cardBills || {}), [data.name]: toNumber(data.bill) };
         const newDues = { ...(monthlyData.cardDueDates || {}), [data.name]: data.due };
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
@@ -590,6 +592,8 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
+  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
+
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -668,9 +672,9 @@ function AppMain() {
                              <SimpleCard className="overflow-hidden">
                                 <div className="p-4 border-b border-white/5 text-xs font-bold text-zinc-400">資金計画</div>
                                 <div className="divide-y divide-white/5">
-                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">手取り給与</span>} right={<span>¥{Number(monthlyData.salary||0).toLocaleString()}</span>} />
-                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">生活費予算（総枠）</span>} right={<span>¥{Number(monthlyData.budget||0).toLocaleString()}</span>} />
-                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">現金予算（口座用）</span>} right={<span>¥{Number(monthlyData.cashBudget||0).toLocaleString()}</span>} />
+                                    <SettingsRow onClick={() => openEdit('salary', { value: monthlyData.salary }, 0)} left={<span className="text-sm text-zinc-200 font-bold">手取り給与</span>} right={<span>¥{Number(monthlyData.salary||0).toLocaleString()}</span>} />
+                                    <SettingsRow onClick={() => openEdit('totalBudget', { value: monthlyData.budget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">生活費予算（総枠）</span>} right={<span>¥{Number(monthlyData.budget||0).toLocaleString()}</span>} />
+                                    <SettingsRow onClick={() => openEdit('cashBudget', { value: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">現金予算（口座用）</span>} right={<span>¥{Number(monthlyData.cashBudget||0).toLocaleString()}</span>} />
                                 </div>
                              </SimpleCard>
                              <SimpleCard className="overflow-hidden">
@@ -728,13 +732,13 @@ function AppMain() {
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e=>e.stopPropagation()}>
             <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button type="button" onClick={()=>setEditingItem(null)} className="p-2 text-zinc-500"><X size={20}/></button></div>
             <div className="p-5 pb-8 space-y-6">
-                {editingItem.type === 'budget' && (<><div className="space-y-3"><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">手取り給与</label><input type="text" inputMode="decimal" value={String(editingItem.data.salary ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,salary:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">生活費予算</label><input type="text" inputMode="decimal" value={String(editingItem.data.budget ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,budget:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">現金予算</label><input type="text" inputMode="decimal" value={String(editingItem.data.cashBudget ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,cashBudget:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div></div></>)}
+                {(editingItem.type === 'salary' || editingItem.type === 'totalBudget' || editingItem.type === 'cashBudget') && (<div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">{editingItem.type==='salary'?'手取り給与':editingItem.type==='totalBudget'?'生活費予算':'現金予算'}</label><input type="text" inputMode="decimal" value={String(editingItem.data.value ?? '')} onChange={e=>setEditingItem({...editingItem,data:{value:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div>)}
                 {editingItem.type === 'bill' && (<><div className="text-xs text-zinc-300 font-bold">{editingItem.data.name}</div><div className="flex gap-2 items-center"><div className="flex-1 flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">引き落とし額</label><input type="text" inputMode="decimal" value={String(editingItem.data.bill ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,bill:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white tabular-nums outline-none"/></div><div className="w-20 flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">引き落とし日</label><input type="number" value={String(editingItem.data.due ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,due:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white tabular-nums outline-none"/></div></div></>)}
                 {editingItem.type === 'category' && (<><div className="flex gap-2"><input value={editingItem.data.icon || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,icon:e.target.value}})} className="w-12 h-12 text-center bg-black/20 border border-white/10 rounded-lg text-xl text-white outline-none"/><input value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="flex-1 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="名前"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 font-bold uppercase pl-1">月間予算</label><input type="text" inputMode="decimal" value={editingItem.data.budget?Number(editingItem.data.budget).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,budget:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="0"/></div></>)}
                 {editingItem.type === 'fixed' && (<><input value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="固定費名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="relative w-full"><select value={editingItem.data.method || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold appearance-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select><ChevronDown size={14} className="absolute right-3 top-4 text-zinc-500 pointer-events-none"/></div></>)}
                 {editingItem.type === 'template' && (<><input value={editingItem.data.title || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,title:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="テンプレート名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="grid grid-cols-2 gap-2"><div className="relative w-full"><select value={editingItem.data.category || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,category:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold appearance-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><ChevronDown size={14} className="absolute right-2 top-4 text-zinc-500 pointer-events-none"/></div><div className="relative w-full"><select value={editingItem.data.method || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold appearance-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select><ChevronDown size={14} className="absolute right-2 top-4 text-zinc-500 pointer-events-none"/></div></div></>)}
                 {editingItem.type === 'payment' && (<input value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="支払方法名"/>)}
-                <div className="flex gap-2 pt-2 pb-8">{editingItem.index!==-1&&editingItem.type!=='budget'&&editingItem.type!=='bill'&&(<button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button></div>
+                <div className="flex gap-2 pt-2 pb-8">{editingItem.index!==-1&&!['salary','totalBudget','cashBudget','bill'].includes(editingItem.type)&&(<button type="button" onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="button" onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button></div>
             </div>
           </div>
         </div>
