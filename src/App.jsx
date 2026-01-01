@@ -116,14 +116,22 @@ const isoToLocalYMD = (iso) => {
 // Data Normalizers
 const normalizeMonthlyData = (data) => {
   const d = data || {};
+  const absorbedDueDates = { ...(d.cardDueDates || {}) };
+  const absorbedCardBills = { ...(d.cardBills || {}) };
+  
+  Object.keys(d).forEach(k => {
+    if (k.startsWith('cardDueDates.')) absorbedDueDates[k.split('.')[1]] = d[k];
+    if (k.startsWith('cardBills.')) absorbedCardBills[k.split('.')[1]] = d[k];
+  });
+
   return {
     salary: d.salary || 0,
     budget: d.budget || 0,
     cashBudget: d.cashBudget || 0,
-    cardBills: d.cardBills || {},
+    cardBills: absorbedCardBills,
     fixedCosts: d.fixedCosts || [],
     catBudgets: d.catBudgets || {},
-    cardDueDates: d.cardDueDates || {},
+    cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || []
   };
 };
@@ -366,10 +374,15 @@ function AppMain() {
     const catTotals = transactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
     const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name]||0), 0);
 
+    // Analyze Tab: last month totals safely
+    const lastCatTotals = (lastMonthTransactions || []).reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
+
     return { cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget, bankBalanceProjected, fixedTotal, totalWithdrawal, catBudgetSum, 
              cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
              cashRemainingPercent: cashBudget > 0 ? Math.round((cashRemaining / cashBudget) * 100) : 0,
-             catTotals, totalSpent: transactions.reduce((s,t)=>s+(Number(t.amount)||0),0), lastTotalSpent: lastMonthTransactions.reduce((s,t)=>s+(Number(t.amount)||0),0),
+             catTotals, lastCatTotals,
+             totalSpent: transactions.reduce((s,t)=>s+(Number(t.amount)||0),0), 
+             lastTotalSpent: (lastMonthTransactions||[]).reduce((s,t)=>s+(Number(t.amount)||0),0),
              dailyTotals: transactions.reduce((acc,t)=>{const d=new Date(t.date).getDate(); acc[d]=(acc[d]||0)+(Number(t.amount)||0); return acc;}, {})
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
@@ -465,6 +478,7 @@ function AppMain() {
       } else if (type === 'cashBudget') {
         await setDoc(doc(db, 'users', user.uid, 'months', month), { cashBudget: toNumber(data.value) }, { merge: true });
       } else if (type === 'bill') {
+        // カードデータは展開して結合してから保存（updateDocの不具合回避）
         const newBills = { ...(monthlyData.cardBills || {}), [data.name]: toNumber(data.bill) };
         const newDues = { ...(monthlyData.cardDueDates || {}), [data.name]: data.due };
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
@@ -593,6 +607,8 @@ function AppMain() {
     { id: 'payment', label: '支払方法', icon: <Wallet size={18}/> },
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
+
+  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
