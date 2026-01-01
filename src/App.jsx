@@ -180,7 +180,6 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// ✅ 矢印アイコンなし
 const SettingsRow = ({ left, right, onClick }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors">
     <div className="flex items-center gap-3 text-left min-w-0 flex-1 font-bold text-zinc-200">{left}</div>
@@ -451,7 +450,6 @@ function AppMain() {
   /* --- SETTINGS OPERATIONS --- */
   const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
 
-  // ✅ FIX: 確実な保存（バックデート対策）
   const handleSettingsSave = async () => {
     if(!user || !editingItem) return;
     const { type, data, index } = editingItem;
