@@ -116,14 +116,24 @@ const isoToLocalYMD = (iso) => {
 // Data Normalizers
 const normalizeMonthlyData = (data) => {
   const d = data || {};
+  // cardDueDatesなどのドット付きキーを正規化して読み込む
+  const absorbedDueDates = { ...(d.cardDueDates || {}) };
+  const absorbedCardBills = { ...(d.cardBills || {}) };
+  
+  // ネストされていないフラットなキーがあれば吸収（念のため）
+  Object.keys(d).forEach(k => {
+    if (k.startsWith('cardDueDates.')) absorbedDueDates[k.split('.')[1]] = d[k];
+    if (k.startsWith('cardBills.')) absorbedCardBills[k.split('.')[1]] = d[k];
+  });
+
   return {
     salary: d.salary || 0,
     budget: d.budget || 0,
     cashBudget: d.cashBudget || 0,
-    cardBills: d.cardBills || {},
+    cardBills: absorbedCardBills,
     fixedCosts: d.fixedCosts || [],
     catBudgets: d.catBudgets || {},
-    cardDueDates: d.cardDueDates || {},
+    cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || []
   };
 };
@@ -187,7 +197,6 @@ const SettingsRow = ({ left, right, onClick }) => (
   </button>
 );
 
-// Calculator
 const safeCalculate = (expression) => {
   if (!expression || /[^0-9+\-*/.]/.test(expression)) return '0';
   try {
@@ -237,7 +246,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
           <button key={i} type="button" onClick={b.act} className={`rounded-lg bg-zinc-800 border border-white/5 text-lg font-bold active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
         ))}
       </div>
-      <button onClick={() => onConfirm(toNumber(display))} className="w-full h-12 bg-white text-black rounded-lg font-bold uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
+      <button type="button" onClick={() => onConfirm(toNumber(display))} className="w-full h-12 bg-white text-black rounded-lg font-bold uppercase tracking-widest active:scale-95 shadow-lg">決定</button>
     </div>
   );
 };
@@ -264,7 +273,7 @@ function AppMain() {
   const [inputMethod, setInputMethod] = useState('');
 
   const [editingTx, setEditingTx] = useState(null);
-  const [editingItem, setEditingItem] = useState(null); // Settings editing
+  const [editingItem, setEditingItem] = useState(null);
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
@@ -459,9 +468,11 @@ function AppMain() {
         }, { merge: true });
       } else if (type === 'bill') {
         const key = data.name;
-        await setDoc(doc(db, 'users', user.uid, 'months', month), {
-            [`cardBills.${key}`]: toNumber(data.bill), [`cardDueDates.${key}`]: data.due
-        }, { merge: true });
+        // Fix: Save correctly using dot notation to avoid overwriting all bills
+        await updateDoc(doc(db, 'users', user.uid, 'months', month), {
+            [`cardBills.${key}`]: toNumber(data.bill),
+            [`cardDueDates.${key}`]: data.due
+        });
       } else if (type === 'fixed') {
         const list = [...(monthlyData.fixedCosts || [])];
         const item = { ...data, amount: toNumber(data.amount) };
@@ -473,7 +484,8 @@ function AppMain() {
         if (index === -1) list.unshift(item); else list[index] = item;
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, categories: list}, {merge:true});
         if (data.budget !== undefined) {
-            await setDoc(doc(db,'users',user.uid,'months',month),{[`catBudgets.${data.name}`]: toNumber(data.budget)},{merge:true});
+             // Fix: Use updateDoc for map field
+             await updateDoc(doc(db,'users',user.uid,'months',month),{[`catBudgets.${data.name}`]: toNumber(data.budget)});
         }
       } else if (type === 'template') {
         const list = [...(config.templates || [])];
@@ -505,10 +517,8 @@ function AppMain() {
         const list = (config.paymentMethods||[]).filter((_,i)=>i!==index);
         await setDoc(doc(db,'users',user.uid,'settings','config'),{...config, paymentMethods: list},{merge:true});
     } else if (type === 'bill') {
-        // カード設定の削除は実質データのクリア
+        // カード設定の削除
         await updateDoc(doc(db,'users',user.uid,'months',month), {
-            [`cardBills.${data.name}`]: deleteDoc(), // Firestore v9 deleteField() is safer but deleteDoc imported? No, deleteField needed. 
-            // Workaround: set 0
             [`cardBills.${data.name}`]: 0,
             [`cardDueDates.${data.name}`]: ''
         });
@@ -528,7 +538,7 @@ function AppMain() {
 
   /* --- OTHERS --- */
   const finalFilteredTx = transactions.filter(t => {
-      const matchSearch = searchText === '' || t.title.includes(searchText);
+      const matchSearch = searchText === '' || (t.title || '').includes(searchText);
       const matchCat = filter.category === 'ALL' || t.category === filter.category;
       const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
       return matchSearch && matchCat && matchMethod;
@@ -595,7 +605,7 @@ function AppMain() {
             <><button onClick={() => setSettingTab('menu')} className="text-zinc-400"><ArrowLeft size={24}/></button>
             <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-xs font-bold text-white uppercase">{currentSettingTitle}</span>{(settingTab === 'fixed' || settingTab === 'category') && (<span className="text-[10px] text-zinc-500 font-mono">計 ¥{(settingTab==='fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}</span>)}</div><div className="w-6"/></>
           ) : (
-            <><div className="w-8 h-8 rounded-xl bg-white/5 p-1"><img src="/favicon.ico" referrerPolicy="no-referrer" alt="logo" className="w-full h-full" /></div>
+            <><div className="w-8 h-8 p-1"><img src="/favicon.ico" referrerPolicy="no-referrer" alt="logo" className="w-full h-full" /></div>
             <div className="flex items-center gap-4"><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()-1);setMonth(getMonthString(d))}}><ChevronLeft size={20}/></button><span className="text-sm font-bold text-white tabular-nums">{formatMonthJP(month)}</span><button onClick={()=>{const d=new Date(month+"-01");d.setMonth(d.getMonth()+1);setMonth(getMonthString(d))}}><ChevronRight size={20}/></button></div>
             <button onClick={()=>setMonth(getMonthString(new Date()))} className="text-zinc-500 active:text-white"><Calendar size={20}/></button></>
           )}
@@ -664,7 +674,9 @@ function AppMain() {
                              <SimpleCard className="overflow-hidden">
                                 <div className="p-4 border-b border-white/5 text-xs font-bold text-zinc-400">資金計画</div>
                                 <div className="divide-y divide-white/5">
-                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200">資金計画</span>} right={<ChevronRight size={16} className="text-zinc-500"/>} />
+                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200">手取り給与</span>} right={<span>¥{Number(monthlyData.salary||0).toLocaleString()}</span>} />
+                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200">生活費予算（総枠）</span>} right={<span>¥{Number(monthlyData.budget||0).toLocaleString()}</span>} />
+                                    <SettingsRow onClick={() => openEdit('budget', { salary: monthlyData.salary, budget: monthlyData.budget, cashBudget: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200">現金予算（口座用）</span>} right={<span>¥{Number(monthlyData.cashBudget||0).toLocaleString()}</span>} />
                                 </div>
                              </SimpleCard>
                              <SimpleCard className="overflow-hidden">
@@ -699,9 +711,9 @@ function AppMain() {
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={()=>setIsTxModalOpen(false)}>
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
             {showCalculator ? (
-              <div className="flex-1 p-5"><div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-black uppercase text-white tracking-widest">電卓</h2><button onClick={()=>setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div><CalculatorPad initialValue={inputAmount} onConfirm={val=>{setInputAmount(String(val));setShowCalculator(false);}}/></div>
+              <div className="flex-1 p-5"><div className="flex justify-between items-center mb-4"><h2 className="text-[10px] font-black uppercase text-white tracking-widest">電卓</h2><button type="button" onClick={()=>setShowCalculator(false)} className="text-zinc-500"><X size={18}/></button></div><CalculatorPad initialValue={inputAmount} onConfirm={val=>{setInputAmount(String(val));setShowCalculator(false);}}/></div>
             ) : (
-              <><div className="flex-none p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">{editingTx?'編集':'入力'}</h2><button onClick={()=>setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20}/></button></div>
+              <><div className="flex-none p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">{editingTx?'編集':'入力'}</h2><button type="button" onClick={()=>setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20}/></button></div>
               <div className="flex-1 overflow-y-auto p-5 pb-8"><form onSubmit={handleTxSubmit} className="space-y-6">
                 <div className="flex gap-2 items-center"><div className="relative flex-1"><span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span><input type="text" inputMode="decimal" value={inputAmount?Number(inputAmount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setInputAmount(v)}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg text-lg font-bold pl-8 pr-4 text-white tabular-nums outline-none" autoFocus required/></div><button type="button" onClick={()=>setShowCalculator(true)} className="w-12 h-12 bg-white/10 rounded-lg text-white flex items-center justify-center active:bg-white/20"><Calculator size={20}/></button></div>
                 <input type="text" value={inputTitle} onChange={e=>setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)"/>
@@ -720,7 +732,7 @@ function AppMain() {
       {editingItem && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={()=>setEditingItem(null)}>
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e=>e.stopPropagation()}>
-            <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button onClick={()=>setEditingItem(null)} type="button" className="p-2 text-zinc-500"><X size={20}/></button></div>
+            <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button type="button" onClick={()=>setEditingItem(null)} className="p-2 text-zinc-500"><X size={20}/></button></div>
             <div className="p-5 pb-8 space-y-6">
                 {editingItem.type === 'budget' && (<><div className="space-y-3"><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">手取り給与</label><input type="text" inputMode="decimal" value={String(editingItem.data.salary ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,salary:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">生活費予算</label><input type="text" inputMode="decimal" value={String(editingItem.data.budget ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,budget:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div><div className="flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">現金予算</label><input type="text" inputMode="decimal" value={String(editingItem.data.cashBudget ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,cashBudget:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white tabular-nums outline-none"/></div></div></>)}
                 {editingItem.type === 'bill' && (<><div className="text-xs text-zinc-300 font-bold">{editingItem.data.name}</div><div className="flex gap-2 items-center"><div className="flex-1 flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">引き落とし額</label><input type="text" inputMode="decimal" value={String(editingItem.data.bill ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,bill:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white tabular-nums outline-none"/></div><div className="w-20 flex flex-col gap-1"><label className="text-[9px] text-zinc-500 pl-1">引き落とし日</label><input type="number" value={String(editingItem.data.due ?? '')} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,due:e.target.value}})} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white tabular-nums outline-none"/></div></div></>)}
@@ -728,7 +740,7 @@ function AppMain() {
                 {editingItem.type === 'fixed' && (<><input value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="固定費名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="relative w-full"><select value={editingItem.data.method || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold appearance-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select><ChevronDown size={14} className="absolute right-3 top-4 text-zinc-500 pointer-events-none"/></div></>)}
                 {editingItem.type === 'template' && (<><input value={editingItem.data.title || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,title:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="テンプレート名"/><input type="text" inputMode="decimal" value={editingItem.data.amount?Number(editingItem.data.amount).toLocaleString():''} onChange={e=>{const v=e.target.value.replace(/,/g,'');if(!isNaN(v))setEditingItem({...editingItem,data:{...editingItem.data,amount:v}})}} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none tabular-nums font-bold" placeholder="金額"/><div className="grid grid-cols-2 gap-2"><div className="relative w-full"><select value={editingItem.data.category || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,category:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold appearance-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><ChevronDown size={14} className="absolute right-2 top-4 text-zinc-500 pointer-events-none"/></div><div className="relative w-full"><select value={editingItem.data.method || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,method:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none font-bold appearance-none">{config.paymentMethods.map(m=><option key={m} value={m}>{m}</option>)}</select><ChevronDown size={14} className="absolute right-2 top-4 text-zinc-500 pointer-events-none"/></div></div></>)}
                 {editingItem.type === 'payment' && (<input value={editingItem.data.name || ''} onChange={e=>setEditingItem({...editingItem,data:{...editingItem.data,name:e.target.value}})} className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold" placeholder="支払方法名"/>)}
-                <div className="flex gap-2 pt-2 pb-8">{editingItem.index!==-1&&editingItem.type!=='budget'&&editingItem.type!=='bill'&&(<button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button></div>
+                <div className="flex gap-2 pt-2 pb-8">{editingItem.index!==-1&&editingItem.type!=='budget'&&editingItem.type!=='bill'&&(<button type="button" onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button></div>
             </div>
           </div>
         </div>
