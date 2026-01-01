@@ -203,12 +203,6 @@ const RowItem = ({ left, right, onClick, className = "" }) => (
   </button>
 );
 
-const SectionHeader = ({ title }) => (
-  <div className="px-4 pt-4 pb-2">
-    <div className="text-[10px] text-zinc-500 tracking-wide">{title}</div>
-  </div>
-);
-
 /* --- Calculator --- */
 const safeCalculate = (expression) => {
   if (!expression || /[^0-9+\-*/.]/.test(expression)) return '0';
@@ -320,7 +314,6 @@ function AppMain() {
   const [inputMethod, setInputMethod] = useState('');
 
   const [editingTx, setEditingTx] = useState(null);
-
   const [editingItem, setEditingItem] = useState(null);
 
   const [transactions, setTransactions] = useState([]);
@@ -328,7 +321,7 @@ function AppMain() {
   const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
   const [config, setConfig] = useState(normalizeConfig({}));
 
-  // ✅（履歴絞り込みUIを戻すため）検索は残すけどUIからは外す
+  // ✅ 履歴：キーワード検索を戻す
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
 
@@ -591,8 +584,10 @@ function AppMain() {
 
   /* --- LIST FILTER --- */
   const finalFilteredTx = useMemo(() => {
+    const s = (searchText || '').trim();
     return transactions.filter(t => {
-      const matchSearch = searchText === '' || (t.title || '').includes(searchText);
+      const title = String(t.title || '');
+      const matchSearch = s === '' || title.toLowerCase().includes(s.toLowerCase());
       const matchCat = filter.category === 'ALL' || t.category === filter.category;
       const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
       return matchSearch && matchCat && matchMethod;
@@ -823,6 +818,35 @@ function AppMain() {
 
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
+  // ✅ ホーム＞収支：カテゴリ予算＆消化UI用
+  const categoryBudgetRows = useMemo(() => {
+    const budgets = monthlyData?.catBudgets || {};
+    const names = getCategoryNames();
+
+    const rows = names.map((name) => {
+      const budget = Number(budgets[name] || 0);
+      const spent = transactions
+        .filter(t => t.category === name && t.paymentMethod !== CASH)
+        .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+
+      const remaining = budget - spent;
+      const pct = budget > 0 ? Math.max(0, Math.min(100, Math.round((spent / budget) * 100))) : 0;
+
+      return {
+        name,
+        icon: getCategoryIcon(name),
+        budget,
+        spent,
+        remaining,
+        pct
+      };
+    });
+
+    // 予算があるものを上に（なければ並び順そのまま）
+    rows.sort((a, b) => (b.budget > 0) - (a.budget > 0));
+    return rows;
+  }, [monthlyData, transactions, config]);
+
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans font-normal flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -909,7 +933,7 @@ function AppMain() {
                       homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500'
                     }`}
                   >
-                    <ListChecks size={14}/> 収支・予定
+                    <ListChecks size={14}/> 収支
                   </button>
                 </div>
 
@@ -980,7 +1004,7 @@ function AppMain() {
 
                     <SimpleCard className="p-5 space-y-3">
                       <div className="flex justify-between items-end">
-                        <p className="text-[10px] text-zinc-500">口座残高見込み（引落後）</p>
+                        <p className="text-[10px] text-zinc-500 tracking-wide">口座残高見込み（引落後）</p>
                         <Banknote size={16} className="text-zinc-600"/>
                       </div>
 
@@ -999,6 +1023,46 @@ function AppMain() {
                         <span className="text-2xl text-white tabular-nums">¥{summary.bankBalanceProjected.toLocaleString()}</span>
                       </div>
                     </SimpleCard>
+
+                    {/* ✅ 戻した：カテゴリ別の予算＆消化UI */}
+                    <SimpleCard className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-[10px] text-zinc-500 tracking-wide">カテゴリ別（カード）</p>
+                        <span className="text-[9px] text-zinc-600">予算 / 消化</span>
+                      </div>
+
+                      <div className="space-y-4">
+                        {categoryBudgetRows.map(r => (
+                          <div key={r.name} className="space-y-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0 text-left">
+                                <span className="text-sm">{r.icon}</span>
+                                <span className="text-xs text-zinc-200 truncate">{r.name}</span>
+                              </div>
+
+                              <div className="text-right shrink-0 tabular-nums">
+                                <div className="text-[10px] text-white">
+                                  ¥{r.spent.toLocaleString()} / <span className="text-zinc-400">¥{r.budget.toLocaleString()}</span>
+                                </div>
+                                <div className={`text-[9px] ${r.remaining < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                                  残り ¥{r.remaining.toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div className="h-full bg-white transition-all duration-700" style={{ width: `${r.pct}%` }}/>
+                            </div>
+                          </div>
+                        ))}
+
+                        {categoryBudgetRows.length === 0 && (
+                          <div className="py-8 text-center text-xs text-zinc-500">
+                            カテゴリがありません
+                          </div>
+                        )}
+                      </div>
+                    </SimpleCard>
                   </div>
                 )}
               </div>
@@ -1008,8 +1072,8 @@ function AppMain() {
             {activeTab === 'log' && (
               <div className="space-y-4">
 
-                {/* ✅ 履歴タブの絞り込みUI：変更で崩れてたのを “前のシンプル版” に戻す */}
-                <SimpleCard className="p-3">
+                {/* ✅ 戻した：絞り込み + キーワード検索 */}
+                <SimpleCard className="p-3 space-y-2">
                   <div className="flex gap-2 items-center">
                     <select
                       onChange={e => setFilter({ ...filter, category: e.target.value })}
@@ -1046,6 +1110,16 @@ function AppMain() {
                       </button>
                     </div>
                   </div>
+
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      className="w-full h-10 bg-black/40 border border-white/10 rounded-lg pl-9 pr-3 text-[10px] text-zinc-200 outline-none"
+                      placeholder="キーワード検索（例：ランチ / Amazon）"
+                    />
+                  </div>
                 </SimpleCard>
 
                 {logView === 'list' ? (
@@ -1064,7 +1138,6 @@ function AppMain() {
                             onClick={() => startEditingTx(t)}
                             className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 transition-colors"
                           >
-                            {/* ✅ タイトル類が中央寄せになってたのを左固定 */}
                             <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
                               <div className="w-10 text-[10px] text-zinc-500 tabular-nums text-left">
                                 {formatDateShort(t.date)}
@@ -1286,10 +1359,13 @@ function AppMain() {
                       )}
                     </div>
 
-                    {/* ✅ 設定＞資金詳細：UIを戻す（見出し分割をやめて、前のシンプルカード構成に戻す） */}
+                    {/* ✅ 戻した：資金計画 / カード支払いを分ける、右端矢印なし */}
                     {settingTab === 'budget' && (
                       <div className="space-y-4">
                         <SimpleCard className="overflow-hidden">
+                          <div className="px-4 pt-4 pb-2">
+                            <div className="text-[10px] text-zinc-500 tracking-wide">資金計画</div>
+                          </div>
                           <div className="divide-y divide-white/5">
                             <RowItem
                               onClick={() => openEdit('budget', {
@@ -1297,13 +1373,25 @@ function AppMain() {
                                 budget: monthlyData.budget,
                                 cashBudget: monthlyData.cashBudget
                               }, 0)}
-                              left={<span className="text-sm text-zinc-200">資金計画</span>}
-                              right={<ChevronRight size={16} className="text-zinc-400" />}
+                              left={<span className="text-sm text-zinc-200">手取り・予算</span>}
+                              right={
+                                <div className="text-right">
+                                  <div className="text-[10px] text-zinc-400 tabular-nums">
+                                    給与 ¥{Number(monthlyData.salary || 0).toLocaleString()}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 tabular-nums">
+                                    生活費 ¥{Number(monthlyData.budget || 0).toLocaleString()} / 現金 ¥{Number(monthlyData.cashBudget || 0).toLocaleString()}
+                                  </div>
+                                </div>
+                              }
                             />
                           </div>
                         </SimpleCard>
 
                         <SimpleCard className="overflow-hidden">
+                          <div className="px-4 pt-4 pb-2">
+                            <div className="text-[10px] text-zinc-500 tracking-wide">カード支払い</div>
+                          </div>
                           <div className="divide-y divide-white/5">
                             {(paymentMethodsSafe || []).filter(m => m !== CASH).map(m => (
                               <RowItem
@@ -1315,14 +1403,13 @@ function AppMain() {
                                 }, 0)}
                                 left={<span className="text-sm text-zinc-200">{m}</span>}
                                 right={
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-4">
                                     <span className="text-xs text-zinc-400 tabular-nums">
                                       ¥{Number(monthlyData.cardBills?.[m] || 0).toLocaleString()}
                                     </span>
                                     <span className="text-xs text-zinc-500 tabular-nums">
                                       {String(monthlyData.cardDueDates?.[m] || '-') }日
                                     </span>
-                                    <ChevronRight size={16} className="text-zinc-400" />
                                   </div>
                                 }
                               />
@@ -1340,7 +1427,6 @@ function AppMain() {
                               key={f.id || idx}
                               onClick={() => openEdit('fixed', f, idx)}
                               left={
-                                // ✅ 固定費：支払い方法を「1行で左端」に
                                 <div className="flex items-center gap-2 min-w-0 text-left">
                                   <span className="text-[9px] px-2 py-1 rounded bg-white/5 text-zinc-400 shrink-0">
                                     {f.method || '未設定'}
@@ -1636,7 +1722,7 @@ function AppMain() {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[9px] text-zinc-500 pl-1">現金予算（口座用）</label>
+                      <label className="text_[9px] text-zinc-500 pl-1">現金予算（口座用）</label>
                       <input
                         type="text"
                         inputMode="decimal"
