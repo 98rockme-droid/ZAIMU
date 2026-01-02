@@ -279,6 +279,10 @@ function AppMain() {
 
   const mainRef = useRef(null);
 
+  // ✅ 追加：コピー元年月を選べるモーダル
+  const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+  const [copySourceMonth, setCopySourceMonth] = useState('');
+
   const showToastMsg = (msg) => {
     setToast({ visible: true, message: msg });
     setTimeout(() => setToast({ visible: false, message: '' }), 2500);
@@ -559,22 +563,45 @@ function AppMain() {
     return [...Array(first).fill(null), ...Array.from({length:last}, (_,i)=>i+1)];
   }, [month]);
 
-  const copyLastMonthSettings = async () => {
-    if(!user || !window.confirm('コピーしますか？')) return;
-    const d = new Date(month + "-01"); d.setMonth(d.getMonth() - 1);
-    const lastMonthStr = getMonthString(d);
-    try {
-        const snap = await getDoc(doc(db, 'users', user.uid, 'months', lastMonthStr));
-        if (snap.exists()) {
-            const d = snap.data();
-            await setDoc(doc(db, 'users', user.uid, 'months', month), {
-                budget: d.budget||0, cashBudget: d.cashBudget||0, fixedCosts: d.fixedCosts||[], catBudgets: d.catBudgets||{},
-                cardBills: d.cardBills||{}, cardDueDates: d.cardDueDates||{}
-            }, { merge: true });
-            showToastMsg('コピーしました');
-        } else showToastMsg('データがありません');
-    } catch (e) { showToastMsg('エラー'); }
+  // ✅ 変更：特定年月からコピー（モーダルで選択）
+  const openCopySettingsModal = () => {
+    const d = new Date(month + "-01");
+    d.setMonth(d.getMonth() - 1);
+    setCopySourceMonth(getMonthString(d)); // 初期値：先月
+    setIsCopyModalOpen(true);
   };
+
+  const copySettingsFromSelectedMonth = async () => {
+    if (!user) return;
+    if (!copySourceMonth) return showToastMsg('年月を選択してください');
+
+    const labelFrom = formatMonthJP(copySourceMonth);
+    const labelTo = formatMonthJP(month);
+    if (!window.confirm(`${labelFrom} の設定を ${labelTo} にコピーしますか？`)) return;
+
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid, 'months', copySourceMonth));
+      if (snap.exists()) {
+        const d = snap.data();
+        await setDoc(doc(db, 'users', user.uid, 'months', month), {
+          budget: d.budget||0,
+          cashBudget: d.cashBudget||0,
+          fixedCosts: d.fixedCosts||[],
+          catBudgets: d.catBudgets||{},
+          cardBills: d.cardBills||{},
+          cardDueDates: d.cardDueDates||{}
+        }, { merge: true });
+        showToastMsg('コピーしました');
+        setIsCopyModalOpen(false);
+      } else {
+        showToastMsg('データがありません');
+      }
+    } catch (e) {
+      console.error(e);
+      showToastMsg('エラー');
+    }
+  };
+
   const handleExportCSV = async () => {
     if(!window.confirm('CSV出力しますか？')) return;
     const q = query(collection(db,'users',user.uid,'transactions'), orderBy('date','desc'));
@@ -806,7 +833,10 @@ function AppMain() {
                     </div>
 
                     <div className="flex flex-col items-center gap-4 pt-4">
-                      <button onClick={copyLastMonthSettings} className="px-6 py-3 border border-white/10 text-zinc-300 rounded-full text-xs font-bold active:bg-white/5 transition-all"><CopyCheck className="inline mr-2" size={16}/> 先月の設定をコピー</button>
+                      {/* ✅ 変更：先月コピー削除 → 年月選択コピーに置換 */}
+                      <button onClick={openCopySettingsModal} className="px-6 py-3 border border-white/10 text-zinc-300 rounded-full text-xs font-bold active:bg-white/5 transition-all">
+                        <CopyCheck className="inline mr-2" size={16}/> 設定をコピー
+                      </button>
                       <button onClick={handleExportCSV} className="text-zinc-600 text-[10px] underline flex items-center gap-2 active:text-white"><FileText size={12}/> 全データをCSV出力</button>
                     </div>
                   </div>
@@ -856,6 +886,48 @@ function AppMain() {
           <button onClick={openTxModalNew} className="flex items-center justify-center w-14 h-14 bg-white text-black rounded-full shadow-[0_0_20px_rgba(255,255,255,0.2)] active:scale-90 ml-2 transition-transform"><Plus size={28}/></button>
         </footer>
       </div>
+
+      {/* ✅ COPY SETTINGS MODAL */}
+      {isCopyModalOpen && (
+        <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={()=>setIsCopyModalOpen(false)}>
+          <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="p-4 border-b border-white/5 flex justify-between items-center">
+              <h2 className="text-xs font-black uppercase text-white tracking-widest">設定をコピー</h2>
+              <button type="button" onClick={()=>setIsCopyModalOpen(false)} className="p-2 text-zinc-500"><X size={20}/></button>
+            </div>
+
+            <div className="p-5 pb-8 space-y-4">
+              <div className="text-[10px] text-zinc-500 uppercase font-black pl-1">コピー元の年月</div>
+              <input
+                type="month"
+                value={copySourceMonth}
+                onChange={e=>setCopySourceMonth(e.target.value)}
+                className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold"
+              />
+              <div className="text-[10px] text-zinc-600 font-bold">
+                {copySourceMonth ? `コピー元：${formatMonthJP(copySourceMonth)} → コピー先：${formatMonthJP(month)}` : '年月を選択してください'}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={()=>setIsCopyModalOpen(false)}
+                  className="flex-1 h-12 bg-white/5 border border-white/10 text-zinc-300 rounded-lg font-black text-xs uppercase active:bg-white/10"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={copySettingsFromSelectedMonth}
+                  className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200"
+                >
+                  コピー
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TX MODAL */}
       {isTxModalOpen && (
