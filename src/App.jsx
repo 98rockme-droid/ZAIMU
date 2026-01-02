@@ -902,7 +902,8 @@ function AppMain() {
                 type="month"
                 value={copySourceMonth}
                 onChange={e=>setCopySourceMonth(e.target.value)}
-                className="w-full h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold"
+                className="w-full max-w-full min-w-0 h-12 bg-black/20 border border-white/10 rounded-lg px-3 text-sm text-white outline-none font-bold box-border appearance-none"
+                style={{ WebkitAppearance: 'none' }}
               />
               <div className="text-[10px] text-zinc-600 font-bold">
                 {copySourceMonth ? `コピー元：${formatMonthJP(copySourceMonth)} → コピー先：${formatMonthJP(month)}` : '年月を選択してください'}
