@@ -14,8 +14,7 @@ import {
   orderBy,
   addDoc,
   updateDoc,
-  serverTimestamp,
-  runTransaction
+  serverTimestamp
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -136,8 +135,7 @@ const normalizeMonthlyData = (data) => {
     catBudgets: d.catBudgets || {},
     cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || [],
-    savings: d.savings || 0,
-    isSavingsDone: d.isSavingsDone || false
+    savings: d.savings || 0
   };
 };
 
@@ -193,7 +191,6 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// ✅ 矢印アイコンなし
 const SettingsRow = ({ left, right, onClick }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors">
     <div className="flex items-center gap-3 text-left min-w-0 flex-1 font-bold text-zinc-200">{left}</div>
@@ -380,10 +377,12 @@ function AppMain() {
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
-    const cashRemaining = cashBudget - spentCash;
+    const savingsAmount = Number(monthlyData?.savings || 0);
+
+    // ✅ 積立分を差し引いて残高を表示
+    const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v)||0), 0);
-    const savingsAmount = Number(monthlyData?.savings || 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
     const bankBalanceProjected = (Number(monthlyData?.salary)||0) - totalWithdrawal;
 
@@ -418,29 +417,6 @@ function AppMain() {
     if (!confirmed.includes(cardName)) {
       await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
       showToastMsg('支払いを完了しました');
-    }
-  };
-
-  const executeSavings = async () => {
-    if (!user || monthlyData.isSavingsDone) return;
-    const amount = Number(monthlyData.savings || 0);
-    if (amount <= 0) return showToastMsg('積立額が設定されていません');
-
-    try {
-      await runTransaction(db, async (t) => {
-        const monthRef = doc(db, 'users', user.uid, 'months', month);
-        t.set(monthRef, { isSavingsDone: true }, { merge: true });
-        const savingsRef = doc(db, 'users', user.uid, 'wallet', 'savings');
-        const savingsDoc = await t.get(savingsRef);
-        t.set(savingsRef, { balance: (savingsDoc.exists() ? savingsDoc.data().balance : 0) + amount }, { merge: true });
-        const cashRef = doc(db, 'users', user.uid, 'wallet', 'cash');
-        const cashDoc = await t.get(cashRef);
-        t.set(cashRef, { balance: (cashDoc.exists() ? cashDoc.data().balance : 0) - amount }, { merge: true });
-      });
-      showToastMsg('積立を完了しました！🎉');
-    } catch (e) {
-      console.error(e);
-      showToastMsg('エラーが発生しました');
     }
   };
 
@@ -652,6 +628,8 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
+  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
+
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -677,30 +655,21 @@ function AppMain() {
                 </div>
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
-                    {/* ✅ 積立総額カード */}
+                    {/* ✅ 積立総額カード: 過去分(savingsBalance) + 今月分(summary.savingsAmount) を表示 */}
                     <SimpleCard className="p-4 flex items-center justify-between bg-emerald-500/10 border-emerald-500/30">
-                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400"><PiggyBank size={20}/></div><div><p className="text-[10px] text-zinc-400 uppercase font-bold">積立貯金総額</p><h3 className="text-xl font-black text-white">¥{savingsBalance.toLocaleString()}</h3></div></div>
+                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400"><PiggyBank size={20}/></div><div><p className="text-[10px] text-zinc-400 uppercase font-bold">積立貯金総額</p><h3 className="text-xl font-black text-white">¥{(savingsBalance + summary.savingsAmount).toLocaleString()}</h3></div></div>
                     </SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining<0?'text-red-400':'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{width:`${summary.cardRemainingPercent}%`}}/></div></SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{width:`${summary.cashRemainingPercent}%`}}/></div></SimpleCard>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
-                    {/* ✅ 今月の積立カード */}
+                    {/* ✅ 今月の積立カード: 表示のみシンプルに */}
                     <SimpleCard className="p-4 bg-emerald-500/10 border-emerald-500/30">
                         <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs"><PiggyBank size={14}/> 今月の積立</div>
                             <span className="text-sm font-black text-white">¥{summary.savingsAmount.toLocaleString()}</span>
                         </div>
-                        {summary.savingsAmount > 0 && (
-                            <div className="mt-3">
-                                {monthlyData.isSavingsDone ? (
-                                    <div className="w-full h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center text-xs font-bold text-emerald-400 gap-2"><CheckCircle2 size={14}/> 積立完了済み</div>
-                                ) : (
-                                    <button onClick={executeSavings} className="w-full h-10 bg-emerald-500 text-black rounded-lg text-xs font-black uppercase active:scale-95 shadow-lg">入金する</button>
-                                )}
-                            </div>
-                        )}
                     </SimpleCard>
                     {activeAlerts.length > 0 && (<SimpleCard className="bg-red-500/10 border-red-500/30 p-4"><div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14}/> 支払期日が迫っています</div><div className="space-y-2">{activeAlerts.map(([card, day]) => (<div key={card} className="flex justify-between items-center bg-black/20 p-2 rounded"><span className="text-xs font-bold text-white">{card} ({day}日)</span><button onClick={() => confirmPayment(card)} className="text-[10px] bg-red-500 text-white px-3 py-1 rounded-full font-bold active:scale-95">完了</button></div>))}</div></SimpleCard>)}
                     <SimpleCard className="p-5 space-y-3"><div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600"/></div><div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div><div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div></SimpleCard>
