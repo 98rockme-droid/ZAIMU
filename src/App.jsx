@@ -125,15 +125,11 @@ const normalizeMonthlyData = (data) => {
   Object.keys(d).forEach(k => {
     if (k.startsWith('cardDueDates.')) {
       const key = k.split('.')[1];
-      if (absorbedDueDates[key] === undefined || absorbedDueDates[key] === null || absorbedDueDates[key] === '') {
-        absorbedDueDates[key] = d[k];
-      }
+      if (absorbedDueDates[key] === undefined) absorbedDueDates[key] = d[k];
     }
     if (k.startsWith('cardBills.')) {
       const key = k.split('.')[1];
-      if (absorbedCardBills[key] === undefined || absorbedCardBills[key] === null || absorbedCardBills[key] === '') {
-        absorbedCardBills[key] = d[k];
-      }
+      if (absorbedCardBills[key] === undefined) absorbedCardBills[key] = d[k];
     }
   });
 
@@ -296,7 +292,7 @@ function AppMain() {
   const [config, setConfig] = useState(normalizeConfig({}));
   const [cashBalance, setCashBalance] = useState(0);
   const [savingsBalance, setSavingsBalance] = useState(0);
-  const [savingsTotalAllMonths, setSavingsTotalAllMonths] = useState(0);
+  const [savingsTotalUntilMonth, setSavingsTotalUntilMonth] = useState(0);
 
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
@@ -379,17 +375,15 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'users', user.uid, 'months'));
-    const unsub = onSnapshot(q, (s) => {
+    const unsub = onSnapshot(collection(db, 'users', user.uid, 'months'), (s) => {
       let sum = 0;
       s.forEach(d => {
-        const v = d.data();
-        sum += Number(v?.savings || 0);
+        if (d.id && d.id <= month) sum += Number(d.data()?.savings || 0);
       });
-      setSavingsTotalAllMonths(sum);
+      setSavingsTotalUntilMonth(sum);
     });
     return () => unsub();
-  }, [user]);
+  }, [user, month]);
 
   /* --- SUMMARY --- */
   const summary = useMemo(() => {
@@ -409,15 +403,15 @@ function AppMain() {
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v)||0), 0);
-    const totalWithdrawal = fixedCash + billTotal;
-    const totalOutflow = totalWithdrawal + savingsAmount;
-    const bankBalanceProjected = (Number(monthlyData?.salary)||0) - totalOutflow;
+    const withdrawalTotal = fixedCash + billTotal;
+    const totalWithdrawal = withdrawalTotal + savingsAmount;
+    const bankBalanceProjected = (Number(monthlyData?.salary)||0) - totalWithdrawal;
 
     const catTotals = transactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
     const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name]||0), 0);
     const lastCatTotals = (lastMonthTransactions || []).reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
 
-    return { cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget, bankBalanceProjected, fixedTotal, totalWithdrawal, totalOutflow, catBudgetSum, savingsAmount,
+    return { cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget, bankBalanceProjected, fixedTotal, totalWithdrawal, withdrawalTotal, catBudgetSum, savingsAmount,
              cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
              cashRemainingPercent: cashBudget > 0 ? Math.round((cashRemaining / cashBudget) * 100) : 0,
              catTotals, lastCatTotals,
@@ -704,7 +698,7 @@ function AppMain() {
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
                     <SimpleCard className="p-4 flex items-center justify-between bg-emerald-500/10 border-emerald-500/30">
-                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400"><PiggyBank size={20}/></div><div><p className="text-[10px] text-zinc-400 uppercase font-bold">積立貯金総額</p><h3 className="text-xl font-black text-white">¥{savingsTotalAllMonths.toLocaleString()}</h3></div></div>
+                        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400"><PiggyBank size={20}/></div><div><p className="text-[10px] text-zinc-400 uppercase font-bold">積立貯金総額</p><h3 className="text-xl font-black text-white">¥{(savingsTotalUntilMonth).toLocaleString()}</h3></div></div>
                     </SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining<0?'text-red-400':'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{width:`${summary.cardRemainingPercent}%`}}/></div></SimpleCard>
                     <SimpleCard className="p-6"><div className="flex justify-between mb-4"><div><p className="text-[10px] text-zinc-500 uppercase">今月あと使える（口座）</p><h2 className={`text-4xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2></div><div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div></div><div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{width:`${summary.cashRemainingPercent}%`}}/></div></SimpleCard>
@@ -718,7 +712,7 @@ function AppMain() {
                         </div>
                     </SimpleCard>
                     {activeAlerts.length > 0 && (<SimpleCard className="bg-red-500/10 border-red-500/30 p-4"><div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14}/> 支払期日が迫っています</div><div className="space-y-2">{activeAlerts.map(([card, day]) => (<div key={card} className="flex justify-between items-center bg-black/20 p-2 rounded"><span className="text-xs font-bold text-white">{card} ({day}日)</span><button onClick={() => confirmPayment(card)} className="text-[10px] bg-red-500 text-white px-3 py-1 rounded-full font-bold active:scale-95">完了</button></div>))}</div></SimpleCard>)}
-                    <SimpleCard className="p-5 space-y-3"><div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600"/></div><div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">積立<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div><div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div></SimpleCard>
+                    <SimpleCard className="p-5 space-y-3"><div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600"/></div><div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.withdrawalTotal.toLocaleString()}</span></div><div className="flex justify-between items-center text-xs text-zinc-400">積立<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div><div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div></SimpleCard>
                     <div className="grid grid-cols-2 gap-3">{getCategoryNames().map(n => { const s=summary.catTotals[n]||0; const b=monthlyData.catBudgets?.[n]||0; if(b===0) return null; return (<SimpleCard key={n} className="p-3 space-y-2"><div className="flex justify-between items-center text-[9px] font-bold"><div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div><span className="text-white">¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span></div><div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500" style={{width:`${Math.min(100, (s/b)*100)}%`}}/></div></SimpleCard>)})}</div>
                   </div>
                 )}
