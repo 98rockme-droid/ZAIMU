@@ -136,8 +136,8 @@ const normalizeMonthlyData = (data) => {
     catBudgets: d.catBudgets || {},
     cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || [],
-    savings: d.savings || 0, // 今月の積立予定額
-    isSavingsDone: d.isSavingsDone || false // 積立完了フラグ
+    savings: d.savings || 0,
+    isSavingsDone: d.isSavingsDone || false
   };
 };
 
@@ -193,6 +193,7 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
+// ✅ 矢印アイコンなし
 const SettingsRow = ({ left, right, onClick }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors">
     <div className="flex items-center gap-3 text-left min-w-0 flex-1 font-bold text-zinc-200">{left}</div>
@@ -284,16 +285,13 @@ function AppMain() {
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
   const [config, setConfig] = useState(normalizeConfig({}));
-  
-  // ✅ 新しい状態：積立貯金総額
-  const [savingsBalance, setSavingsBalance] = useState(0);
   const [cashBalance, setCashBalance] = useState(0);
+  const [savingsBalance, setSavingsBalance] = useState(0);
 
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
 
   const mainRef = useRef(null);
-
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
@@ -364,7 +362,6 @@ function AppMain() {
     return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if(s.exists()) setCashBalance(s.data().balance); });
   }, [user]);
 
-  // ✅ 追加：積立貯金総額の監視
   useEffect(() => {
     if (!user) return;
     return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'savings'), (s) => { if(s.exists()) setSavingsBalance(s.data().balance || 0); });
@@ -386,10 +383,8 @@ function AppMain() {
     const cashRemaining = cashBudget - spentCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v)||0), 0);
-    
-    // ✅ 収支計算：積立額も「支出（移動）」として計算に含める
     const savingsAmount = Number(monthlyData?.savings || 0);
-    const totalWithdrawal = fixedCash + billTotal + savingsAmount; 
+    const totalWithdrawal = fixedCash + billTotal + savingsAmount;
     const bankBalanceProjected = (Number(monthlyData?.salary)||0) - totalWithdrawal;
 
     const catTotals = transactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
@@ -426,7 +421,6 @@ function AppMain() {
     }
   };
 
-  /* --- ✅ SAVINGS ACTION --- */
   const executeSavings = async () => {
     if (!user || monthlyData.isSavingsDone) return;
     const amount = Number(monthlyData.savings || 0);
@@ -434,21 +428,14 @@ function AppMain() {
 
     try {
       await runTransaction(db, async (t) => {
-        // 1. 月データを更新（完了フラグ）
         const monthRef = doc(db, 'users', user.uid, 'months', month);
         t.set(monthRef, { isSavingsDone: true }, { merge: true });
-
-        // 2. 積立総額を加算
         const savingsRef = doc(db, 'users', user.uid, 'wallet', 'savings');
         const savingsDoc = await t.get(savingsRef);
-        const currentSavings = savingsDoc.exists() ? (savingsDoc.data().balance || 0) : 0;
-        t.set(savingsRef, { balance: currentSavings + amount }, { merge: true });
-
-        // 3. 現金残高から減算
+        t.set(savingsRef, { balance: (savingsDoc.exists() ? savingsDoc.data().balance : 0) + amount }, { merge: true });
         const cashRef = doc(db, 'users', user.uid, 'wallet', 'cash');
         const cashDoc = await t.get(cashRef);
-        const currentCash = cashDoc.exists() ? (cashDoc.data().balance || 0) : 0;
-        t.set(cashRef, { balance: currentCash - amount }, { merge: true });
+        t.set(cashRef, { balance: (cashDoc.exists() ? cashDoc.data().balance : 0) - amount }, { merge: true });
       });
       showToastMsg('積立を完了しました！🎉');
     } catch (e) {
@@ -528,7 +515,6 @@ function AppMain() {
       } else if (type === 'cashBudget') {
         await setDoc(doc(db, 'users', user.uid, 'months', month), { cashBudget: toNumber(data.value) }, { merge: true });
       } else if (type === 'savings') {
-        // ✅ 積立額設定の保存
         await setDoc(doc(db, 'users', user.uid, 'months', month), { savings: toNumber(data.value) }, { merge: true });
       } else if (type === 'bill') {
         const newBills = { ...(monthlyData.cardBills || {}), [data.name]: toNumber(data.bill) };
@@ -665,8 +651,6 @@ function AppMain() {
     { id: 'payment', label: '支払方法', icon: <Wallet size={18}/> },
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
-
-  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
