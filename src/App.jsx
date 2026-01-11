@@ -193,7 +193,7 @@ const Toast = ({ message, isVisible }) => (
   </div>
 );
 
-// 矢印アイコンなしリスト
+// ✅ 矢印アイコンなし
 const SettingsRow = ({ left, right, onClick }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/5 text-zinc-300 transition-colors">
     <div className="flex items-center gap-3 text-left min-w-0 flex-1 font-bold text-zinc-200">{left}</div>
@@ -385,15 +385,11 @@ function AppMain() {
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v)||0), 0);
-    // ✅ 収支計算: 積立額を除外して別途表示するため、ここでは純粋な引き落とし計を計算
     const withdrawalOnly = fixedCash + billTotal; 
-    // 残高見込み = 給与 - 引き落とし - 積立
     const bankBalanceProjected = (Number(monthlyData?.salary)||0) - withdrawalOnly - savingsAmount;
 
     const catTotals = transactions.reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
     const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name]||0), 0);
-    
-    // ✅ Analyze Tab Crash Fix: Safe reduce
     const lastCatTotals = (lastMonthTransactions || []).reduce((acc, t) => { acc[t.category] = (acc[t.category]||0) + (Number(t.amount)||0); return acc; }, {});
 
     return { cardRemaining, cashRemaining, cardBudget: totalBudget, cashBudget, bankBalanceProjected, fixedTotal, withdrawalOnly, catBudgetSum, savingsAmount,
@@ -522,9 +518,8 @@ function AppMain() {
       } else if (type === 'savings') {
         await setDoc(doc(db, 'users', user.uid, 'months', month), { savings: toNumber(data.value) }, { merge: true });
       } else if (type === 'bill') {
-        // Fix: Use correct object spread to update specific card key without overwriting others
         const newBills = { ...(monthlyData.cardBills || {}), [data.name]: toNumber(data.bill) };
-        const newDues = { ...(monthlyData.cardDueDates || {}), [data.name]: String(data.due) };
+        const newDues = { ...(monthlyData.cardDueDates || {}), [data.name]: data.due };
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
             cardBills: newBills,
             cardDueDates: newDues
@@ -658,8 +653,6 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
-
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -694,7 +687,7 @@ function AppMain() {
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
-                    {/* ✅ 今月の積立カード */}
+                    {/* ✅ 今月の積立カード: 表示のみシンプルに */}
                     <SimpleCard className="p-4 bg-emerald-500/10 border-emerald-500/30">
                         <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs"><PiggyBank size={14}/> 今月の積立</div>
@@ -858,7 +851,7 @@ function AppMain() {
                 <div className="flex flex-wrap gap-2">{paymentMethodsSafe.map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
                 {/* TEMPLATE BUTTONS */}
                 {!editingTx && <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">{(config.templates || []).map((t, idx) => (<button key={idx} type="button" onClick={() => applyTemplate(t)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 flex items-center gap-1.5 active:bg-white/10 transition-colors"><Zap size={10} className="text-yellow-400" /> {t.title}</button>))}</div>}
-                <div className="flex gap-2 pt-2">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('削除しますか？')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsTxModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
+                <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('削除しますか？')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsTxModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
               </form></div></>
             )}
           </div>
