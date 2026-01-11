@@ -14,7 +14,8 @@ import {
   orderBy,
   addDoc,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -135,7 +136,8 @@ const normalizeMonthlyData = (data) => {
     catBudgets: d.catBudgets || {},
     cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || [],
-    savings: d.savings || 0
+    savings: d.savings || 0,
+    isSavingsDone: d.isSavingsDone || false
   };
 };
 
@@ -379,7 +381,6 @@ function AppMain() {
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount)||0), 0);
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    // ✅ 積立分を差し引いて残高を表示
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v)||0), 0);
@@ -417,6 +418,29 @@ function AppMain() {
     if (!confirmed.includes(cardName)) {
       await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
       showToastMsg('支払いを完了しました');
+    }
+  };
+
+  const executeSavings = async () => {
+    if (!user || monthlyData.isSavingsDone) return;
+    const amount = Number(monthlyData.savings || 0);
+    if (amount <= 0) return showToastMsg('積立額が設定されていません');
+
+    try {
+      await runTransaction(db, async (t) => {
+        const monthRef = doc(db, 'users', user.uid, 'months', month);
+        t.set(monthRef, { isSavingsDone: true }, { merge: true });
+        const savingsRef = doc(db, 'users', user.uid, 'wallet', 'savings');
+        const savingsDoc = await t.get(savingsRef);
+        t.set(savingsRef, { balance: (savingsDoc.exists() ? savingsDoc.data().balance : 0) + amount }, { merge: true });
+        const cashRef = doc(db, 'users', user.uid, 'wallet', 'cash');
+        const cashDoc = await t.get(cashRef);
+        t.set(cashRef, { balance: (cashDoc.exists() ? cashDoc.data().balance : 0) - amount }, { merge: true });
+      });
+      showToastMsg('積立を完了しました！🎉');
+    } catch (e) {
+      console.error(e);
+      showToastMsg('エラーが発生しました');
     }
   };
 
@@ -628,8 +652,6 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  const openEdit = (type, data, index) => setEditingItem({ type, data: {...data}, index });
-
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -811,8 +833,9 @@ function AppMain() {
                 <input type="text" value={inputTitle} onChange={e=>setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)"/>
                 <div className="grid grid-cols-2 gap-4 w-full"><div className="flex flex-col gap-2"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label><input type="date" value={inputDate} onChange={e=>setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold"/></div><div className="flex flex-col gap-2"><label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label><div className="relative w-full"><select value={inputCategory} onChange={e=>setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold appearance-none">{getCategoryNames().map(c=><option key={c} value={c}>{c}</option>)}</select><ChevronDown size={14} className="absolute right-3 top-3.5 text-zinc-500 pointer-events-none"/></div></div></div>
                 <div className="flex flex-wrap gap-2">{paymentMethodsSafe.map(m=>(<label key={m} className="cursor-pointer"><input type="radio" value={m} checked={inputMethod===m} onChange={e=>setInputMethod(e.target.value)} className="peer hidden" required/><div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div></label>))}</div>
+                {/* TEMPLATE BUTTONS */}
                 {!editingTx && <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">{(config.templates || []).map((t, idx) => (<button key={idx} type="button" onClick={() => applyTemplate(t)} className="flex-shrink-0 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 flex items-center gap-1.5 active:bg-white/10 transition-colors"><Zap size={10} className="text-yellow-400" /> {t.title}</button>))}</div>}
-                <div className="flex gap-2 pt-2">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('削除しますか？')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsTxModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
+                <div className="flex gap-2 pt-2 pb-8">{editingTx&&(<button type="button" onClick={async()=>{if(window.confirm('削除しますか？')){await deleteDoc(doc(db,'users',user.uid,'transactions',editingTx.id));setIsTxModalOpen(false);showToastMsg('削除しました');}}} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18}/></button>)}<button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button></div>
               </form></div></>
             )}
           </div>
