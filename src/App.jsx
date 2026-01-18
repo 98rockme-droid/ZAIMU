@@ -295,7 +295,7 @@ function AppMain() {
   const [savingsTotalToMonth, setSavingsTotalToMonth] = useState(0);
 
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL', special: 'ALL' });
+  const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL', special: false });
 
   const mainRef = useRef(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -318,7 +318,7 @@ function AppMain() {
     return c?.icon || '🏷';
   };
   const paymentMethodsSafe = config?.paymentMethods?.length ? config.paymentMethods : [CASH];
-  const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL', special: 'ALL' }); };
+  const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL', special: false }); };
 
   /* --- AUTH --- */
   useEffect(() => {
@@ -396,20 +396,8 @@ function AppMain() {
         });
         setSavingsTotalToMonth(sum);
       } catch (e) {
-        try {
-          const s = await getDocs(collection(db, 'users', user.uid, 'months'));
-          let sum = 0;
-          s.forEach(d => {
-            if (String(d.id) <= String(month)) {
-              const md = normalizeMonthlyData(d.data());
-              sum += Number(md.savings || 0);
-            }
-          });
-          setSavingsTotalToMonth(sum);
-        } catch (e2) {
-          console.error(e2);
-          setSavingsTotalToMonth(0);
-        }
+        console.error(e);
+        setSavingsTotalToMonth(0);
       }
     };
     fetchSavingsTotalToMonth();
@@ -431,11 +419,10 @@ function AppMain() {
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
-    const spentCashNormal = normalTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const spentCashSpecial = transactions.filter(t => t.isSpecial === true && t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const spentCash = normalTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    const cashRemaining = cashBudget - spentCashNormal - spentCashSpecial - savingsAmount;
+    const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
@@ -661,9 +648,10 @@ function AppMain() {
     const matchSearch = searchText === '' || (t.title || '').includes(searchText);
     const matchCat = filter.category === 'ALL' || t.category === filter.category;
     const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
-    const matchSpecial = filter.special === 'ALL' || (filter.special === 'SPECIAL' && t.isSpecial === true);
+    const matchSpecial = !filter.special || t.isSpecial === true;
     return matchSearch && matchCat && matchMethod && matchSpecial;
   });
+
   const calendarDaysList = useMemo(() => {
     if (!month) return [];
     const d = new Date(month + "-01");
@@ -855,8 +843,9 @@ function AppMain() {
                         <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView === 'calendar' ? 'bg-white text-black' : 'text-zinc-500'}`}><CalendarDays size={16} /></button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
+
+                    <div className="flex gap-2 items-center">
+                      <div className="relative flex-[1] min-w-0">
                         <select
                           value={filter.category}
                           onChange={e => setFilter({ ...filter, category: e.target.value })}
@@ -867,7 +856,8 @@ function AppMain() {
                         </select>
                         <ChevronDown size={14} className="absolute right-2 top-2.5 text-zinc-500 pointer-events-none" />
                       </div>
-                      <div className="relative flex-1">
+
+                      <div className="relative flex-[1] min-w-0">
                         <select
                           value={filter.method}
                           onChange={e => setFilter({ ...filter, method: e.target.value })}
@@ -881,15 +871,17 @@ function AppMain() {
 
                       <button
                         type="button"
-                        onClick={() => setFilter(prev => ({ ...prev, special: prev.special === 'SPECIAL' ? 'ALL' : 'SPECIAL' }))}
-                        className={`w-9 h-9 border rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0 ${filter.special === 'SPECIAL' ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'}`}
-                        aria-label="特別費で絞り込む"
-                        title="特別費"
+                        onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
+                        className={`h-9 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
+                          filter.special ? 'bg-white text-black border-white' : 'bg-white/5 text-zinc-400 border-white/10'
+                        }`}
                       >
-                        <Sparkles size={16} className={`${filter.special === 'SPECIAL' ? 'text-zinc-200' : 'text-zinc-500'}`} />
+                        特別費
                       </button>
 
-                      <button type="button" onClick={clearLogFilters} className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0"><X size={16} className="text-zinc-500" /></button>
+                      <button type="button" onClick={clearLogFilters} className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
+                        <X size={16} className="text-zinc-500" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -907,20 +899,17 @@ function AppMain() {
                           {finalFilteredTx.map(t => (
                             <div key={t.id} onClick={() => startEditingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
                               <div className="flex items-center gap-3 flex-1 min-w-0">
+                                {/* 日付幅を少し狭く */}
                                 <div className="w-8 font-bold font-mono text-[10px] text-zinc-500">{formatDateShort(t.date)}</div>
+
+                                {/* 特別費ならカテゴリを枠だけに（ラベル自体はカテゴリを使う） */}
                                 <div className={`w-12 text-center text-[9px] rounded py-0.5 truncate ${t.isSpecial === true ? 'bg-transparent border border-white/10 text-zinc-400' : 'bg-white/5 text-zinc-400'}`}>
                                   {t.category}
                                 </div>
+
                                 <div className="flex-1 truncate text-sm font-bold text-white">{t.title}</div>
                               </div>
-                              <div className="flex items-center gap-2 shrink-0 pl-2">
-                                {t.isSpecial === true && (
-                                  <span className="text-[9px] px-2 py-0.5 rounded border border-white/10 text-zinc-400 bg-transparent">
-                                    特別費
-                                  </span>
-                                )}
-                                <span className="text-sm font-bold tabular-nums text-white">¥{Number(t.amount || 0).toLocaleString()}</span>
-                              </div>
+                              <span className="text-sm font-bold tabular-nums text-white pl-2">¥{Number(t.amount || 0).toLocaleString()}</span>
                             </div>
                           ))}
                         </div>
@@ -998,7 +987,8 @@ function AppMain() {
                           </div>
                           <div className="space-y-1">
                             <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}}%` }} /></div>
+                            {/* ✅ ここがVercelエラーの原因だったので修正済み */}
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}%` }} /></div>
                           </div>
                         </div>
                       );
