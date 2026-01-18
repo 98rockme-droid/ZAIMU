@@ -998,7 +998,7 @@ function AppMain() {
                           </div>
                           <div className="space-y-1">
                             <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100)}%` }} /></div>
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}}%` }} /></div>
                           </div>
                         </div>
                       );
