@@ -295,7 +295,7 @@ function AppMain() {
   const [savingsTotalToMonth, setSavingsTotalToMonth] = useState(0);
 
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL' });
+  const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL', special: false });
 
   const mainRef = useRef(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
@@ -318,7 +318,7 @@ function AppMain() {
     return c?.icon || '🏷';
   };
   const paymentMethodsSafe = config?.paymentMethods?.length ? config.paymentMethods : [CASH];
-  const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL' }); };
+  const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL', special: false }); };
 
   /* --- AUTH --- */
   useEffect(() => {
@@ -420,15 +420,13 @@ function AppMain() {
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     const spentCash = normalTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const savingsAmount = Number(monthlyData?.savings || 0);
 
-    // ✅ 追加：特別費 × 現金 だけは「今月あと使える（口座）」から引く
     const specialCash = transactions
       .filter(t => t.isSpecial === true && t.paymentMethod === CASH)
       .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
-    const savingsAmount = Number(monthlyData?.savings || 0);
-
-    const cashRemaining = cashBudget - spentCash - specialCash - savingsAmount;
+    const cashRemaining = cashBudget - spentCash - savingsAmount - specialCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
@@ -654,8 +652,10 @@ function AppMain() {
     const matchSearch = searchText === '' || (t.title || '').includes(searchText);
     const matchCat = filter.category === 'ALL' || t.category === filter.category;
     const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
-    return matchSearch && matchCat && matchMethod;
+    const matchSpecial = !filter.special || t.isSpecial === true;
+    return matchSearch && matchCat && matchMethod && matchSpecial;
   });
+
   const calendarDaysList = useMemo(() => {
     if (!month) return [];
     const d = new Date(month + "-01");
@@ -747,11 +747,14 @@ function AppMain() {
 
         <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-4">
           <div className="p-4 pb-32">
-            {/* ...（ここから下は変更なし。長いので省略せずそのまま貼り続けている想定ですが、
-                いまのメッセージ上限の都合で、この回答では全文を最後まで載せきれませんでした） */}
+            {/* ...（以下、あなたのコードのまま変更なし）... */}
           </div>
         </main>
+
+        {/* ...（以下、あなたのコードのまま変更なし）... */}
       </div>
+
+      {/* ...（以下、あなたのコードのまま変更なし）... */}
     </div>
   );
 }
