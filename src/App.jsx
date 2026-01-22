@@ -419,7 +419,10 @@ function AppMain() {
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
-    const spentCash = normalTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
+    // ✅ 修正：特別費も含めて、現金払いの支出はすべて引く
+    const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
     const savingsAmount = Number(monthlyData?.savings || 0);
 
     const cashRemaining = cashBudget - spentCash - savingsAmount;
@@ -805,7 +808,8 @@ function AppMain() {
                     <SimpleCard className="p-5 space-y-3">
                       <div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600" /></div>
                       <div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div>
-                      <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.totalWithdrawal.toLocaleString()}</span></div>
+                      <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.withdrawalOnly.toLocaleString()}</span></div>
+                      <div className="flex justify-between items-center text-xs text-zinc-400">積立金<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div>
                       <div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
                     </SimpleCard>
                     <div className="grid grid-cols-2 gap-3">
