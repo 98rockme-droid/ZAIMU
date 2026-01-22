@@ -420,7 +420,7 @@ function AppMain() {
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     
-    // ✅ 修正：特別費も含めて、現金払いの支出はすべて引く
+    // 現金支出（特別費含む）
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     
     const savingsAmount = Number(monthlyData?.savings || 0);
@@ -429,6 +429,8 @@ function AppMain() {
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
+    // 口座残高見込みの計算用（積立を除く引き落とし計）
+    const withdrawalOnly = fixedCash + billTotal;
     const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
     const catTotals = normalTx.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + (Number(t.amount) || 0); return acc; }, {});
@@ -446,6 +448,7 @@ function AppMain() {
       bankBalanceProjected,
       fixedTotal,
       totalWithdrawal,
+      withdrawalOnly: withdrawalOnly || 0, // ガード追加
       catBudgetSum,
       savingsAmount,
       cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
@@ -808,7 +811,7 @@ function AppMain() {
                     <SimpleCard className="p-5 space-y-3">
                       <div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600" /></div>
                       <div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div>
-                      <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{summary.withdrawalOnly.toLocaleString()}</span></div>
+                      <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{Number(summary.withdrawalOnly || 0).toLocaleString()}</span></div>
                       <div className="flex justify-between items-center text-xs text-zinc-400">積立金<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div>
                       <div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
                     </SimpleCard>
