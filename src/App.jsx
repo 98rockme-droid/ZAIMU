@@ -54,7 +54,8 @@ import {
   Home,
   Sparkles,
   ChevronDown,
-  PiggyBank
+  PiggyBank,
+  HelpCircle
 } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
@@ -122,7 +123,7 @@ const normalizeMonthlyData = (data) => {
   const d = data || {};
   const absorbedDueDates = { ...(d.cardDueDates || {}) };
   const absorbedCardBills = { ...(d.cardBills || {}) };
-
+  
   Object.keys(d).forEach(k => {
     if (k.startsWith('cardDueDates.')) absorbedDueDates[k.split('.')[1]] = d[k];
     if (k.startsWith('cardBills.')) absorbedCardBills[k.split('.')[1]] = d[k];
@@ -286,6 +287,9 @@ function AppMain() {
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
 
+  // ✅ FAQ用ステート
+  const [expandedFaq, setExpandedFaq] = useState(null);
+
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
@@ -300,6 +304,15 @@ function AppMain() {
   const mainRef = useRef(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
+
+  // ✅ FAQデータ
+  const FAQ_LIST = [
+    { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
+    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n「現金予算」から「今の出費」と「積立額」を差し引いた、純粋に使える残高を表示しています。' },
+    { q: '入金ボタンがないけど、積立はどうやるの？', a: '設定した積立額は、毎月自動的に「支出」として計算され、積立総額に加算された状態で表示されます。手動での入金操作は不要です。' },
+    { q: 'カードの引き落とし額はどこで設定するの？', a: '設定タブの「資金計画・引落日」からカードごとに設定できます。' },
+    { q: '特別費ってなに？', a: '冠婚葬祭や旅行など、通常の月予算とは別枠で管理したい出費です。\n支出入力時に「特別」ボタンをONにすると、通常の予算バーからは引かれずに記録されますが、現金残高からは減算されます。' },
+  ];
 
   const showToastMsg = (msg) => {
     setToast({ visible: true, message: msg });
@@ -429,7 +442,6 @@ function AppMain() {
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
-    // 口座残高見込みの計算用（積立を除く引き落とし計）
     const withdrawalOnly = fixedCash + billTotal;
     const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
@@ -448,7 +460,7 @@ function AppMain() {
       bankBalanceProjected,
       fixedTotal,
       totalWithdrawal,
-      withdrawalOnly: withdrawalOnly || 0, // ガード追加
+      withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
       savingsAmount,
       cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
@@ -714,6 +726,7 @@ function AppMain() {
     { id: 'category', label: 'カテゴリ予算', icon: <Tags size={18} /> },
     { id: 'template', label: 'テンプレート', icon: <Zap size={18} /> },
     { id: 'payment', label: '支払方法', icon: <Wallet size={18} /> },
+    { id: 'faq', label: 'よくある質問・計算ロジック', icon: <HelpCircle size={18} /> },
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
@@ -1036,6 +1049,30 @@ function AppMain() {
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    {settingTab === 'faq' && (
+                        <div className="space-y-3 animate-in slide-in-from-right-2">
+                            <SimpleCard className="overflow-hidden">
+                                <div className="divide-y divide-white/5">
+                                    {FAQ_LIST.map((item, idx) => (
+                                        <div key={idx} className="p-4 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)}>
+                                            <div className="flex justify-between items-start gap-4">
+                                                <div className="flex items-start gap-3">
+                                                    <HelpCircle size={18} className="text-zinc-500 mt-0.5 shrink-0" />
+                                                    <span className="text-sm font-bold text-zinc-200">{item.q}</span>
+                                                </div>
+                                                <ChevronDown size={16} className={`text-zinc-500 transition-transform ${expandedFaq === idx ? 'rotate-180' : ''}`} />
+                                            </div>
+                                            {expandedFaq === idx && (
+                                                <div className="mt-3 pl-8 text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                                                    {item.a}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </SimpleCard>
+                        </div>
+                    )}
                     {settingTab === 'budget' && (
                       <div className="space-y-4 animate-in slide-in-from-right-2">
                         <div className="text-[10px] text-zinc-500 uppercase font-black pl-1">資金計画</div>
@@ -1496,7 +1533,6 @@ function AppMain() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
