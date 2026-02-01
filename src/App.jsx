@@ -304,10 +304,11 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
+  // ✅ FAQ: 計算ロジックに合わせて修正
   const FAQ_LIST = [
     { q: '「今月あと使える（カード）」の計算式は？', a: '生活費予算（総枠） － 固定費（全額） － 今のカード出費 です。\nこれは「固定費を除いた、今月カードで使って良い変動費の予算」を表しています。' },
     { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
-    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'いいえ、引かれていません。\n「現金予算」から「今の出費」だけを引いた残高です。\n積立は「口座残高見込み」の方で、口座からなくなるお金として計算されています。' },
+    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n本当に使えるお金を把握するため、現金予算から「今の出費」と「積立額」を差し引いた残高を表示しています。' },
     { q: '入金ボタンがないけど、積立はどうやるの？', a: '設定した積立額は、毎月自動的に「支出」として計算され、積立総額に加算された状態で表示されます。手動での入金操作は不要です。' },
     { q: 'カードの引き落とし額はどこで設定するの？', a: '設定タブの「資金計画・引落日」からカードごとに設定できます。' },
     { q: '特別費ってなに？', a: '冠婚葬祭や旅行など、通常の月予算とは別枠で管理したい出費です。\n支出入力時に「特別」ボタンをONにすると、通常の予算バーからは引かれずに記録されますが、現金残高からは減算されます。' },
@@ -428,14 +429,21 @@ function AppMain() {
     const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
 
     const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
+    // カードの残り予算
     const cardRemaining = totalBudget - fixedTotal - spentCard;
-    const variableBudget = totalBudget - fixedTotal; // ✅ 変動費予算
+    // 変動費予算（カードで使っていい額）
+    const variableBudget = totalBudget - fixedTotal;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
+    
+    // 現金支出（特別費含む）
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    const cashRemaining = cashBudget - spentCash;
+    // ✅ FIX: 積立額も引く（ユーザー要望により復活）
+    const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
@@ -451,7 +459,7 @@ function AppMain() {
 
     return {
       cardRemaining,
-      variableBudget, // ✅ 変動費予算
+      variableBudget, 
       cashRemaining,
       cardBudget: totalBudget,
       cashBudget,
@@ -468,7 +476,7 @@ function AppMain() {
       lastCatTotals,
       totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
-      spentCard, // ✅ カード利用済額
+      spentCard, 
       dailyTotals: normalTx.reduce((acc, t) => { const d = new Date(t.date).getDate(); acc[d] = (acc[d] || 0) + (Number(t.amount) || 0); return acc; }, {}),
       specialTotalSpent,
       lastSpecialTotalSpent
