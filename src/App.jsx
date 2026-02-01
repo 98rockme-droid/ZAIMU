@@ -123,7 +123,7 @@ const normalizeMonthlyData = (data) => {
   const d = data || {};
   const absorbedDueDates = { ...(d.cardDueDates || {}) };
   const absorbedCardBills = { ...(d.cardBills || {}) };
-  
+
   Object.keys(d).forEach(k => {
     if (k.startsWith('cardDueDates.')) absorbedDueDates[k.split('.')[1]] = d[k];
     if (k.startsWith('cardBills.')) absorbedCardBills[k.split('.')[1]] = d[k];
@@ -287,7 +287,6 @@ function AppMain() {
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
 
-  // ✅ FAQ用ステート
   const [expandedFaq, setExpandedFaq] = useState(null);
 
   const [transactions, setTransactions] = useState([]);
@@ -305,7 +304,6 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
-  // ✅ FAQデータ
   const FAQ_LIST = [
     { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
     { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n「現金予算」から「今の出費」と「積立額」を差し引いた、純粋に使える残高を表示しています。' },
@@ -432,10 +430,7 @@ function AppMain() {
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
-    
-    // 現金支出（特別費含む）
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    
     const savingsAmount = Number(monthlyData?.savings || 0);
 
     const cashRemaining = cashBudget - spentCash - savingsAmount;
@@ -459,6 +454,7 @@ function AppMain() {
       cashBudget,
       bankBalanceProjected,
       fixedTotal,
+      fixedCard, // ✅ カード固定費を表示するために追加
       totalWithdrawal,
       withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
@@ -784,6 +780,8 @@ function AppMain() {
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p>
                           <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
+                          {/* ✅ カード固定費の表示を追加 */}
+                          <p className="text-[10px] text-zinc-500 mt-1">(うちカード固定費 -¥{summary.fixedCard.toLocaleString()})</p>
                         </div>
                         <div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div>
                       </div>
