@@ -288,7 +288,7 @@ function AppMain() {
   const [editingItem, setEditingItem] = useState(null);
 
   const [expandedFaq, setExpandedFaq] = useState(null);
-  const [faqSearchText, setFaqSearchText] = useState(''); // ✅ 検索用ステート
+  const [faqSearchText, setFaqSearchText] = useState('');
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
@@ -305,7 +305,6 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
-  // ✅ FAQデータ（カテゴリ分け・内容拡充）
   const FAQ_DATA = [
     {
       category: '💰 予算・残高の計算',
@@ -337,7 +336,6 @@ function AppMain() {
     }
   ];
 
-  // ✅ FAQ検索ロジック
   const filteredFaqData = useMemo(() => {
     if (!faqSearchText) return FAQ_DATA;
     const lowerText = faqSearchText.toLowerCase();
@@ -464,13 +462,17 @@ function AppMain() {
     const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
 
     const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
+    // カードの残り予算
     const cardRemaining = totalBudget - fixedTotal - spentCard;
+    // 変動費予算（カードで使っていい額）
     const variableBudget = totalBudget - fixedTotal;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const savingsAmount = Number(monthlyData?.savings || 0);
 
+    // 現金予算から積立額も引く
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -820,6 +822,7 @@ function AppMain() {
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p>
                           <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
+                          {/* ✅ 修正: 変動費予算と利用済額を表示 */}
                           <div className="flex gap-3 text-[10px] text-zinc-500 mt-1">
                             <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
                             <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
@@ -895,7 +898,7 @@ function AppMain() {
                   <div className="space-y-3">
                     <div className="flex gap-2">
                       <div className="flex-1 relative">
-                        <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none" />
+                        <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors" />
                         <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
                       </div>
                       <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
@@ -909,37 +912,37 @@ function AppMain() {
                         <select
                           value={filter.category}
                           onChange={e => setFilter({ ...filter, category: e.target.value })}
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-2 h-9 text-[10px] text-zinc-300 outline-none appearance-none"
+                          className="w-full h-10 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
                         >
                           <option value="ALL">全てのカテゴリ</option>
                           {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
-                        <ChevronDown size={14} className="absolute right-2 top-2.5 text-zinc-500 pointer-events-none" />
+                        <ChevronDown size={14} className="absolute right-2 top-3 text-zinc-500 pointer-events-none" />
                       </div>
 
                       <div className="relative flex-[1] min-w-0">
                         <select
                           value={filter.method}
                           onChange={e => setFilter({ ...filter, method: e.target.value })}
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-2 h-9 text-[10px] text-zinc-300 outline-none appearance-none"
+                          className="w-full h-10 bg-black/20 border border-white/10 rounded-lg px-2 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
                         >
                           <option value="ALL">全ての支払方法</option>
                           {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
-                        <ChevronDown size={14} className="absolute right-2 top-2.5 text-zinc-500 pointer-events-none" />
+                        <ChevronDown size={14} className="absolute right-2 top-3 text-zinc-500 pointer-events-none" />
                       </div>
 
                       <button
                         type="button"
                         onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
-                        className={`h-9 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
-                          filter.special ? 'bg-white text-black border-white' : 'bg-white/5 text-zinc-400 border-white/10'
+                        className={`h-10 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
+                          filter.special ? 'bg-white text-black border-white' : 'bg-black/20 text-zinc-400 border-white/10'
                         }`}
                       >
                         特別費
                       </button>
 
-                      <button type="button" onClick={clearLogFilters} className="w-9 h-9 bg-white/5 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
+                      <button type="button" onClick={clearLogFilters} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
                         <X size={16} className="text-zinc-500" />
                       </button>
                     </div>
@@ -1101,6 +1104,14 @@ function AppMain() {
                                     className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors"
                                 />
                                 <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+                                {faqSearchText && (
+                                  <button 
+                                    onClick={() => setFaqSearchText('')}
+                                    className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
                             </div>
 
                             <div className="space-y-4">
