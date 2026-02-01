@@ -288,6 +288,7 @@ function AppMain() {
   const [editingItem, setEditingItem] = useState(null);
 
   const [expandedFaq, setExpandedFaq] = useState(null);
+  const [faqSearchText, setFaqSearchText] = useState(''); // ✅ 検索用ステート
 
   const [transactions, setTransactions] = useState([]);
   const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
@@ -304,15 +305,49 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
-  // ✅ FAQ: 計算ロジックに合わせて修正
-  const FAQ_LIST = [
-    { q: '「今月あと使える（カード）」の計算式は？', a: '生活費予算（総枠） － 固定費（全額） － 今のカード出費 です。\nこれは「固定費を除いた、今月カードで使って良い変動費の予算」を表しています。' },
-    { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
-    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n本当に使えるお金を把握するため、現金予算から「今の出費」と「積立額」を差し引いた残高を表示しています。' },
-    { q: '入金ボタンがないけど、積立はどうやるの？', a: '設定した積立額は、毎月自動的に「支出」として計算され、積立総額に加算された状態で表示されます。手動での入金操作は不要です。' },
-    { q: 'カードの引き落とし額はどこで設定するの？', a: '設定タブの「資金計画・引落日」からカードごとに設定できます。' },
-    { q: '特別費ってなに？', a: '冠婚葬祭や旅行など、通常の月予算とは別枠で管理したい出費です。\n支出入力時に「特別」ボタンをONにすると、通常の予算バーからは引かれずに記録されますが、現金残高からは減算されます。' },
+  // ✅ FAQデータ（カテゴリ分け・内容拡充）
+  const FAQ_DATA = [
+    {
+      category: '💰 予算・残高の計算',
+      items: [
+        { q: '「今月あと使える（カード）」の計算式は？', a: '生活費予算（総枠） － 固定費（全額） － 今のカード出費 です。\nこれは「固定費を除いた、今月カードで使って良い変動費の予算」を表しています。' },
+        { q: '「変動費予算」って何ですか？', a: '生活費予算（総枠）から、固定費（全額）を引いた金額です。\n食費や日用品など、自身のやりくりでコントロール可能な出費の上限目安となります。' },
+        { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。あくまで「毎月自動的に出ていくお金」を引いた残高予測です。' },
+        { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n本当に使えるお金を把握するため、現金予算から「今の出費」と「積立額」を差し引いた残高を表示しています。' },
+        { q: '「引き落とし計」には何が含まれますか？', a: '「現金払いの固定費」と「カードの引き落とし額」の合計です。\n積立金はここには含まれず、別の行で計算されています。' },
+      ]
+    },
+    {
+      category: '🐷 積立・特別費',
+      items: [
+        { q: '積立はどうやるの？入金ボタンがないです', a: '設定した積立額は、毎月自動的に「支出」として計算され、積立総額に加算された状態で表示されます。手動での入金操作は不要です。' },
+        { q: '積立金はいつ残高から引かれますか？', a: '設定タブで金額を入力した時点で、即座に「今月あと使える（口座）」や「口座残高見込み」からマイナスされます。「先取り貯金」として計算するためです。' },
+        { q: '積立総額が増えていない気がします', a: '積立総額は「先月までの積立完了分 ＋ 今月の積立予定額」で表示しています。\n毎月1日になると、自動的に今月分が加算されて表示されます。' },
+        { q: '特別費ってなに？', a: '冠婚葬祭や旅行など、通常の月予算とは別枠で管理したい出費です。\n支出入力時に「特別」ボタンをONにすると、通常の予算バーからは引かれずに記録されますが、現金残高からは減算されます。' },
+      ]
+    },
+    {
+      category: '⚙️ 設定・操作',
+      items: [
+        { q: 'カードの引き落とし額はどこで設定するの？', a: '設定タブの「資金計画・引落日」からカードごとに設定できます。' },
+        { q: 'カード払いの固定費はどこで引かれていますか？', a: '「カードの引き落とし額」の中に含まれている前提で計算しています。\nそのため、「引き落とし計」の中の「現金の固定費」からは除外されています（二重計上防止のため）。' },
+        { q: '来月の設定はどうすればいいですか？', a: '月が変わったら、設定タブの下部にある「設定をコピー」ボタンを押してください。\n先月や過去の月の設定（予算、固定費、積立額など）をそのまま引き継げます。' },
+        { q: 'データのバックアップはできますか？', a: '設定タブの「全データをCSV出力」から、これまでの全取引データをダウンロードできます。Excelなどで管理したい場合にご利用ください。' },
+      ]
+    }
   ];
+
+  // ✅ FAQ検索ロジック
+  const filteredFaqData = useMemo(() => {
+    if (!faqSearchText) return FAQ_DATA;
+    const lowerText = faqSearchText.toLowerCase();
+    return FAQ_DATA.map(cat => ({
+      ...cat,
+      items: cat.items.filter(item => 
+        item.q.toLowerCase().includes(lowerText) || item.a.toLowerCase().includes(lowerText)
+      )
+    })).filter(cat => cat.items.length > 0);
+  }, [faqSearchText]);
 
   const showToastMsg = (msg) => {
     setToast({ visible: true, message: msg });
@@ -429,20 +464,13 @@ function AppMain() {
     const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
 
     const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    
-    // カードの残り予算
     const cardRemaining = totalBudget - fixedTotal - spentCard;
-    // 変動費予算（カードで使っていい額）
     const variableBudget = totalBudget - fixedTotal;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
-    
-    // 現金支出（特別費含む）
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    // ✅ FIX: 積立額も引く（ユーザー要望により復活）
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
@@ -792,7 +820,6 @@ function AppMain() {
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p>
                           <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
-                          {/* ✅ 修正: 変動費予算と利用済額を表示 */}
                           <div className="flex gap-3 text-[10px] text-zinc-500 mt-1">
                             <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
                             <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
@@ -1064,26 +1091,49 @@ function AppMain() {
                   <div className="space-y-4">
                     {settingTab === 'faq' && (
                         <div className="space-y-3 animate-in slide-in-from-right-2">
-                            <SimpleCard className="overflow-hidden">
-                                <div className="divide-y divide-white/5">
-                                    {FAQ_LIST.map((item, idx) => (
-                                        <div key={idx} className="p-4 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setExpandedFaq(expandedFaq === idx ? null : idx)}>
-                                            <div className="flex justify-between items-start gap-4">
-                                                <div className="flex items-start gap-3">
-                                                    <HelpCircle size={18} className="text-zinc-500 mt-0.5 shrink-0" />
-                                                    <span className="text-sm font-bold text-zinc-200">{item.q}</span>
+                            {/* ✅ 検索バー */}
+                            <div className="relative mb-4">
+                                <input
+                                    type="text"
+                                    value={faqSearchText}
+                                    onChange={(e) => setFaqSearchText(e.target.value)}
+                                    placeholder="キーワードで検索 (例: 積立, カード)"
+                                    className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors"
+                                />
+                                <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+                            </div>
+
+                            <div className="space-y-4">
+                                {filteredFaqData.length > 0 ? (
+                                    filteredFaqData.map((section, sIdx) => (
+                                        <div key={sIdx}>
+                                            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 pl-2">{section.category}</h3>
+                                            <SimpleCard className="overflow-hidden">
+                                                <div className="divide-y divide-white/5">
+                                                    {section.items.map((item, idx) => (
+                                                        <div key={idx} className="p-4 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => setExpandedFaq(expandedFaq === `${sIdx}-${idx}` ? null : `${sIdx}-${idx}`)}>
+                                                            <div className="flex justify-between items-start gap-4">
+                                                                <div className="flex items-start gap-3">
+                                                                    <HelpCircle size={18} className="text-zinc-500 mt-0.5 shrink-0" />
+                                                                    <span className="text-sm font-bold text-zinc-200 leading-snug">{item.q}</span>
+                                                                </div>
+                                                                <ChevronDown size={16} className={`text-zinc-500 transition-transform shrink-0 ${expandedFaq === `${sIdx}-${idx}` ? 'rotate-180' : ''}`} />
+                                                            </div>
+                                                            {expandedFaq === `${sIdx}-${idx}` && (
+                                                                <div className="mt-3 pl-8 text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                                                                    {item.a}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <ChevronDown size={16} className={`text-zinc-500 transition-transform ${expandedFaq === idx ? 'rotate-180' : ''}`} />
-                                            </div>
-                                            {expandedFaq === idx && (
-                                                <div className="mt-3 pl-8 text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
-                                                    {item.a}
-                                                </div>
-                                            )}
+                                            </SimpleCard>
                                         </div>
-                                    ))}
-                                </div>
-                            </SimpleCard>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-10 text-zinc-500 text-xs">見つかりませんでした</div>
+                                )}
+                            </div>
                         </div>
                     )}
                     {settingTab === 'budget' && (
