@@ -462,10 +462,7 @@ function AppMain() {
     const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
 
     const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    
-    // カードの残り予算
     const cardRemaining = totalBudget - fixedTotal - spentCard;
-    // 変動費予算（カードで使っていい額）
     const variableBudget = totalBudget - fixedTotal;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
@@ -822,7 +819,6 @@ function AppMain() {
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p>
                           <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
-                          {/* ✅ 修正: 変動費予算と利用済額を表示 */}
                           <div className="flex gap-3 text-[10px] text-zinc-500 mt-1">
                             <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
                             <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
@@ -1360,30 +1356,45 @@ function AppMain() {
 
                   <input type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)" />
 
-                  {/* ✅ 日付 / カテゴリ / 特別費（横並び） */}
-                  <div className="grid grid-cols-3 gap-x-3 w-full">
-                    <div className="flex flex-col gap-2">
+                  {/* ✅ 修正：日付 / カテゴリ / 特別費 のレイアウト調整 */}
+                  <div className="flex gap-3 w-full">
+                    {/* 日付 */}
+                    <div className="flex-[1.2] flex flex-col gap-2 min-w-0">
                       <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label>
-                      <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold" />
+                      <input
+                        type="date"
+                        value={inputDate}
+                        onChange={e => setInputDate(e.target.value)}
+                        className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-3 text-white outline-none font-bold"
+                      />
                     </div>
-                    <div className="flex flex-col gap-2">
+
+                    {/* カテゴリ */}
+                    <div className="flex-[1.5] flex flex-col gap-2 min-w-0">
                       <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label>
                       <div className="relative w-full">
-                        <select value={inputCategory} onChange={e => setInputCategory(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-2 text-white outline-none font-bold appearance-none">
+                        <select
+                          value={inputCategory}
+                          onChange={e => setInputCategory(e.target.value)}
+                          className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-3 text-white outline-none font-bold appearance-none truncate"
+                        >
                           {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <ChevronDown size={14} className="absolute right-3 top-3.5 text-zinc-500 pointer-events-none" />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">特別</label>
+
+                    {/* 特別 */}
+                    <div className="flex flex-col gap-2 shrink-0 items-center">
+                      <label className="text-[9px] text-zinc-500 uppercase font-black">特別</label>
                       <button
                         type="button"
                         onClick={() => setInputIsSpecial(prev => !prev)}
-                        className={`w-full h-11 rounded-lg border transition-colors flex items-center justify-center ${inputIsSpecial ? 'bg-white border-white' : 'bg-black/30 border-white/10'}`}
+                        className="h-11 w-12 flex items-center justify-center active:scale-95 transition-transform"
                       >
-                        <div className={`h-6 w-12 rounded-full border flex items-center px-1 transition-colors ${inputIsSpecial ? 'bg-black/10 border-black/10' : 'bg-black/20 border-white/10'}`}>
-                          <div className={`h-4 w-4 rounded-full transition-transform ${inputIsSpecial ? 'bg-black translate-x-6' : 'bg-white/70 translate-x-0'}`} />
+                        {/* トグルスイッチ本体 */}
+                        <div className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out border ${inputIsSpecial ? 'bg-white border-white' : 'bg-black/40 border-white/10'}`}>
+                          <div className={`w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${inputIsSpecial ? 'translate-x-4 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
                         </div>
                       </button>
                     </div>
