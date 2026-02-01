@@ -306,7 +306,7 @@ function AppMain() {
 
   const FAQ_LIST = [
     { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
-    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'はい、引かれています。\n「現金予算」から「今の出費」と「積立額」を差し引いた、純粋に使える残高を表示しています。' },
+    { q: '「今月あと使える（口座）」から積立金は引かれていますか？', a: 'いいえ、引かれていません。\n「現金予算」から「今の出費」だけを引いた残高です。\n積立は「口座残高見込み」の方で、口座からなくなるお金として計算されています。' },
     { q: '入金ボタンがないけど、積立はどうやるの？', a: '設定した積立額は、毎月自動的に「支出」として計算され、積立総額に加算された状態で表示されます。手動での入金操作は不要です。' },
     { q: 'カードの引き落とし額はどこで設定するの？', a: '設定タブの「資金計画・引落日」からカードごとに設定できます。' },
     { q: '特別費ってなに？', a: '冠婚葬祭や旅行など、通常の月予算とは別枠で管理したい出費です。\n支出入力時に「特別」ボタンをONにすると、通常の予算バーからは引かれずに記録されますが、現金残高からは減算されます。' },
@@ -430,10 +430,13 @@ function AppMain() {
     const cardRemaining = totalBudget - fixedTotal - spentCard;
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
+    
+    // 現金支出（特別費含む）
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    const cashRemaining = cashBudget - spentCash - savingsAmount;
+    const cashRemaining = cashBudget - spentCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
@@ -454,7 +457,7 @@ function AppMain() {
       cashBudget,
       bankBalanceProjected,
       fixedTotal,
-      fixedCard, // ✅ カード固定費を表示するために追加
+      fixedCard, // カード固定費
       totalWithdrawal,
       withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
