@@ -469,7 +469,6 @@ function AppMain() {
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    // 現金予算から積立額も引く
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
