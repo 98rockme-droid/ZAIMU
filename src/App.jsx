@@ -304,7 +304,6 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
 
-  // ✅ FAQ更新
   const FAQ_LIST = [
     { q: '「今月あと使える（カード）」の計算式は？', a: '生活費予算（総枠） － 固定費（全額） － 今のカード出費 です。\nこれは「固定費を除いた、今月カードで使って良い変動費の予算」を表しています。' },
     { q: '「口座残高見込み」の計算式は？', a: '手取り給与 － (現金の固定費 + カード引き落とし額 + 今月の積立額) です。\n※食費などの変動費はここからは引かれていません。' },
@@ -429,17 +428,14 @@ function AppMain() {
     const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
 
     const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    
-    // ✅ 修正: カードの残り予算
     const cardRemaining = totalBudget - fixedTotal - spentCard;
-    // ✅ 追加: 変動費予算（カードで使っていい額）
-    const variableBudget = totalBudget - fixedTotal;
+    const variableBudget = totalBudget - fixedTotal; // ✅ 変動費予算
 
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     const spentCash = transactions.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const savingsAmount = Number(monthlyData?.savings || 0);
 
-    const cashRemaining = cashBudget - spentCash - savingsAmount;
+    const cashRemaining = cashBudget - spentCash;
 
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
     const totalWithdrawal = fixedCash + billTotal + savingsAmount;
@@ -455,12 +451,13 @@ function AppMain() {
 
     return {
       cardRemaining,
-      variableBudget, // ✅
+      variableBudget, // ✅ 変動費予算
       cashRemaining,
       cardBudget: totalBudget,
       cashBudget,
       bankBalanceProjected,
       fixedTotal,
+      fixedCard,
       totalWithdrawal,
       withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
@@ -471,6 +468,7 @@ function AppMain() {
       lastCatTotals,
       totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
+      spentCard, // ✅ カード利用済額
       dailyTotals: normalTx.reduce((acc, t) => { const d = new Date(t.date).getDate(); acc[d] = (acc[d] || 0) + (Number(t.amount) || 0); return acc; }, {}),
       specialTotalSpent,
       lastSpecialTotalSpent
@@ -786,8 +784,11 @@ function AppMain() {
                         <div>
                           <p className="text-[10px] text-zinc-500 uppercase">今月あと使える（カード）</p>
                           <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
-                          {/* ✅ 変動費予算の表示 */}
-                          <p className="text-[10px] text-zinc-500 mt-1">(変動費予算: ¥{summary.variableBudget.toLocaleString()})</p>
+                          {/* ✅ 修正: 変動費予算と利用済額を表示 */}
+                          <div className="flex gap-3 text-[10px] text-zinc-500 mt-1">
+                            <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
+                            <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
+                          </div>
                         </div>
                         <div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div>
                       </div>
