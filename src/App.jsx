@@ -84,12 +84,14 @@ const getMonthString = (date) => {
 const formatMonthJP = (monthStr) => {
   if (!monthStr) return "";
   const [y, m] = monthStr.split('-');
+  if (!y || !m) return "";
   return `${y}年 ${Number(m)}月`;
 };
 
 const formatDateShort = (isoDateStr) => {
   if (!isoDateStr) return '';
   const d = new Date(isoDateStr);
+  if (isNaN(d.getTime())) return ''; // エラー回避
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
@@ -107,11 +109,15 @@ const toNumber = (val) => {
   return Number.isFinite(num) ? num : 0;
 };
 
-const toISODateSafe = (yyyyMmDd) => new Date(`${yyyyMmDd}T12:00:00`).toISOString();
+const toISODateSafe = (yyyyMmDd) => {
+  if (!yyyyMmDd) return new Date().toISOString();
+  return new Date(`${yyyyMmDd}T12:00:00`).toISOString();
+};
 
 const isoToLocalYMD = (iso) => {
   if (!iso) return getTodayString();
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return getTodayString(); // エラー回避
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -140,7 +146,7 @@ const normalizeMonthlyData = (data) => {
     confirmedPayments: d.confirmedPayments || [],
     savings: d.savings || 0,
     isSavingsDone: d.isSavingsDone || false,
-    memo: d.memo || '' // ✅ メモフィールド
+    memo: d.memo || '' 
   };
 };
 
@@ -167,6 +173,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="h-screen w-full bg-[#121212] text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
           <h1 className="text-xl font-bold text-red-400">エラーが発生しました</h1>
+          <p className="text-xs text-zinc-400 text-center">画面を再読み込みしてください。</p>
           <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm">再読み込み</button>
         </div>
       );
@@ -306,7 +313,6 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
-  // ✅ メモ用の状態
   const [memoText, setMemoText] = useState('');
 
   const FAQ_DATA = [
@@ -453,7 +459,6 @@ function AppMain() {
     fetchSavingsTotalToMonth();
   }, [user, month]);
 
-  // ✅ DBのメモ内容をローカルステートに同期
   useEffect(() => {
     setMemoText(monthlyData?.memo || '');
   }, [monthlyData?.memo]);
@@ -485,9 +490,17 @@ function AppMain() {
     const withdrawalOnly = fixedCash + billTotal;
     const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
 
-    const catTotals = normalTx.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + (Number(t.amount) || 0); return acc; }, {});
+    const catTotals = normalTx.reduce((acc, t) => { 
+      const cat = t.category || '未分類';
+      acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0); 
+      return acc; 
+    }, {});
     const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name] || 0), 0);
-    const lastCatTotals = normalLastTx.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + (Number(t.amount) || 0); return acc; }, {});
+    const lastCatTotals = normalLastTx.reduce((acc, t) => { 
+      const cat = t.category || '未分類';
+      acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0); 
+      return acc; 
+    }, {});
 
     const specialTotalSpent = transactions.filter(t => t.isSpecial === true).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const lastSpecialTotalSpent = (lastMonthTransactions || []).filter(t => t.isSpecial === true).reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -512,7 +525,14 @@ function AppMain() {
       totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       spentCard, 
-      dailyTotals: normalTx.reduce((acc, t) => { const d = new Date(t.date).getDate(); acc[d] = (acc[d] || 0) + (Number(t.amount) || 0); return acc; }, {}),
+      dailyTotals: normalTx.reduce((acc, t) => { 
+        if (!t.date) return acc;
+        const dObj = new Date(t.date);
+        if (isNaN(dObj.getTime())) return acc;
+        const d = dObj.getDate(); 
+        acc[d] = (acc[d] || 0) + (Number(t.amount) || 0); 
+        return acc; 
+      }, {}),
       specialTotalSpent,
       lastSpecialTotalSpent
     };
@@ -615,7 +635,6 @@ function AppMain() {
     } catch (e) { console.error(e); showToastMsg('エラー'); }
   };
   
-  // ✅ メモの保存処理
   const handleMemoBlur = async () => {
     if (!user) return;
     if (memoText !== (monthlyData.memo || '')) {
@@ -720,7 +739,7 @@ function AppMain() {
 
   /* --- OTHERS --- */
   const finalFilteredTx = transactions.filter(t => {
-    const matchSearch = searchText === '' || (t.title || '').includes(searchText);
+    const matchSearch = searchText === '' || String(t.title || '').includes(searchText);
     const matchCat = filter.category === 'ALL' || t.category === filter.category;
     const matchMethod = filter.method === 'ALL' || t.paymentMethod === filter.method;
     const matchSpecial = !filter.special || t.isSpecial === true;
@@ -730,6 +749,7 @@ function AppMain() {
   const calendarDaysList = useMemo(() => {
     if (!month) return [];
     const d = new Date(month + "-01");
+    if (isNaN(d.getTime())) return [];
     const first = d.getDay();
     const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     return [...Array(first).fill(null), ...Array.from({ length: last }, (_, i) => i + 1)];
@@ -1082,7 +1102,6 @@ function AppMain() {
                           </div>
                           <div className="space-y-1">
                             <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
-                            {/* ✅ ここがVercelエラーの原因だったので修正済み */}
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}%` }} /></div>
                           </div>
                         </div>
@@ -1126,7 +1145,6 @@ function AppMain() {
                   <div className="space-y-4">
                     {settingTab === 'faq' && (
                         <div className="space-y-3 animate-in slide-in-from-right-2">
-                            {/* ✅ 検索バー */}
                             <div className="relative mb-4">
                                 <input
                                     type="text"
@@ -1367,7 +1385,7 @@ function AppMain() {
                 <button type="button" onClick={() => setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-5 pb-16">
-                <form onSubmit={handleTxSubmit} className="space-y-6">
+                <form onSubmit={handleTxSubmit} className="space-y-5">
                   <div className="flex gap-2 items-center">
                     <div className="relative flex-1">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span>
@@ -1392,60 +1410,56 @@ function AppMain() {
 
                   <input type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)" />
 
-                  {/* ✅ 完全修正：日付を1段独占させ、絶対に被らないようにする */}
-                  <div className="flex flex-col gap-4 w-full">
-                    {/* 上段：日付 */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label>
+                  {/* ✅ すっきりしたiOS設定風リストUI（絶対かぶらない） */}
+                  <div className="bg-black/20 border border-white/10 rounded-xl flex flex-col overflow-hidden divide-y divide-white/5">
+                    {/* 日付 */}
+                    <div className="flex items-center justify-between px-4 h-12">
+                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">日付</span>
                       <input
                         type="date"
                         value={inputDate}
                         onChange={e => setInputDate(e.target.value)}
-                        className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-sm px-3 text-white outline-none font-bold"
+                        className="bg-transparent text-white text-sm outline-none font-bold text-right flex-1 ml-4 appearance-none"
                       />
                     </div>
-
-                    {/* 下段：カテゴリ と 特別費 */}
-                    <div className="flex gap-3 w-full">
-                      {/* カテゴリ */}
-                      <div className="flex-1 flex flex-col gap-2 min-w-0">
-                        <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label>
-                        <div className="relative w-full">
-                          <select
-                            value={inputCategory}
-                            onChange={e => setInputCategory(e.target.value)}
-                            className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-sm px-3 text-white outline-none font-bold appearance-none truncate"
-                          >
-                            {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          <ChevronDown size={14} className="absolute right-3 top-3.5 text-zinc-500 pointer-events-none" />
-                        </div>
-                      </div>
-
-                      {/* 特別費 */}
-                      <div className="flex flex-col gap-2 shrink-0 items-center">
-                        <label className="text-[9px] text-zinc-500 uppercase font-black">特別</label>
-                        <button
-                          type="button"
-                          onClick={() => setInputIsSpecial(prev => !prev)}
-                          className="h-11 w-14 flex items-center justify-center active:scale-95 transition-transform"
-                        >
-                          <div className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out border ${inputIsSpecial ? 'bg-white border-white' : 'bg-black/40 border-white/10'}`}>
-                            <div className={`w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${inputIsSpecial ? 'translate-x-4 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
-                          </div>
-                        </button>
-                      </div>
+                    {/* カテゴリ */}
+                    <div className="flex items-center justify-between px-4 h-12 relative">
+                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">カテゴリ</span>
+                      <select
+                        value={inputCategory}
+                        onChange={e => setInputCategory(e.target.value)}
+                        className="flex-1 bg-transparent text-white text-sm outline-none font-bold text-right appearance-none pr-6 z-10 ml-4"
+                      >
+                        {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 text-zinc-500 pointer-events-none" />
+                    </div>
+                    {/* 特別費 */}
+                    <div className="flex items-center justify-between px-4 h-12">
+                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">特別費（別枠）</span>
+                      <button
+                        type="button"
+                        onClick={() => setInputIsSpecial(prev => !prev)}
+                        className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${inputIsSpecial ? 'bg-white' : 'bg-black/40 border border-white/10'}`}
+                      >
+                        <div className={`absolute left-0.5 w-5 h-5 rounded-full transition-transform ${inputIsSpecial ? 'translate-x-5 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {paymentMethodsSafe.map(m => (
-                      <label key={m} className="cursor-pointer">
-                        <input type="radio" value={m} checked={inputMethod === m} onChange={e => setInputMethod(e.target.value)} className="peer hidden" required />
-                        {/* ✅ 支払方法のUI変更: 白フチ */}
-                        <div className="px-3 py-2 text-[10px] rounded-lg border border-white/10 bg-white/5 font-black text-zinc-500 peer-checked:border-white peer-checked:text-white peer-checked:bg-transparent transition-all">{m}</div>
-                      </label>
-                    ))}
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] text-zinc-500 uppercase font-black pl-1">支払方法</span>
+                    <div className="flex flex-wrap gap-2">
+                      {paymentMethodsSafe.map(m => (
+                        <label key={m} className="cursor-pointer">
+                          <input type="radio" value={m} checked={inputMethod === m} onChange={e => setInputMethod(e.target.value)} className="peer hidden" required />
+                          {/* ✅ 支払方法：白フチ */}
+                          <div className="px-4 py-2 text-[11px] rounded-lg border font-black text-zinc-400 bg-white/5 border-transparent peer-checked:border-white peer-checked:text-white peer-checked:bg-transparent transition-all">
+                            {m}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   {/* TEMPLATE BUTTONS */}
