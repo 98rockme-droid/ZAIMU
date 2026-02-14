@@ -844,7 +844,8 @@ function AppMain() {
           )}
         </header>
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide relative">
+        {/* ✅ log タブの時だけ main 自体のスクロールを停止 */}
+        <main ref={mainRef} className={`flex-1 relative ${activeTab === 'log' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
           
           {/* ✅ ホーム画面（1ページ化） */}
           {activeTab === 'home' && (
@@ -939,15 +940,16 @@ function AppMain() {
                           <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
                             <div className="flex justify-between items-center text-[9px] font-bold">
                               <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
+                              {/* ✅ オーバー時は赤字アラート */}
                               <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                              {/* ✅ オーバー時はバーを赤く */}
                               <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${Math.min(100, (s / b) * 100)}%` }} />
                             </div>
                           </div>
                         );
                       })}
-                      {/* ✅ 奇数個の時の空欄を綺麗に埋める */}
                       {activeCategories.length % 2 !== 0 && (
                         <div className="bg-[#1E1E1E]" />
                       )}
@@ -984,7 +986,6 @@ function AppMain() {
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
                   <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
-                    {/* ✅ 重複した見出しを削除してスッキリ */}
                     <div className="flex items-end justify-between">
                        <div>
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
@@ -1002,74 +1003,74 @@ function AppMain() {
             </div>
           )}
 
-          {/* 🔽 以降は log, analysis, settings タブの表示 */}
+          {/* ✅ log タブのスクロール修正 */}
           {activeTab === 'log' && (
-            <div className="animate-in fade-in space-y-4">
-              <div className="fixed top-16 left-0 right-0 z-40 bg-[#121212]/95 backdrop-blur w-full max-w-md mx-auto px-4 py-3">
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <div className="flex-1 relative">
-                      <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors" />
-                      <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
-                    </div>
-                    <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
-                      <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView === 'list' ? 'bg-white text-black' : 'text-zinc-500'}`}><AlignJustify size={16} /></button>
-                      <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView === 'calendar' ? 'bg-white text-black' : 'text-zinc-500'}`}><CalendarDays size={16} /></button>
-                    </div>
+            <div className="animate-in fade-in flex flex-col h-full pt-3">
+              {/* フィルター部分（固定ではなく flex-none で配置） */}
+              <div className="flex-none px-4 pb-3 space-y-3 z-10">
+                <div className="flex gap-2">
+                  <div className="flex-1 relative">
+                    <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors" />
+                    <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
                   </div>
+                  <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
+                    <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView === 'list' ? 'bg-white text-black' : 'text-zinc-500'}`}><AlignJustify size={16} /></button>
+                    <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView === 'calendar' ? 'bg-white text-black' : 'text-zinc-500'}`}><CalendarDays size={16} /></button>
+                  </div>
+                </div>
 
-                  <div className="flex gap-2 items-center">
-                    <div className="relative flex-[1] min-w-0">
-                      <select
-                        value={filter.category}
-                        onChange={e => setFilter({ ...filter, category: e.target.value })}
-                        className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
-                      >
-                        <option value="ALL">すべて</option>
-                        {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
-                    </div>
-
-                    <div className="relative flex-[1] min-w-0">
-                      <select
-                        value={filter.method}
-                        onChange={e => setFilter({ ...filter, method: e.target.value })}
-                        className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
-                      >
-                        <option value="ALL">すべて</option>
-                        {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
-                      className={`h-10 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
-                        filter.special ? 'bg-white text-black border-white' : 'bg-black/20 text-zinc-400 border-white/10'
-                      }`}
+                <div className="flex gap-2 items-center">
+                  <div className="relative flex-[1] min-w-0">
+                    <select
+                      value={filter.category}
+                      onChange={e => setFilter({ ...filter, category: e.target.value })}
+                      className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
                     >
-                      特別費
-                    </button>
-
-                    <button type="button" onClick={clearLogFilters} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
-                      <X size={16} className="text-zinc-500" />
-                    </button>
+                      <option value="ALL">すべて</option>
+                      {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
                   </div>
+
+                  <div className="relative flex-[1] min-w-0">
+                    <select
+                      value={filter.method}
+                      onChange={e => setFilter({ ...filter, method: e.target.value })}
+                      className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
+                    >
+                      <option value="ALL">すべて</option>
+                      {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
+                    className={`h-10 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
+                      filter.special ? 'bg-white text-black border-white' : 'bg-black/20 text-zinc-400 border-white/10'
+                    }`}
+                  >
+                    特別費
+                  </button>
+
+                  <button type="button" onClick={clearLogFilters} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
+                    <X size={16} className="text-zinc-500" />
+                  </button>
                 </div>
               </div>
 
-              <div className="px-4 pt-32 pb-32">
+              {/* リスト・カレンダー部分（flex-1 で余白を埋め、カードの「内側」だけスクロール） */}
+              <div className="flex-1 px-4 pb-6 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
-                  <SimpleCard>
+                  <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
                     {finalFilteredTx.length === 0 ? (
                       <div className="py-20 flex flex-col items-center gap-3 text-zinc-600">
                         <Sparkles size={48} className="text-zinc-600" />
                         <p className="text-xs uppercase font-black">No Spending! 🎉</p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-white/5">
+                      <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-hide pb-20">
                         {finalFilteredTx.map(t => (
                           <div key={t.id} onClick={() => startEditingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1086,27 +1087,29 @@ function AppMain() {
                     )}
                   </SimpleCard>
                 ) : (
-                  <SimpleCard className="p-4">
-                    <div className="grid grid-cols-7 gap-1 text-center mb-2 text-[10px] text-zinc-600 uppercase">
+                  <SimpleCard className="flex-1 flex flex-col overflow-hidden p-4">
+                    <div className="flex-none grid grid-cols-7 gap-1 text-center mb-2 text-[10px] text-zinc-600 uppercase">
                       {['日', '月', '火', '水', '木', '金', '土'].map(d => <div key={d}>{d}</div>)}
                     </div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {calendarDaysList.map((day, i) => {
-                        if (!day) return <div key={i} />;
-                        const a = summary.dailyTotals[day] || 0;
-                        const isT = day === new Date().getDate() && month === getMonthString(new Date());
-                        return (
-                          <div
-                            key={i}
-                            onClick={() => openTxModalWithDate(`${month}-${String(day).padStart(2, '0')}`)}
-                            className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative transition-transform active:scale-95 ${isT ? 'border-white bg-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'border-white/5 bg-black/20'}`}
-                          >
-                            <span className={`text-[9px] ${isT ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
-                            {a > 0 && <span className="text-[8px] text-zinc-300 tabular-nums">¥{(a / 1000).toFixed(1)}k</span>}
-                            {(a === 0 && !isT && new Date(month + '-' + String(day).padStart(2, '0')) <= new Date()) && <span className="absolute text-[10px]">✨</span>}
-                          </div>
-                        );
-                      })}
+                    <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
+                      <div className="grid grid-cols-7 gap-1">
+                        {calendarDaysList.map((day, i) => {
+                          if (!day) return <div key={i} />;
+                          const a = summary.dailyTotals[day] || 0;
+                          const isT = day === new Date().getDate() && month === getMonthString(new Date());
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => openTxModalWithDate(`${month}-${String(day).padStart(2, '0')}`)}
+                              className={`aspect-square rounded-lg border flex flex-col items-center justify-center relative transition-transform active:scale-95 ${isT ? 'border-white bg-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'border-white/5 bg-black/20'}`}
+                            >
+                              <span className={`text-[9px] ${isT ? 'text-white' : 'text-zinc-500'}`}>{day}</span>
+                              {a > 0 && <span className="text-[8px] text-zinc-300 tabular-nums">¥{(a / 1000).toFixed(1)}k</span>}
+                              {(a === 0 && !isT && new Date(month + '-' + String(day).padStart(2, '0')) <= new Date()) && <span className="absolute text-[10px]">✨</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </SimpleCard>
                 )}
@@ -1142,18 +1145,18 @@ function AppMain() {
                   <div className="text-right text-[10px] text-zinc-600 uppercase font-black">先月総支出<p className="text-sm font-bold text-zinc-500">¥{summary.lastTotalSpent.toLocaleString()}</p></div>
                 </div>
               </SimpleCard>
-              <SimpleCard className="p-6 space-y-6">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">カテゴリ別 比較</p>
-                <div className="space-y-6">
+              <SimpleCard className="p-0 overflow-hidden">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest m-6 mb-2">カテゴリ別 比較</p>
+                <div className="grid grid-cols-2 gap-px bg-white/5 border-t border-white/5">
                   {getCategoryNames().map(n => {
                     const c = summary.catTotals[n] || 0;
                     const l = summary.lastCatTotals[n] || 0;
                     const max = Math.max(c, l, 1);
                     return (
-                      <div key={n} className="space-y-2">
+                      <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
                         <div className="flex justify-between items-center font-bold text-[10px]">
                           <div className="flex items-center gap-2"><span className="text-sm">{getCategoryIcon(n)}</span><span className="text-zinc-300">{n}</span></div>
-                          <div><span className="text-zinc-600">先月 ¥{l.toLocaleString()}</span> <span className="text-white ml-2">今月 ¥{c.toLocaleString()}</span></div>
+                          <div className="text-right flex flex-col leading-tight"><span className="text-zinc-600 text-[8px]">先月 ¥{l.toLocaleString()}</span> <span className="text-white">今月 ¥{c.toLocaleString()}</span></div>
                         </div>
                         <div className="space-y-1">
                           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
@@ -1162,6 +1165,9 @@ function AppMain() {
                       </div>
                     );
                   })}
+                  {getCategoryNames().length % 2 !== 0 && (
+                    <div className="bg-[#1E1E1E]" />
+                  )}
                 </div>
               </SimpleCard>
             </div>
@@ -1261,7 +1267,6 @@ function AppMain() {
                           <SettingsRow onClick={() => openEdit('totalBudget', { value: monthlyData.budget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">生活費予算（総枠）</span>} right={<span>¥{Number(monthlyData.budget || 0).toLocaleString()}</span>} />
                           <SettingsRow onClick={() => openEdit('cashBudget', { value: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">現金予算（口座用）</span>} right={<span>¥{Number(monthlyData.cashBudget || 0).toLocaleString()}</span>} />
                           <SettingsRow onClick={() => openEdit('savings', { value: monthlyData.savings }, 0)} left={<span className="text-sm text-zinc-200 font-bold">今月の積立額</span>} right={<span>¥{Number(monthlyData.savings || 0).toLocaleString()}</span>} />
-                          {/* ✅ 設定タブの中に「今月のメモ」の入力口を追加 */}
                           <SettingsRow 
                             onClick={() => openEdit('memo', { memo: monthlyData.memo }, 0)} 
                             left={<span className="text-sm text-zinc-200 font-bold">今月のメモ</span>} 
@@ -1386,6 +1391,34 @@ function AppMain() {
                   setShowCalculator(false);
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MEMO MODAL (NEW) */}
+      {isMemoModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
+          <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-white/5 flex justify-between items-center">
+              <h2 className="text-xs font-black uppercase text-white tracking-widest flex items-center gap-2"><Pencil size={14} /> 今月のメモ</h2>
+              <button type="button" onClick={() => setIsMemoModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
+            </div>
+            <div className="p-5 pb-6 flex flex-col gap-4">
+              <textarea
+                value={memoText}
+                onChange={(e) => setMemoText(e.target.value)}
+                placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
+                className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
+                autoFocus
+              />
+              <button 
+                type="button" 
+                onClick={handleMemoSave} 
+                className="w-full h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:scale-95 transition-transform shadow-xl"
+              >
+                保存する
+              </button>
             </div>
           </div>
         </div>
