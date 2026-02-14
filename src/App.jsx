@@ -61,7 +61,7 @@ import {
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
-  apiKey: "AIzaSyD_MMX3Irb-xN1Tql5L0kWJo6BoO_rFX7g",
+  apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
   authDomain: "zaimu-4f79b.firebaseapp.com",
   projectId: "zaimu-4f79b",
   storageBucket: "zaimu-4f79b.firebasestorage.app",
