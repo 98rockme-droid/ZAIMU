@@ -945,6 +945,7 @@ function AppMain() {
 
             {activeTab === 'log' && (
               <div className="animate-in fade-in space-y-4">
+                {/* ✅ 修正: 検索バーエリア下の線を削除 */}
                 <div className="fixed top-16 left-0 right-0 z-40 bg-[#121212]/95 backdrop-blur w-full max-w-md mx-auto px-4 py-3">
                   <div className="space-y-3">
                     <div className="flex gap-2">
@@ -960,6 +961,7 @@ function AppMain() {
 
                     <div className="flex gap-2 items-center">
                       <div className="relative flex-[1] min-w-0">
+                        {/* ✅ 修正: 「全て」に変更、左paddingをpl-3にして微増 */}
                         <select
                           value={filter.category}
                           onChange={e => setFilter({ ...filter, category: e.target.value })}
@@ -972,6 +974,7 @@ function AppMain() {
                       </div>
 
                       <div className="relative flex-[1] min-w-0">
+                        {/* ✅ 修正: 「全て」に変更、左paddingをpl-3にして微増 */}
                         <select
                           value={filter.method}
                           onChange={e => setFilter({ ...filter, method: e.target.value })}
@@ -1382,13 +1385,13 @@ function AppMain() {
               <div className="flex-1 overflow-y-auto p-5 pb-16">
                 <form onSubmit={handleTxSubmit} className="space-y-6">
                   
-                  {/* リスト形式のデザイン（枠なし、背景色付き入力エリアで統一） */}
+                  {/* ✅ 修正：枠なし、背景色付き入力エリアのリスト */}
                   <div className="flex flex-col gap-3">
                     
                     {/* 金額 */}
                     <div className="flex items-center">
                       <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">金額</label>
-                      <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                      <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                         <span className="text-zinc-500 font-bold mr-1">¥</span>
                         <input
                           type="text"
@@ -1412,7 +1415,7 @@ function AppMain() {
                     {/* 内容 */}
                     <div className="flex items-center">
                       <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">内容</label>
-                      <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                      <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                         <input 
                           type="text" 
                           value={inputTitle} 
@@ -1426,7 +1429,7 @@ function AppMain() {
                     {/* 日付 */}
                     <div className="flex items-center">
                       <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">日付</label>
-                      <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                      <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                         <input
                           type="date"
                           value={inputDate}
@@ -1439,7 +1442,7 @@ function AppMain() {
                     {/* カテゴリ */}
                     <div className="flex items-center relative">
                       <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">カテゴリ</label>
-                      <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3 relative">
+                      <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3 relative">
                         <select
                           value={inputCategory}
                           onChange={e => setInputCategory(e.target.value)}
@@ -1454,7 +1457,7 @@ function AppMain() {
                     {/* 特別費 */}
                     <div className="flex items-center">
                       <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">特別費</label>
-                      <div className="flex-1 flex items-center h-12">
+                      <div className="flex-1 flex items-center h-11">
                         <button
                           type="button"
                           onClick={() => setInputIsSpecial(prev => !prev)}
@@ -1467,13 +1470,14 @@ function AppMain() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 py-2 border-t border-white/5">
+                  <div className="flex flex-col gap-1.5">
                     <label className="text-[10px] text-zinc-500 font-black uppercase pl-1">支払方法</label>
                     <div className="flex flex-wrap gap-2">
                       {paymentMethodsSafe.map(m => (
                         <label key={m} className="cursor-pointer">
                           <input type="radio" value={m} checked={inputMethod === m} onChange={e => setInputMethod(e.target.value)} className="peer hidden" required />
-                          <div className="px-4 py-2.5 text-[11px] rounded-lg border font-black text-zinc-400 bg-white/5 border-transparent peer-checked:border-white peer-checked:text-white peer-checked:bg-transparent transition-all">
+                          {/* ✅ 修正：ボタンのパディングを縮小 */}
+                          <div className="px-3 py-2 text-[10px] rounded-lg border font-black text-zinc-400 bg-white/5 border-transparent peer-checked:border-white peer-checked:text-white peer-checked:bg-transparent transition-all">
                             {m}
                           </div>
                         </label>
@@ -1482,7 +1486,7 @@ function AppMain() {
                   </div>
 
                   {!editingTx && (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] text-zinc-500 font-black uppercase pl-1">テンプレート</label>
                       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {(config.templates || []).map((t, idx) => (
@@ -1490,7 +1494,7 @@ function AppMain() {
                             key={idx}
                             type="button"
                             onClick={() => applyTemplate(t)}
-                            className="flex-shrink-0 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-[11px] font-bold text-zinc-400 flex items-center gap-1.5 active:bg-white/10 transition-colors"
+                            className="flex-shrink-0 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-zinc-400 flex items-center gap-1.5 active:bg-white/10 transition-colors"
                           >
                             <Zap size={10} className="text-yellow-400" /> {t.title}
                           </button>
@@ -1499,7 +1503,8 @@ function AppMain() {
                     </div>
                   )}
 
-                  <div className="flex gap-2 pt-6 pb-12 border-t border-white/5">
+                  {/* ✅ 修正：保存ボタンの上にラインを引き、下マージンを調整 */}
+                  <div className="flex gap-2 pt-4 pb-6 border-t border-white/5">
                     {editingTx && (
                       <button type="button" onClick={async () => {
                         if (window.confirm('削除しますか？')) {
@@ -1507,9 +1512,9 @@ function AppMain() {
                           setIsTxModalOpen(false);
                           showToastMsg('削除しました');
                         }
-                      }} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
+                      }} className="w-11 h-11 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
                     )}
-                    <button type="submit" className="flex-1 h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button>
+                    <button type="submit" className="flex-1 h-11 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button>
                   </div>
                 </form>
               </div>
@@ -1532,7 +1537,7 @@ function AppMain() {
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">
                       {editingItem.type === 'salary' ? '手取り給与' : editingItem.type === 'totalBudget' ? '生活費予算' : editingItem.type === 'savings' ? '積立額' : '現金予算'}
                     </label>
-                    <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                    <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1551,13 +1556,13 @@ function AppMain() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">カード名</label>
-                    <div className="flex-1 h-12 flex items-center px-3">
+                    <div className="flex-1 h-11 flex items-center px-3">
                       <span className="text-sm text-white font-bold">{editingItem.data.name}</span>
                     </div>
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">引落額</label>
-                    <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                    <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1570,7 +1575,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">引落日</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input
                         type="number"
                         value={String(editingItem.data.due ?? '')}
@@ -1588,19 +1593,19 @@ function AppMain() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">アイコン</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input value={editingItem.data.icon || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, icon: e.target.value } })} className="flex-1 bg-transparent text-xl text-white outline-none text-left" />
                     </div>
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">名前</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none text-left" placeholder="名前" />
                     </div>
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">月間予算</label>
-                    <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                    <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1620,13 +1625,13 @@ function AppMain() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">固定費名</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none text-left" placeholder="固定費名" />
                     </div>
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">金額</label>
-                    <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                    <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1640,7 +1645,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-center relative">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">支払方法</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3 relative">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3 relative">
                       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none appearance-none pr-6 truncate text-left">
                         {config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
@@ -1655,13 +1660,13 @@ function AppMain() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">名称</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none text-left" placeholder="テンプレート名" />
                     </div>
                   </div>
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">金額</label>
-                    <div className="flex-1 flex items-center bg-[#121212] rounded-lg h-12 px-3">
+                    <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <input
                         type="text"
                         inputMode="decimal"
@@ -1675,7 +1680,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-center relative">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">カテゴリ</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3 relative">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3 relative">
                       <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none appearance-none pr-6 truncate text-left">
                         {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -1684,7 +1689,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-center relative">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">支払方法</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3 relative">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3 relative">
                       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none appearance-none pr-6 truncate text-left">
                         {config.paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
@@ -1699,18 +1704,18 @@ function AppMain() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center">
                     <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">名称</label>
-                    <div className="flex-1 bg-[#121212] rounded-lg h-12 flex items-center px-3">
+                    <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="flex-1 w-full bg-transparent text-white font-bold text-sm outline-none text-left" placeholder="支払方法名" />
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-2 pt-6 pb-12 border-t border-white/5">
+              <div className="flex gap-2 pt-4 pb-6 border-t border-white/5">
                 {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'savings', 'bill'].includes(editingItem.type) && (
-                  <button onClick={handleDeleteItem} className="w-12 h-12 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
+                  <button onClick={handleDeleteItem} className="w-11 h-11 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
                 )}
-                <button onClick={handleSettingsSave} className="flex-1 h-12 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button>
+                <button onClick={handleSettingsSave} className="flex-1 h-11 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button>
               </div>
             </div>
           </div>
