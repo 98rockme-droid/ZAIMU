@@ -313,15 +313,14 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
-  const [memoText, setMemoText] = useState('');
-  const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
+  // ✅ ホーム画面のメモ展開状態
+  const [isMemoExpanded, setIsMemoExpanded] = useState(false);
 
   // ✅ アンカーリンク用のRef
   const balanceRef = useRef(null);
   const categoryRef = useRef(null);
   const accountRef = useRef(null);
   const savingsRef = useRef(null);
-  const memoRef = useRef(null);
 
   const scrollToSection = (ref) => {
     if (ref && ref.current) {
@@ -472,10 +471,6 @@ function AppMain() {
     };
     fetchSavingsTotalToMonth();
   }, [user, month]);
-
-  useEffect(() => {
-    setMemoText(monthlyData?.memo || '');
-  }, [monthlyData?.memo]);
 
   /* --- SUMMARY --- */
   const summary = useMemo(() => {
@@ -648,18 +643,6 @@ function AppMain() {
       setIsTxModalOpen(false);
     } catch (e) { console.error(e); showToastMsg('エラー'); }
   };
-  
-  const handleMemoSave = async () => {
-    if (!user) return;
-    try {
-      await setDoc(doc(db, 'users', user.uid, 'months', month), { memo: memoText }, { merge: true });
-      showToastMsg('メモを保存しました');
-      setIsMemoModalOpen(false);
-    } catch (e) {
-      console.error(e);
-      showToastMsg('メモの保存に失敗しました');
-    }
-  };
 
   /* --- SETTINGS OPERATIONS --- */
   const openEdit = (type, data, index) => setEditingItem({ type, data: { ...data }, index });
@@ -680,6 +663,9 @@ function AppMain() {
         await setDoc(doc(db, 'users', user.uid, 'months', month), { cashBudget: toNumber(data.value) }, { merge: true });
       } else if (type === 'savings') {
         await setDoc(doc(db, 'users', user.uid, 'months', month), { savings: toNumber(data.value) }, { merge: true });
+      } else if (type === 'memo') {
+        // ✅ メモの保存処理
+        await setDoc(doc(db, 'users', user.uid, 'months', month), { memo: data.memo || '' }, { merge: true });
       } else if (type === 'bill') {
         const newBills = { ...(monthlyData.cardBills || {}), [data.name]: toNumber(data.bill) };
         const newDues = { ...(monthlyData.cardDueDates || {}), [data.name]: data.due };
@@ -854,21 +840,40 @@ function AppMain() {
           
           {/* ✅ ホーム画面：ジャンプメニューと1ページ統合 */}
           {activeTab === 'home' && (
-            <>
-              <div className="sticky top-0 z-30 bg-[#121212]/95 backdrop-blur-md px-4 py-2 border-b border-white/5 shadow-lg">
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  <button onClick={() => scrollToSection(balanceRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">残高</button>
-                  <button onClick={() => scrollToSection(categoryRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">カテゴリ</button>
-                  <button onClick={() => scrollToSection(accountRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">口座・引落</button>
-                  <button onClick={() => scrollToSection(savingsRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">貯金</button>
-                  <button onClick={() => scrollToSection(memoRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">メモ</button>
+            <div className="flex flex-col relative">
+              {/* ジャンプメニュー（上部固定） */}
+              <div className="sticky top-0 z-30 flex flex-col">
+                <div className="bg-[#121212]/95 backdrop-blur-md px-4 py-2 shadow-lg">
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                    <button onClick={() => scrollToSection(balanceRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">残高</button>
+                    <button onClick={() => scrollToSection(categoryRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">カテゴリ</button>
+                    <button onClick={() => scrollToSection(accountRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">口座・引落</button>
+                    <button onClick={() => scrollToSection(savingsRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">貯金</button>
+                  </div>
                 </div>
+
+                {/* 📌 LINE風 追従アナウンス（メモ） */}
+                {monthlyData.memo && (
+                  <div 
+                    onClick={() => setIsMemoExpanded(!isMemoExpanded)}
+                    className="bg-zinc-900 border-b border-white/10 px-4 py-2.5 flex flex-col cursor-pointer transition-all duration-300 relative z-20 shadow-md"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-[12px] mt-0.5">📌</span>
+                      <div className={`flex-1 text-xs text-zinc-300 leading-relaxed transition-all duration-300 ${isMemoExpanded ? 'whitespace-pre-wrap break-all' : 'truncate block'}`}>
+                        {monthlyData.memo}
+                      </div>
+                      <ChevronDown size={14} className={`text-zinc-500 shrink-0 transition-transform mt-0.5 ${isMemoExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* メインコンテンツ */}
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
                 
                 {/* ① 残高セクション */}
-                <div ref={balanceRef} className="space-y-4 scroll-mt-20">
+                <div ref={balanceRef} className="space-y-4 scroll-mt-28">
                   <SimpleCard className="p-0">
                     <div className="p-6 border-b border-white/5">
                       <div className="flex justify-between mb-4">
@@ -904,7 +909,7 @@ function AppMain() {
                 </div>
 
                 {/* ② カテゴリセクション */}
-                <div ref={categoryRef} className="space-y-3 scroll-mt-20">
+                <div ref={categoryRef} className="space-y-3 scroll-mt-28">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 予算</h3>
                   <div className="grid grid-cols-2 gap-3">
                     {getCategoryNames().map(n => {
@@ -925,7 +930,7 @@ function AppMain() {
                 </div>
 
                 {/* ③ 口座・引落セクション */}
-                <div ref={accountRef} className="space-y-3 scroll-mt-20">
+                <div ref={accountRef} className="space-y-3 scroll-mt-28">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">口座残高・引落予定</h3>
                   {activeAlerts.length > 0 && (
                     <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
@@ -950,7 +955,7 @@ function AppMain() {
                 </div>
 
                 {/* ④ 貯金セクション */}
-                <div ref={savingsRef} className="space-y-3 scroll-mt-20">
+                <div ref={savingsRef} className="space-y-3 scroll-mt-28">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
                   <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
                     <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
@@ -969,28 +974,11 @@ function AppMain() {
                   </SimpleCard>
                 </div>
 
-                {/* ⑤ メモセクション */}
-                <div ref={memoRef} className="space-y-3 scroll-mt-20">
-                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のメモ</h3>
-                  <button 
-                    onClick={() => setIsMemoModalOpen(true)}
-                    className="w-full text-left bg-[#1E1E1E] rounded-xl border border-white/5 p-4 shadow-lg active:scale-95 transition-transform"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold flex items-center gap-1.5">
-                        <Pencil size={12} /> タップして編集
-                      </p>
-                      <ChevronRight size={14} className="text-zinc-600" />
-                    </div>
-                    <p className={`text-xs leading-relaxed ${memoText ? 'text-zinc-300' : 'text-zinc-600'}`}>
-                      {memoText ? (memoText.length > 50 ? memoText.slice(0, 50) + '...' : memoText) : 'メモはありません'}
-                    </p>
-                  </button>
-                </div>
               </div>
-            </>
+            </div>
           )}
 
+          {/* 🔽 以降は log, analysis, settings タブの表示 */}
           <div className="p-4 pb-32">
             {activeTab === 'log' && (
               <div className="animate-in fade-in space-y-4">
@@ -1250,6 +1238,12 @@ function AppMain() {
                             <SettingsRow onClick={() => openEdit('totalBudget', { value: monthlyData.budget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">生活費予算（総枠）</span>} right={<span>¥{Number(monthlyData.budget || 0).toLocaleString()}</span>} />
                             <SettingsRow onClick={() => openEdit('cashBudget', { value: monthlyData.cashBudget }, 0)} left={<span className="text-sm text-zinc-200 font-bold">現金予算（口座用）</span>} right={<span>¥{Number(monthlyData.cashBudget || 0).toLocaleString()}</span>} />
                             <SettingsRow onClick={() => openEdit('savings', { value: monthlyData.savings }, 0)} left={<span className="text-sm text-zinc-200 font-bold">今月の積立額</span>} right={<span>¥{Number(monthlyData.savings || 0).toLocaleString()}</span>} />
+                            {/* ✅ 設定タブの中に「今月のメモ」の入力口を追加 */}
+                            <SettingsRow 
+                              onClick={() => openEdit('memo', { memo: monthlyData.memo }, 0)} 
+                              left={<span className="text-sm text-zinc-200 font-bold">今月のメモ</span>} 
+                              right={<span className="text-[10px] text-zinc-500 truncate max-w-[100px]">{monthlyData.memo ? '設定済み' : '未設定'}</span>} 
+                            />
                           </div>
                         </SimpleCard>
                         <div className="text-[10px] text-zinc-500 uppercase font-black pl-1">カード設定</div>
@@ -1370,34 +1364,6 @@ function AppMain() {
                   setShowCalculator(false);
                 }}
               />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ MEMO MODAL (NEW) */}
-      {isMemoModalOpen && (
-        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
-          <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-white/5 flex justify-between items-center">
-              <h2 className="text-xs font-black uppercase text-white tracking-widest flex items-center gap-2"><Pencil size={14} /> 今月のメモ</h2>
-              <button type="button" onClick={() => setIsMemoModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
-            </div>
-            <div className="p-5 pb-6 flex flex-col gap-4">
-              <textarea
-                value={memoText}
-                onChange={(e) => setMemoText(e.target.value)}
-                placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
-                className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
-                autoFocus
-              />
-              <button 
-                type="button" 
-                onClick={handleMemoSave} 
-                className="w-full h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:scale-95 transition-transform shadow-xl"
-              >
-                保存する
-              </button>
             </div>
           </div>
         </div>
@@ -1620,6 +1586,20 @@ function AppMain() {
                 </div>
               )}
 
+              {/* ✅ Memo Edit */}
+              {editingItem.type === 'memo' && (
+                <div className="flex flex-col gap-3">
+                  <label className="text-[10px] text-zinc-500 font-black uppercase pl-1">今月のメモ</label>
+                  <textarea
+                    value={editingItem.data.memo || ''}
+                    onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
+                    className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
+                    placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
+                    autoFocus
+                  />
+                </div>
+              )}
+
               {/* Bills */}
               {editingItem.type === 'bill' && (
                 <>
@@ -1779,7 +1759,7 @@ function AppMain() {
               )}
 
               <div className="flex gap-2 pt-4 border-t border-white/5">
-                {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'savings', 'bill'].includes(editingItem.type) && (
+                {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'savings', 'bill', 'memo'].includes(editingItem.type) && (
                   <button onClick={handleDeleteItem} className="w-11 h-11 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
                 )}
                 <button onClick={handleSettingsSave} className="flex-1 h-11 bg-white text-black rounded-lg font-black text-xs uppercase active:bg-zinc-200">保存</button>
