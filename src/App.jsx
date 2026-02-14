@@ -140,7 +140,7 @@ const normalizeMonthlyData = (data) => {
     confirmedPayments: d.confirmedPayments || [],
     savings: d.savings || 0,
     isSavingsDone: d.isSavingsDone || false,
-    memo: d.memo || '' // ✅ メモフィールドを追加
+    memo: d.memo || ''
   };
 };
 
@@ -306,7 +306,6 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
-  // ✅ メモ用の状態
   const [memoText, setMemoText] = useState('');
 
   const FAQ_DATA = [
@@ -453,7 +452,6 @@ function AppMain() {
     fetchSavingsTotalToMonth();
   }, [user, month]);
   
-  // ✅ DBのメモ内容をローカルステートに同期
   useEffect(() => {
     setMemoText(monthlyData?.memo || '');
   }, [monthlyData?.memo]);
@@ -615,7 +613,6 @@ function AppMain() {
     } catch (e) { console.error(e); showToastMsg('エラー'); }
   };
   
-  // ✅ メモの保存処理
   const handleMemoBlur = async () => {
     if (!user) return;
     if (memoText !== (monthlyData.memo || '')) {
@@ -861,7 +858,7 @@ function AppMain() {
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     
-                    {/* ✅ メモ機能の追加 */}
+                    {/* ✅ メモ機能 */}
                     <SimpleCard className="p-4">
                       <p className="text-[10px] text-zinc-500 uppercase font-bold mb-3 flex items-center gap-1.5">
                         <span>📝</span> 今月のメモ
@@ -1126,6 +1123,7 @@ function AppMain() {
                   <div className="space-y-4">
                     {settingTab === 'faq' && (
                         <div className="space-y-3 animate-in slide-in-from-right-2">
+                            {/* ✅ 検索バー */}
                             <div className="relative mb-4">
                                 <input
                                     type="text"
@@ -1366,7 +1364,7 @@ function AppMain() {
                 <button type="button" onClick={() => setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
               </div>
               <div className="flex-1 overflow-y-auto p-5 pb-16">
-                <form onSubmit={handleTxSubmit} className="space-y-6">
+                <form onSubmit={handleTxSubmit} className="space-y-5">
                   <div className="flex gap-2 items-center">
                     <div className="relative flex-1">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-lg font-bold">¥</span>
@@ -1393,58 +1391,62 @@ function AppMain() {
 
                   {/* ✅ 完全修正：2段に分けて絶対被らないようにする */}
                   <div className="flex flex-col gap-4 w-full">
-                    {/* 上段：日付 */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label>
-                      <input
-                        type="date"
-                        value={inputDate}
-                        onChange={e => setInputDate(e.target.value)}
-                        className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-3 text-white outline-none font-bold"
-                      />
-                    </div>
-                    
-                    {/* 下段：カテゴリ と 特別費 */}
-                    <div className="flex gap-3 w-full">
-                      {/* カテゴリ */}
-                      <div className="flex-1 flex flex-col gap-2 min-w-0">
+                    {/* 上段：日付とカテゴリ（50% 50%） */}
+                    <div className="grid grid-cols-2 gap-3 w-full">
+                      <div className="flex flex-col gap-1.5 min-w-0">
+                        <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">日付</label>
+                        <input
+                          type="date"
+                          value={inputDate}
+                          onChange={e => setInputDate(e.target.value)}
+                          className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-[11px] px-2 text-white outline-none font-bold"
+                        />
+                      </div>
+                      
+                      <div className="flex flex-col gap-1.5 min-w-0">
                         <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">カテゴリ</label>
                         <div className="relative w-full">
                           <select
                             value={inputCategory}
                             onChange={e => setInputCategory(e.target.value)}
-                            className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-xs px-3 text-white outline-none font-bold appearance-none truncate"
+                            className="w-full h-11 bg-black/20 border border-white/10 rounded-lg text-[11px] px-2 text-white outline-none font-bold appearance-none truncate"
                           >
                             {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
-                          <ChevronDown size={14} className="absolute right-3 top-3.5 text-zinc-500 pointer-events-none" />
+                          <ChevronDown size={14} className="absolute right-2 top-3.5 text-zinc-500 pointer-events-none" />
                         </div>
-                      </div>
-
-                      {/* 特別 */}
-                      <div className="flex flex-col gap-2 shrink-0 items-center">
-                        <label className="text-[9px] text-zinc-500 uppercase font-black">特別費</label>
-                        <button
-                          type="button"
-                          onClick={() => setInputIsSpecial(prev => !prev)}
-                          className="h-11 w-12 flex items-center justify-center active:scale-95 transition-transform"
-                        >
-                          {/* トグルスイッチ本体 */}
-                          <div className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out border ${inputIsSpecial ? 'bg-white border-white' : 'bg-black/40 border-white/10'}`}>
-                            <div className={`w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${inputIsSpecial ? 'translate-x-4 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
-                          </div>
-                        </button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    {paymentMethodsSafe.map(m => (
-                      <label key={m} className="cursor-pointer">
-                        <input type="radio" value={m} checked={inputMethod === m} onChange={e => setInputMethod(e.target.value)} className="peer hidden" required />
-                        <div className="px-3 py-2 text-[10px] rounded-lg border border-zinc-800 font-black text-zinc-500 peer-checked:bg-white peer-checked:text-black transition-all">{m}</div>
-                      </label>
-                    ))}
+                  {/* ✅ 下段：支払方法と特別費 */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-end mb-1">
+                      <label className="text-[9px] text-zinc-500 uppercase font-black pl-1">支払方法</label>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[9px] text-zinc-500 uppercase font-black">特別費</label>
+                        <button
+                          type="button"
+                          onClick={() => setInputIsSpecial(prev => !prev)}
+                          className="h-6 w-10 flex items-center justify-center active:scale-95 transition-transform"
+                        >
+                          {/* トグルスイッチ本体 */}
+                          <div className={`w-8 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out border ${inputIsSpecial ? 'bg-white border-white' : 'bg-black/40 border-white/10'}`}>
+                            <div className={`w-3.5 h-3.5 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${inputIsSpecial ? 'translate-x-3 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {paymentMethodsSafe.map(m => (
+                        <label key={m} className="cursor-pointer">
+                          <input type="radio" value={m} checked={inputMethod === m} onChange={e => setInputMethod(e.target.value)} className="peer hidden" required />
+                          {/* ✅ 支払方法のUI変更 */}
+                          <div className="px-3 py-2 text-[10px] rounded-lg border border-white/10 bg-white/5 font-black text-zinc-500 peer-checked:border-white peer-checked:text-white peer-checked:bg-transparent transition-all">{m}</div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   {/* TEMPLATE BUTTONS */}
