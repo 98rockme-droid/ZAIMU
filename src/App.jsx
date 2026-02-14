@@ -146,7 +146,7 @@ const normalizeMonthlyData = (data) => {
     confirmedPayments: d.confirmedPayments || [],
     savings: d.savings || 0,
     isSavingsDone: d.isSavingsDone || false,
-    memo: d.memo || '' 
+    memo: d.memo || '' // ✅ メモフィールド
   };
 };
 
@@ -173,7 +173,6 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="h-screen w-full bg-[#121212] text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
           <h1 className="text-xl font-bold text-red-400">エラーが発生しました</h1>
-          <p className="text-xs text-zinc-400 text-center">画面を再読み込みしてください。</p>
           <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white text-black rounded-full font-bold text-sm">再読み込み</button>
         </div>
       );
@@ -294,6 +293,7 @@ function AppMain() {
 
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
+  const [isEditingMemo, setIsEditingMemo] = useState(false); // ✅ メモの編集状態
 
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [faqSearchText, setFaqSearchText] = useState('');
@@ -881,19 +881,34 @@ function AppMain() {
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
                     </SimpleCard>
                     
-                    {/* ✅ メモ機能 */}
-                    <SimpleCard className="p-4">
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-3 flex items-center gap-1.5">
-                        <span>📝</span> 今月のメモ
-                      </p>
-                      <textarea
-                        value={memoText}
-                        onChange={(e) => setMemoText(e.target.value)}
-                        onBlur={handleMemoBlur}
-                        placeholder="例: 貯金から4万円補填予定"
-                        className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-xs text-zinc-300 outline-none focus:border-white/30 transition-colors resize-none min-h-[80px]"
-                      />
-                    </SimpleCard>
+                    {/* ✅ メモ機能：カードをなくしてひっそり表示 */}
+                    <div className="px-1 mt-2">
+                      {isEditingMemo ? (
+                        <textarea
+                          value={memoText}
+                          onChange={(e) => setMemoText(e.target.value)}
+                          onBlur={() => {
+                            handleMemoBlur();
+                            setIsEditingMemo(false);
+                          }}
+                          autoFocus
+                          placeholder="今月のメモを追加 (例: 貯金から4万円補填予定)"
+                          className="w-full bg-transparent border border-white/20 rounded-lg p-3 text-xs text-zinc-300 outline-none focus:border-white/40 transition-colors resize-none min-h-[80px]"
+                        />
+                      ) : (
+                        <div 
+                          onClick={() => setIsEditingMemo(true)}
+                          className="w-full min-h-[40px] text-xs flex items-start gap-2 cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors whitespace-pre-wrap group"
+                        >
+                          <span className="text-zinc-600 mt-0.5 shrink-0"><FileText size={14} /></span>
+                          <div className="flex-1">
+                            <span className={memoText ? "text-zinc-300" : "text-zinc-600 italic"}>
+                              {memoText || "タップしてメモを追加..."}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
@@ -1410,40 +1425,42 @@ function AppMain() {
 
                   <input type="text" value={inputTitle} onChange={e => setInputTitle(e.target.value)} className="w-full h-11 bg-black/20 border border-white/10 rounded-lg px-4 text-sm text-white font-bold outline-none" placeholder="タイトル (例: ランチ)" />
 
-                  {/* ✅ すっきりしたiOS設定風リストUI（絶対かぶらない） */}
+                  {/* ✅ リストUIの配置とラベル固定幅を調整 */}
                   <div className="bg-black/20 border border-white/10 rounded-xl flex flex-col overflow-hidden divide-y divide-white/5">
                     {/* 日付 */}
-                    <div className="flex items-center justify-between px-4 h-12">
-                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">日付</span>
+                    <div className="flex items-center px-4 h-12 gap-4">
+                      <span className="text-[11px] text-zinc-400 font-bold w-14 shrink-0 text-left">日付</span>
                       <input
                         type="date"
                         value={inputDate}
                         onChange={e => setInputDate(e.target.value)}
-                        className="bg-transparent text-white text-sm outline-none font-bold text-right flex-1 ml-4 appearance-none"
+                        className="bg-transparent text-white text-sm outline-none font-bold text-left flex-1 appearance-none"
                       />
                     </div>
                     {/* カテゴリ */}
-                    <div className="flex items-center justify-between px-4 h-12 relative">
-                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">カテゴリ</span>
+                    <div className="flex items-center px-4 h-12 gap-4 relative">
+                      <span className="text-[11px] text-zinc-400 font-bold w-14 shrink-0 text-left">カテゴリ</span>
                       <select
                         value={inputCategory}
                         onChange={e => setInputCategory(e.target.value)}
-                        className="flex-1 bg-transparent text-white text-sm outline-none font-bold text-right appearance-none pr-6 z-10 ml-4"
+                        className="flex-1 bg-transparent text-white text-sm outline-none font-bold text-left appearance-none z-10"
                       >
                         {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                       <ChevronDown size={14} className="absolute right-4 text-zinc-500 pointer-events-none" />
                     </div>
                     {/* 特別費 */}
-                    <div className="flex items-center justify-between px-4 h-12">
-                      <span className="text-[11px] text-zinc-400 font-bold shrink-0">特別費（別枠）</span>
-                      <button
-                        type="button"
-                        onClick={() => setInputIsSpecial(prev => !prev)}
-                        className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${inputIsSpecial ? 'bg-white' : 'bg-black/40 border border-white/10'}`}
-                      >
-                        <div className={`absolute left-0.5 w-5 h-5 rounded-full transition-transform ${inputIsSpecial ? 'translate-x-5 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
-                      </button>
+                    <div className="flex items-center px-4 h-12 gap-4">
+                      <span className="text-[11px] text-zinc-400 font-bold w-14 shrink-0 text-left">特別費</span>
+                      <div className="flex-1 flex justify-start">
+                        <button
+                          type="button"
+                          onClick={() => setInputIsSpecial(prev => !prev)}
+                          className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${inputIsSpecial ? 'bg-white' : 'bg-black/40 border border-white/10'}`}
+                        >
+                          <div className={`absolute left-0.5 w-5 h-5 rounded-full transition-transform ${inputIsSpecial ? 'translate-x-5 bg-black' : 'translate-x-0 bg-zinc-400'}`} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
