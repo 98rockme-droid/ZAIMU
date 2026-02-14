@@ -56,7 +56,7 @@ import {
   ChevronDown,
   PiggyBank,
   HelpCircle,
-  Pencil // ✅ メモアイコン用に追加
+  Pencil
 } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
@@ -274,7 +274,6 @@ function AppMain() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState('home');
-  const [homeView, setHomeView] = useState('spending');
   const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
@@ -314,9 +313,21 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
-  // ✅ メモ用の状態
   const [memoText, setMemoText] = useState('');
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
+
+  // ✅ アンカーリンク用のRef
+  const balanceRef = useRef(null);
+  const categoryRef = useRef(null);
+  const accountRef = useRef(null);
+  const savingsRef = useRef(null);
+  const memoRef = useRef(null);
+
+  const scrollToSection = (ref) => {
+    if (ref && ref.current) {
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const FAQ_DATA = [
     {
@@ -638,7 +649,6 @@ function AppMain() {
     } catch (e) { console.error(e); showToastMsg('エラー'); }
   };
   
-  // ✅ メモの保存処理（モーダル用）
   const handleMemoSave = async () => {
     if (!user) return;
     try {
@@ -840,131 +850,148 @@ function AppMain() {
           )}
         </header>
 
-        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-4">
-          <div className="p-4 pb-32">
-            {activeTab === 'home' && (
-              <div className="space-y-4 animate-in fade-in duration-300">
-                <div className="bg-[#1E1E1E] p-1 rounded-xl flex gap-1 mb-2 border border-white/5">
-                  <button onClick={() => setHomeView('spending')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView === 'spending' ? 'bg-white text-black shadow-lg' : 'text-zinc-500'}`}><LayoutGrid size={14} /> 支出管理</button>
-                  <button onClick={() => setHomeView('forecast')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 ${homeView === 'forecast' ? 'bg-white text-black shadow-lg' : 'text-zinc-500'}`}><ListChecks size={14} /> 収支・予定</button>
+        <main ref={mainRef} className="flex-1 overflow-y-auto scrollbar-hide pt-4 relative">
+          
+          {/* ✅ ホーム画面：ジャンプメニューと1ページ統合 */}
+          {activeTab === 'home' && (
+            <>
+              <div className="sticky top-0 z-30 bg-[#121212]/95 backdrop-blur-md px-4 py-2 border-b border-white/5 shadow-lg">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                  <button onClick={() => scrollToSection(balanceRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">残高</button>
+                  <button onClick={() => scrollToSection(categoryRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">カテゴリ</button>
+                  <button onClick={() => scrollToSection(accountRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">口座・引落</button>
+                  <button onClick={() => scrollToSection(savingsRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">貯金</button>
+                  <button onClick={() => scrollToSection(memoRef)} className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white/10 text-[10px] font-bold text-zinc-300 active:bg-white/20 transition-colors">メモ</button>
                 </div>
-                {homeView === 'spending' ? (
-                  <div className="space-y-4 animate-in slide-in-from-left-2">
-                    
-                    {/* ✅ カードと口座を1つのカードに統合 */}
-                    <SimpleCard className="p-0">
-                      {/* 上段：カード */}
-                      <div className="p-6 border-b border-white/5">
-                        <div className="flex justify-between mb-4">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                              <CreditCard size={12} />
-                              <p>今月あと使える（カード）</p>
-                            </div>
-                            <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
-                            <div className="flex gap-3 text-[10px] text-zinc-500 mt-1.5">
-                              <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
-                              <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
-                            </div>
-                          </div>
-                          <div className="text-right text-[9px] text-zinc-600 uppercase">総枠<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div>
-                        </div>
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
-                      </div>
-
-                      {/* 下段：口座 */}
-                      <div className="p-6 bg-black/10">
-                        <div className="flex justify-between mb-4">
-                          <div>
-                            <div className="flex items-center gap-1.5 mb-1 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                              <Wallet size={12} />
-                              <p>今月あと使える（口座）</p>
-                            </div>
-                            <h2 className={`text-3xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2>
-                          </div>
-                          <div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div>
-                        </div>
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
-                      </div>
-                    </SimpleCard>
-                    
-                    {/* ✅ メモ機能をプレビューのみにして、タップでモーダル展開に */}
-                    <button 
-                      onClick={() => setIsMemoModalOpen(true)}
-                      className="w-full text-left bg-[#1E1E1E] rounded-xl border border-white/5 p-4 shadow-lg active:scale-95 transition-transform"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold flex items-center gap-1.5">
-                          <Pencil size={12} /> 今月のメモ
-                        </p>
-                        <ChevronRight size={14} className="text-zinc-600" />
-                      </div>
-                      <p className={`text-xs leading-relaxed ${memoText ? 'text-zinc-300' : 'text-zinc-600'}`}>
-                        {memoText ? (memoText.length > 50 ? memoText.slice(0, 50) + '...' : memoText) : 'タップしてメモを入力...'}
-                      </p>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-4 animate-in slide-in-from-right-2">
-                    
-                    {/* ✅ 貯金情報を「収支・予定」のトップに統合 */}
-                    <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
-                        <PiggyBank size={16} /> 積立貯金
-                      </div>
-                      <div className="flex items-end justify-between">
-                         <div>
-                           <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
-                           <h3 className="text-2xl font-black text-white">¥{Number(savingsTotalToMonth || 0).toLocaleString()}</h3>
-                         </div>
-                         <div className="text-right">
-                           <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">今月の積立</p>
-                           <p className="text-sm font-bold text-emerald-400">+ ¥{summary.savingsAmount.toLocaleString()}</p>
-                         </div>
-                      </div>
-                    </SimpleCard>
-
-                    {activeAlerts.length > 0 && (
-                      <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
-                        <div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14} /> 支払期日が迫っています</div>
-                        <div className="space-y-2">
-                          {activeAlerts.map(([card, day]) => (
-                            <div key={card} className="flex justify-between items-center bg-black/20 p-2 rounded">
-                              <span className="text-xs font-bold text-white">{card} ({day}日)</span>
-                              <button onClick={() => confirmPayment(card)} className="text-[10px] bg-red-500 text-white px-3 py-1 rounded-full font-bold active:scale-95">完了</button>
-                            </div>
-                          ))}
-                        </div>
-                      </SimpleCard>
-                    )}
-                    <SimpleCard className="p-5 space-y-3">
-                      <div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600" /></div>
-                      <div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div>
-                      <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{Number(summary.withdrawalOnly || 0).toLocaleString()}</span></div>
-                      <div className="flex justify-between items-center text-xs text-zinc-400">積立金<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div>
-                      <div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
-                    </SimpleCard>
-                    <div className="grid grid-cols-2 gap-3">
-                      {getCategoryNames().map(n => {
-                        const s = summary.catTotals[n] || 0;
-                        const b = monthlyData.catBudgets?.[n] || 0;
-                        if (b === 0) return null;
-                        return (
-                          <SimpleCard key={n} className="p-3 space-y-2">
-                            <div className="flex justify-between items-center text-[9px] font-bold">
-                              <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
-                              <span className="text-white">¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
-                            </div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500" style={{ width: `${Math.min(100, (s / b) * 100)}%` }} /></div>
-                          </SimpleCard>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
 
+              <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
+                
+                {/* ① 残高セクション */}
+                <div ref={balanceRef} className="space-y-4 scroll-mt-20">
+                  <SimpleCard className="p-0">
+                    <div className="p-6 border-b border-white/5">
+                      <div className="flex justify-between mb-4">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-1 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                            <CreditCard size={12} />
+                            <p>今月あと使える（カード）</p>
+                          </div>
+                          <h2 className={`text-4xl font-bold mt-1 ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cardRemaining.toLocaleString()}</h2>
+                          <div className="flex gap-3 text-[10px] text-zinc-500 mt-1.5">
+                            <span>変動費予算 ¥{summary.variableBudget.toLocaleString()}</span>
+                            <span>利用済 ¥{summary.spentCard.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className="text-right text-[9px] text-zinc-600 uppercase">総枠<p className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</p></div>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-white transition-all duration-1000" style={{ width: `${summary.cardRemainingPercent}%` }} /></div>
+                    </div>
+                    <div className="p-6 bg-black/10">
+                      <div className="flex justify-between mb-4">
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-1 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                            <Wallet size={12} />
+                            <p>今月あと使える（口座）</p>
+                          </div>
+                          <h2 className={`text-3xl font-bold mt-1 ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>¥{summary.cashRemaining.toLocaleString()}</h2>
+                        </div>
+                        <div className="text-right text-[9px] text-zinc-600 uppercase">軍資金<p className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</p></div>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${summary.cashRemainingPercent}%` }} /></div>
+                    </div>
+                  </SimpleCard>
+                </div>
+
+                {/* ② カテゴリセクション */}
+                <div ref={categoryRef} className="space-y-3 scroll-mt-20">
+                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 予算</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {getCategoryNames().map(n => {
+                      const s = summary.catTotals[n] || 0;
+                      const b = monthlyData.catBudgets?.[n] || 0;
+                      if (b === 0) return null;
+                      return (
+                        <SimpleCard key={n} className="p-3 space-y-2">
+                          <div className="flex justify-between items-center text-[9px] font-bold">
+                            <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
+                            <span className="text-white">¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
+                          </div>
+                          <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500" style={{ width: `${Math.min(100, (s / b) * 100)}%` }} /></div>
+                        </SimpleCard>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ③ 口座・引落セクション */}
+                <div ref={accountRef} className="space-y-3 scroll-mt-20">
+                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">口座残高・引落予定</h3>
+                  {activeAlerts.length > 0 && (
+                    <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
+                      <div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14} /> 支払期日が迫っています</div>
+                      <div className="space-y-2">
+                        {activeAlerts.map(([card, day]) => (
+                          <div key={card} className="flex justify-between items-center bg-black/20 p-2 rounded">
+                            <span className="text-xs font-bold text-white">{card} ({day}日)</span>
+                            <button onClick={() => confirmPayment(card)} className="text-[10px] bg-red-500 text-white px-3 py-1 rounded-full font-bold active:scale-95">完了</button>
+                          </div>
+                        ))}
+                      </div>
+                    </SimpleCard>
+                  )}
+                  <SimpleCard className="p-5 space-y-3">
+                    <div className="flex justify-between items-end"><p className="text-[10px] text-zinc-500 uppercase">口座残高見込み（引落後）</p><Banknote size={16} className="text-zinc-600" /></div>
+                    <div className="flex justify-between items-center text-xs text-zinc-400">給与収入<span className="text-sm font-bold text-white">+ ¥{monthlyData.salary.toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center text-xs text-zinc-400">引き落とし計<span className="text-sm font-bold text-red-400">- ¥{Number(summary.withdrawalOnly || 0).toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center text-xs text-zinc-400">積立金<span className="text-sm font-bold text-red-400">- ¥{summary.savingsAmount.toLocaleString()}</span></div>
+                    <div className="pt-2 border-t border-white/5 flex justify-between items-end text-xs font-bold text-zinc-500">残高予想<span className="text-2xl font-black text-white">¥{summary.bankBalanceProjected.toLocaleString()}</span></div>
+                  </SimpleCard>
+                </div>
+
+                {/* ④ 貯金セクション */}
+                <div ref={savingsRef} className="space-y-3 scroll-mt-20">
+                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
+                  <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
+                      <PiggyBank size={16} /> 積立貯金
+                    </div>
+                    <div className="flex items-end justify-between">
+                       <div>
+                         <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
+                         <h3 className="text-2xl font-black text-white">¥{Number(savingsTotalToMonth || 0).toLocaleString()}</h3>
+                       </div>
+                       <div className="text-right">
+                         <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">今月の積立</p>
+                         <p className="text-sm font-bold text-emerald-400">+ ¥{summary.savingsAmount.toLocaleString()}</p>
+                       </div>
+                    </div>
+                  </SimpleCard>
+                </div>
+
+                {/* ⑤ メモセクション */}
+                <div ref={memoRef} className="space-y-3 scroll-mt-20">
+                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のメモ</h3>
+                  <button 
+                    onClick={() => setIsMemoModalOpen(true)}
+                    className="w-full text-left bg-[#1E1E1E] rounded-xl border border-white/5 p-4 shadow-lg active:scale-95 transition-transform"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold flex items-center gap-1.5">
+                        <Pencil size={12} /> タップして編集
+                      </p>
+                      <ChevronRight size={14} className="text-zinc-600" />
+                    </div>
+                    <p className={`text-xs leading-relaxed ${memoText ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                      {memoText ? (memoText.length > 50 ? memoText.slice(0, 50) + '...' : memoText) : 'メモはありません'}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="p-4 pb-32">
             {activeTab === 'log' && (
               <div className="animate-in fade-in space-y-4">
                 <div className="fixed top-16 left-0 right-0 z-40 bg-[#121212]/95 backdrop-blur w-full max-w-md mx-auto px-4 py-3">
