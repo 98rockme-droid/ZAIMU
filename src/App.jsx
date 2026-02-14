@@ -61,7 +61,7 @@ import {
 
 /* --- FIREBASE CONFIG --- */
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
+  apiKey: "AIzaSyD_MMX3Irb-xN1Tql5L0kWJo6BoO_rFX7g",
   authDomain: "zaimu-4f79b.firebaseapp.com",
   projectId: "zaimu-4f79b",
   storageBucket: "zaimu-4f79b.firebasestorage.app",
@@ -527,7 +527,7 @@ function AppMain() {
       totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       spentCard, 
-      spentCash, // ✅ 口座の利用済用に追加
+      spentCash,
       dailyTotals: normalTx.reduce((acc, t) => { 
         if (!t.date) return acc;
         const dObj = new Date(t.date);
@@ -540,6 +540,9 @@ function AppMain() {
       lastSpecialTotalSpent
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
+
+  // ✅ 有効なカテゴリのみ抽出（予算設定されているもの）
+  const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0);
 
   /* --- ALERTS --- */
   const activeAlerts = useMemo(() => {
@@ -816,7 +819,7 @@ function AppMain() {
       <Toast message={toast.message} isVisible={toast.visible} />
 
       <div className="w-full max-w-md h-full flex flex-col relative bg-[#121212] shadow-2xl mx-auto">
-        <header className="flex-none h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50">
+        <header className="flex-none h-16 border-b border-white/5 px-4 flex items-center justify-between bg-[#121212]/80 backdrop-blur-xl z-50 relative">
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <>
               <button onClick={() => setSettingTab('menu')} className="text-zinc-400"><ArrowLeft size={24} /></button>
@@ -846,7 +849,7 @@ function AppMain() {
           {/* ✅ ホーム画面（1ページ化） */}
           {activeTab === 'home' && (
             <div className="flex flex-col relative">
-              {/* 📌 LINE風 追従アナウンス（メモ）- ヘッダー直下に配置 */}
+              {/* 📌 LINE風 追従アナウンス（メモ）- ヘッダー直下に配置して隙間なし！ */}
               {monthlyData.memo && (
                 <div 
                   onClick={() => setIsMemoExpanded(!isMemoExpanded)}
@@ -865,7 +868,7 @@ function AppMain() {
               {/* メインコンテンツ */}
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
                 
-                {/* ① 残高セクション（✅ 1つのカードに2カラムで配置） */}
+                {/* ① 残高セクション */}
                 <div className="space-y-4">
                   <SimpleCard className="p-0">
                     <div className="grid grid-cols-2 divide-x divide-white/5">
@@ -888,7 +891,6 @@ function AppMain() {
                             <span>利用済</span><span>¥{summary.spentCard.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between text-[8px] text-zinc-500 pb-0.5">
-                            {/* ✅ カードの「総枠」も太字に統一 */}
                             <span>総枠</span><span className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</span>
                           </div>
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
@@ -909,7 +911,6 @@ function AppMain() {
                           </h2>
                         </div>
                         <div className="mt-4 flex-1 flex flex-col justify-end space-y-1">
-                          {/* ✅ 口座の方も「利用済」を表示 */}
                           <div className="flex justify-between text-[8px] text-zinc-500">
                             <span>利用済</span><span>¥{summary.spentCash.toLocaleString()}</span>
                           </div>
@@ -925,25 +926,31 @@ function AppMain() {
                   </SimpleCard>
                 </div>
 
-                {/* ② カテゴリセクション（✅ 1つのカードにまとめてラインで区切る） */}
+                {/* ② カテゴリセクション */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 予算</h3>
                   <SimpleCard className="p-0 overflow-hidden">
                     <div className="grid grid-cols-2 gap-px bg-white/5">
-                      {getCategoryNames().map(n => {
+                      {activeCategories.map(n => {
                         const s = summary.catTotals[n] || 0;
                         const b = monthlyData.catBudgets?.[n] || 0;
-                        if (b === 0) return null;
+                        const isOver = s > b;
                         return (
                           <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
                             <div className="flex justify-between items-center text-[9px] font-bold">
                               <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
-                              <span className="text-white">¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
+                              <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
                             </div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500" style={{ width: `${Math.min(100, (s / b) * 100)}%` }} /></div>
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                              <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${Math.min(100, (s / b) * 100)}%` }} />
+                            </div>
                           </div>
                         );
                       })}
+                      {/* ✅ 奇数個の時の空欄を綺麗に埋める */}
+                      {activeCategories.length % 2 !== 0 && (
+                        <div className="bg-[#1E1E1E]" />
+                      )}
                     </div>
                   </SimpleCard>
                 </div>
@@ -977,9 +984,7 @@ function AppMain() {
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
                   <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
-                      <PiggyBank size={16} /> 積立貯金
-                    </div>
+                    {/* ✅ 重複した見出しを削除してスッキリ */}
                     <div className="flex items-end justify-between">
                        <div>
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
