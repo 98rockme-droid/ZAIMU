@@ -55,7 +55,8 @@ import {
   Sparkles,
   ChevronDown,
   PiggyBank,
-  HelpCircle
+  HelpCircle,
+  Pencil // ✅ メモアイコン用に追加
 } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
@@ -313,7 +314,9 @@ function AppMain() {
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
+  // ✅ メモ用の状態
   const [memoText, setMemoText] = useState('');
+  const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
 
   const FAQ_DATA = [
     {
@@ -635,16 +638,16 @@ function AppMain() {
     } catch (e) { console.error(e); showToastMsg('エラー'); }
   };
   
-  const handleMemoBlur = async () => {
+  // ✅ メモの保存処理（モーダル用）
+  const handleMemoSave = async () => {
     if (!user) return;
-    if (memoText !== (monthlyData.memo || '')) {
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'months', month), { memo: memoText }, { merge: true });
-        showToastMsg('メモを保存しました');
-      } catch (e) {
-        console.error(e);
-        showToastMsg('メモの保存に失敗しました');
-      }
+    try {
+      await setDoc(doc(db, 'users', user.uid, 'months', month), { memo: memoText }, { merge: true });
+      showToastMsg('メモを保存しました');
+      setIsMemoModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      showToastMsg('メモの保存に失敗しました');
     }
   };
 
@@ -847,17 +850,8 @@ function AppMain() {
                 </div>
                 {homeView === 'spending' ? (
                   <div className="space-y-4 animate-in slide-in-from-left-2">
-                    <SimpleCard className="p-4 flex items-center justify-between bg-emerald-500/10 border-emerald-500/30">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400"><PiggyBank size={20} /></div>
-                        <div>
-                          <p className="text-[10px] text-zinc-400 uppercase font-bold">積立貯金総額</p>
-                          <h3 className="text-xl font-black text-white">¥{Number(savingsTotalToMonth || 0).toLocaleString()}</h3>
-                        </div>
-                      </div>
-                    </SimpleCard>
                     
-                    {/* ✅ 1つのカードに統合 */}
+                    {/* ✅ カードと口座を1つのカードに統合 */}
                     <SimpleCard className="p-0">
                       {/* 上段：カード */}
                       <div className="p-6 border-b border-white/5">
@@ -894,27 +888,42 @@ function AppMain() {
                       </div>
                     </SimpleCard>
                     
-                    <SimpleCard className="p-4">
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-3 flex items-center gap-1.5">
-                        <span>📝</span> 今月のメモ
+                    {/* ✅ メモ機能をプレビューのみにして、タップでモーダル展開に */}
+                    <button 
+                      onClick={() => setIsMemoModalOpen(true)}
+                      className="w-full text-left bg-[#1E1E1E] rounded-xl border border-white/5 p-4 shadow-lg active:scale-95 transition-transform"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold flex items-center gap-1.5">
+                          <Pencil size={12} /> 今月のメモ
+                        </p>
+                        <ChevronRight size={14} className="text-zinc-600" />
+                      </div>
+                      <p className={`text-xs leading-relaxed ${memoText ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                        {memoText ? (memoText.length > 50 ? memoText.slice(0, 50) + '...' : memoText) : 'タップしてメモを入力...'}
                       </p>
-                      <textarea
-                        value={memoText}
-                        onChange={(e) => setMemoText(e.target.value)}
-                        onBlur={handleMemoBlur}
-                        placeholder="例: 貯金から4万円補填予定"
-                        className="w-full bg-[#121212] rounded-lg p-3 text-xs text-zinc-300 outline-none focus:bg-[#121212]/80 transition-colors resize-none min-h-[80px]"
-                      />
-                    </SimpleCard>
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in slide-in-from-right-2">
-                    <SimpleCard className="p-4 bg-emerald-500/10 border-emerald-500/30">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs"><PiggyBank size={14} /> 今月の積立</div>
-                        <span className="text-sm font-black text-white">¥{summary.savingsAmount.toLocaleString()}</span>
+                    
+                    {/* ✅ 貯金情報を「収支・予定」のトップに統合 */}
+                    <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-3">
+                        <PiggyBank size={16} /> 積立貯金
+                      </div>
+                      <div className="flex items-end justify-between">
+                         <div>
+                           <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
+                           <h3 className="text-2xl font-black text-white">¥{Number(savingsTotalToMonth || 0).toLocaleString()}</h3>
+                         </div>
+                         <div className="text-right">
+                           <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">今月の積立</p>
+                           <p className="text-sm font-bold text-emerald-400">+ ¥{summary.savingsAmount.toLocaleString()}</p>
+                         </div>
                       </div>
                     </SimpleCard>
+
                     {activeAlerts.length > 0 && (
                       <SimpleCard className="bg-red-500/10 border-red-500/30 p-4">
                         <div className="flex items-center gap-2 text-red-400 mb-2 font-bold text-xs"><Calendar size={14} /> 支払期日が迫っています</div>
@@ -1334,6 +1343,34 @@ function AppMain() {
                   setShowCalculator(false);
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ MEMO MODAL (NEW) */}
+      {isMemoModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
+          <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-white/5 flex justify-between items-center">
+              <h2 className="text-xs font-black uppercase text-white tracking-widest flex items-center gap-2"><Pencil size={14} /> 今月のメモ</h2>
+              <button type="button" onClick={() => setIsMemoModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
+            </div>
+            <div className="p-5 pb-6 flex flex-col gap-4">
+              <textarea
+                value={memoText}
+                onChange={(e) => setMemoText(e.target.value)}
+                placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
+                className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
+                autoFocus
+              />
+              <button 
+                type="button" 
+                onClick={handleMemoSave} 
+                className="w-full h-12 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:scale-95 transition-transform shadow-xl"
+              >
+                保存する
+              </button>
             </div>
           </div>
         </div>
