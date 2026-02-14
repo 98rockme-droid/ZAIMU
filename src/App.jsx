@@ -869,7 +869,7 @@ function AppMain() {
               {/* メインコンテンツ */}
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
                 
-                {/* ① 残高セクション */}
+                {/* ① 残高セクション（✅ 1つのカードに2カラムで配置） */}
                 <div className="space-y-4">
                   <SimpleCard className="p-0">
                     <div className="grid grid-cols-2 divide-x divide-white/5">
@@ -892,6 +892,7 @@ function AppMain() {
                             <span>利用済</span><span>¥{summary.spentCard.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between text-[8px] text-zinc-500 pb-0.5">
+                            {/* ✅ カードの「総枠」も太字に統一 */}
                             <span>総枠</span><span className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</span>
                           </div>
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
@@ -912,6 +913,7 @@ function AppMain() {
                           </h2>
                         </div>
                         <div className="mt-4 flex-1 flex flex-col justify-end space-y-1">
+                          {/* ✅ 口座の方も「利用済」を表示 */}
                           <div className="flex justify-between text-[8px] text-zinc-500">
                             <span>利用済</span><span>¥{summary.spentCash.toLocaleString()}</span>
                           </div>
@@ -927,7 +929,7 @@ function AppMain() {
                   </SimpleCard>
                 </div>
 
-                {/* ② カテゴリセクション */}
+                {/* ② カテゴリセクション（✅ 1つのカードにまとめてラインで区切る） */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 予算</h3>
                   <SimpleCard className="p-0 overflow-hidden">
@@ -950,6 +952,7 @@ function AppMain() {
                           </div>
                         );
                       })}
+                      {/* ✅ 奇数個の時の空欄を綺麗に埋める */}
                       {activeCategories.length % 2 !== 0 && (
                         <div className="bg-[#1E1E1E]" />
                       )}
@@ -986,6 +989,7 @@ function AppMain() {
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
                   <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
+                    {/* ✅ 重複した見出しを削除してスッキリ */}
                     <div className="flex items-end justify-between">
                        <div>
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
@@ -1003,7 +1007,7 @@ function AppMain() {
             </div>
           )}
 
-          {/* ✅ log タブのスクロール修正 */}
+          {/* 🔽 以降は log, analysis, settings タブの表示 */}
           {activeTab === 'log' && (
             <div className="animate-in fade-in flex flex-col h-full pt-3">
               {/* フィルター部分（固定ではなく flex-none で配置） */}
@@ -1145,31 +1149,35 @@ function AppMain() {
                   <div className="text-right text-[10px] text-zinc-600 uppercase font-black">先月総支出<p className="text-sm font-bold text-zinc-500">¥{summary.lastTotalSpent.toLocaleString()}</p></div>
                 </div>
               </SimpleCard>
-              <SimpleCard className="p-0 overflow-hidden">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest m-6 mb-2">カテゴリ別 比較</p>
-                <div className="grid grid-cols-2 gap-px bg-white/5 border-t border-white/5">
-                  {getCategoryNames().map(n => {
-                    const c = summary.catTotals[n] || 0;
-                    const l = summary.lastCatTotals[n] || 0;
-                    const max = Math.max(c, l, 1);
-                    return (
-                      <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
-                        <div className="flex justify-between items-center font-bold text-[10px]">
-                          <div className="flex items-center gap-2"><span className="text-sm">{getCategoryIcon(n)}</span><span className="text-zinc-300">{n}</span></div>
-                          <div className="text-right flex flex-col leading-tight"><span className="text-zinc-600 text-[8px]">先月 ¥{l.toLocaleString()}</span> <span className="text-white">今月 ¥{c.toLocaleString()}</span></div>
+              
+              {/* ✅ 「カテゴリ別 比較」のタイトルを外に出してスッキリ統一 */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
+                <SimpleCard className="p-0 overflow-hidden">
+                  <div className="grid grid-cols-2 gap-px bg-white/5">
+                    {getCategoryNames().map(n => {
+                      const c = summary.catTotals[n] || 0;
+                      const l = summary.lastCatTotals[n] || 0;
+                      const max = Math.max(c, l, 1);
+                      return (
+                        <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
+                          <div className="flex justify-between items-center font-bold text-[10px]">
+                            <div className="flex items-center gap-2"><span className="text-sm">{getCategoryIcon(n)}</span><span className="text-zinc-300">{n}</span></div>
+                            <div className="text-right flex flex-col leading-tight"><span className="text-zinc-600 text-[8px]">先月 ¥{l.toLocaleString()}</span> <span className="text-white">今月 ¥{c.toLocaleString()}</span></div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}%` }} /></div>
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
-                          <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}%` }} /></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {getCategoryNames().length % 2 !== 0 && (
-                    <div className="bg-[#1E1E1E]" />
-                  )}
-                </div>
-              </SimpleCard>
+                      );
+                    })}
+                    {getCategoryNames().length % 2 !== 0 && (
+                      <div className="bg-[#1E1E1E]" />
+                    )}
+                  </div>
+                </SimpleCard>
+              </div>
             </div>
           )}
 
@@ -1383,7 +1391,7 @@ function AppMain() {
               <h2 className="text-[10px] font-black uppercase text-white tracking-widest">電卓</h2>
               <button type="button" onClick={() => setShowCalculator(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
-            <div className="p-5 pb-16">
+            <div className="p-5 pb-12">
               <CalculatorPad
                 initialValue={calcInitialValue}
                 onConfirm={(val) => {
@@ -1396,7 +1404,7 @@ function AppMain() {
         </div>
       )}
 
-      {/* ✅ MEMO MODAL (NEW) */}
+      {/* ✅ MEMO MODAL */}
       {isMemoModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
           <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1404,14 +1412,16 @@ function AppMain() {
               <h2 className="text-xs font-black uppercase text-white tracking-widest flex items-center gap-2"><Pencil size={14} /> 今月のメモ</h2>
               <button type="button" onClick={() => setIsMemoModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
-            <div className="p-5 pb-6 flex flex-col gap-4">
-              <textarea
-                value={memoText}
-                onChange={(e) => setMemoText(e.target.value)}
-                placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
-                className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
-                autoFocus
-              />
+            <div className="p-5 pb-12 flex flex-col gap-4">
+              <div className="w-full bg-black/20 rounded-lg p-3">
+                <textarea
+                  value={memoText}
+                  onChange={(e) => setMemoText(e.target.value)}
+                  placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
+                  className="w-full h-32 bg-transparent text-white font-bold text-sm outline-none resize-none leading-relaxed"
+                  autoFocus
+                />
+              </div>
               <button 
                 type="button" 
                 onClick={handleMemoSave} 
@@ -1433,7 +1443,7 @@ function AppMain() {
               <button type="button" onClick={() => setIsCopyModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
 
-            <div className="p-5 pb-16 space-y-4">
+            <div className="p-5 pb-12 space-y-4">
               <div className="text-[10px] text-zinc-500 uppercase font-black pl-1">コピー元の年月</div>
               <div className="w-full overflow-hidden">
                 <input
@@ -1477,7 +1487,7 @@ function AppMain() {
                 <h2 className="text-xs font-black uppercase text-white tracking-widest">{editingTx ? '編集' : '入力'}</h2>
                 <button type="button" onClick={() => setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-5 pb-6">
+              <div className="flex-1 overflow-y-auto p-5 pb-12">
                 <form onSubmit={handleTxSubmit} className="space-y-3">
                   
                   {/* 金額 */}
@@ -1620,7 +1630,7 @@ function AppMain() {
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button type="button" onClick={() => setEditingItem(null)} className="p-2 text-zinc-500"><X size={20} /></button></div>
-            <div className="p-5 pb-6 space-y-3">
+            <div className="p-5 pb-12 space-y-3">
 
               {/* Salary / Budgets / Savings */}
               {['salary', 'totalBudget', 'cashBudget', 'savings'].includes(editingItem.type) && (
@@ -1643,15 +1653,17 @@ function AppMain() {
 
               {/* ✅ Memo Edit */}
               {editingItem.type === 'memo' && (
-                <div className="flex flex-col gap-3">
-                  <label className="text-[10px] text-zinc-500 font-black uppercase pl-1">今月のメモ</label>
-                  <textarea
-                    value={editingItem.data.memo || ''}
-                    onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
-                    className="w-full h-40 bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-zinc-200 outline-none focus:border-white/30 transition-colors resize-none leading-relaxed"
-                    placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
-                    autoFocus
-                  />
+                <div className="flex items-start">
+                  <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1 pt-3">今月のメモ</label>
+                  <div className="flex-1 bg-black/20 rounded-lg p-3">
+                    <textarea
+                      value={editingItem.data.memo || ''}
+                      onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
+                      className="w-full h-32 bg-transparent text-white font-bold text-sm outline-none resize-none leading-relaxed"
+                      placeholder="今月のやりくりや、特別にお金を使った理由などをメモしておけます。"
+                      autoFocus
+                    />
+                  </div>
                 </div>
               )}
 
