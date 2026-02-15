@@ -157,16 +157,6 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-const CAT_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#C084FC', '#F87171', '#2DD4BF', '#FCD34D', '#A855F7'];
-const getCategoryColor = (name) => {
-  if (name === 'その他') return '#A1A1AA';
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return CAT_COLORS[Math.abs(hash) % CAT_COLORS.length];
-};
-
 /* --- COMPONENTS --- */
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -594,6 +584,7 @@ function AppMain() {
   }, [summary, month]);
 
   // ✅ SVG円グラフ（パイチャート）用のデータ作成
+  // ※カラフルさを抑え、金額が大きい順にグレースケールのグラデーションを適用
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
@@ -603,14 +594,17 @@ function AppMain() {
       .filter(item => item.amount > 0);
     arr.sort((a, b) => b.amount - a.amount);
 
+    // 美しいモノトーンのパレット（金額が多いほど明るい色）
+    const GRAY_PALETTE = ['#FFFFFF', '#F4F4F5', '#E4E4E7', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B'];
+
     let items = [];
     if (arr.length <= 6) {
-      items = arr.map(item => ({ ...item, color: getCategoryColor(item.name) }));
+      items = arr.map((item, idx) => ({ ...item, color: GRAY_PALETTE[idx % GRAY_PALETTE.length] }));
     } else {
       const top5 = arr.slice(0, 5);
       const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-      items = top5.map(item => ({ ...item, color: getCategoryColor(item.name) }));
-      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor('その他') });
+      items = top5.map((item, idx) => ({ ...item, color: GRAY_PALETTE[idx] }));
+      items.push({ name: 'その他', amount: otherAmount, color: GRAY_PALETTE[5] });
     }
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
@@ -886,17 +880,16 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  // ✅ インタラクティブな円グラフ（穴なしの完全なパイチャート）コンポーネント
+  // ✅ インタラクティブな円グラフ（穴なしの完全なパイチャート・見切れ防止版）
   const InteractivePieChart = ({ data, total, selectedSlice, onSelect }) => {
-    // 半径を25にし、strokeWidthを50にすることで、穴のない完全な円になる
     const radius = 25;
     const circumference = 2 * Math.PI * radius;
     let currentOffset = 0;
 
     return (
       <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 drop-shadow-lg">
-          {/* 背景の円（支出ゼロ用） */}
+        {/* viewBoxを広げてはみ出しを防ぐ */}
+        <svg viewBox="-10 -10 120 120" className="w-full h-full -rotate-90 drop-shadow-lg">
           {total === 0 && (
             <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth="50" />
           )}
@@ -914,8 +907,8 @@ function AppMain() {
                 r={radius}
                 fill="transparent"
                 stroke={item.color}
-                strokeWidth={isSelected ? "56" : "50"} // 選択時は少し太くして飛び出させる
-                strokeDasharray={`${Math.max(strokeLength - 0.5, 0)} ${circumference}`} // 0.5引いて微小な隙間を作る
+                strokeWidth={isSelected ? "56" : "50"}
+                strokeDasharray={`${Math.max(strokeLength - 0.5, 0)} ${circumference}`}
                 strokeDashoffset={-offset}
                 className="transition-all duration-300 cursor-pointer hover:opacity-80"
                 onClick={() => onSelect(isSelected ? null : item)}
@@ -1043,17 +1036,25 @@ function AppMain() {
                   <SimpleCard className="p-0 overflow-hidden">
                     <div className="grid grid-cols-2 gap-px bg-white/5">
                       {activeCategories.map(n => {
-                        const s = summary.catTotals[n] || 0;
+                        const c = summary.catTotals[n] || 0;
                         const b = monthlyData.catBudgets?.[n] || 0;
-                        const isOver = b > 0 && s > b;
+                        const isOver = b > 0 && c > b;
+                        const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
+                        
                         return (
-                          <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
-                            <div className="flex justify-between items-center text-[9px] font-bold">
-                              <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
-                              <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
+                          <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-center">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
+                              <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                              <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${b > 0 ? Math.min(100, (s / b) * 100) : 0}%` }} />
+                            {/* ✅ マージンを詰めて1行にスッキリまとめる */}
+                            <div className="flex items-baseline gap-1 mb-1.5">
+                              <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                              <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
+                            </div>
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
+                              {/* ✅ プログレスバーの色は白・グレー（オーバー時のみ赤）に統一 */}
+                              <div className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} style={{ width: `${percent}%` }} />
                             </div>
                           </div>
                         );
@@ -1251,15 +1252,14 @@ function AppMain() {
                       />
 
                       {/* 右側の情報エリア（選択状態に応じて表示切り替え） */}
-                      <div className="flex-1 flex flex-col justify-center min-w-0">
+                      <div className="flex-1 flex flex-col justify-center min-w-0 pl-2">
                          {selectedDonutSlice ? (
                            // タップ時：カテゴリの詳細
                            <div className="animate-in fade-in slide-in-from-left-2">
                              <div className="flex items-center gap-2 mb-1.5">
-                               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: selectedDonutSlice.color }} />
-                               <span className="text-[11px] text-zinc-300 font-bold truncate">{selectedDonutSlice.name}</span>
+                               <span className="text-xs text-zinc-300 font-bold truncate">{selectedDonutSlice.name}</span>
                              </div>
-                             <h3 className="text-2xl font-black text-white tracking-tight leading-none mb-1" style={{ color: selectedDonutSlice.color }}>
+                             <h3 className="text-2xl font-black tracking-tight leading-none mb-1 text-white">
                                ¥{selectedDonutSlice.amount.toLocaleString()}
                              </h3>
                              <span className="text-[10px] text-zinc-500 font-bold">
@@ -1267,21 +1267,24 @@ function AppMain() {
                              </span>
                            </div>
                          ) : (
-                           // 未選択時：全体のサマリー
+                           // 未選択時：全体のサマリーと特別費
                            <div className="animate-in fade-in slide-in-from-right-2">
                              <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
                              <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1.5">¥{summary.totalSpent.toLocaleString()}</h3>
                              
-                             <div className={`flex items-center gap-1 text-[10px] font-bold mb-3 ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
-                               {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
+                             <div className="flex items-center gap-1 text-[10px] font-bold mb-3 text-zinc-400">
+                               {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} className="text-zinc-500" /> : <TrendingUp size={12} className="text-zinc-500" />}
                                <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
                              </div>
                              
-                             {summary.specialTotalSpent > 0 && (
-                               <div className="inline-block px-2.5 py-1 rounded bg-white/5 border border-white/10 text-[9px] text-zinc-400 font-bold">
-                                 うち特別費: ¥{summary.specialTotalSpent.toLocaleString()}
+                             {/* ✅ 特別費をここに統合 */}
+                             <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
+                               <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
+                               <div className="flex items-baseline gap-1">
+                                 <span className="text-sm font-bold text-white">¥{summary.specialTotalSpent.toLocaleString()}</span>
+                                 <span className="text-[9px] text-zinc-500">/ 先月 ¥{summary.lastSpecialTotalSpent.toLocaleString()}</span>
                                </div>
-                             )}
+                             </div>
                            </div>
                          )}
                       </div>
@@ -1297,36 +1300,35 @@ function AppMain() {
                         // 予算もなく支出もない項目は非表示
                         if (b === 0 && c === 0) return null;
 
-                        const color = getCategoryColor(n);
                         const isOver = b > 0 && c > b;
                         const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
 
                         return (
-                          <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
+                          <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-center">
                             {/* 上段：アイコンと名前 */}
                             <div className="flex items-center gap-1.5 mb-2">
-                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                              {/* 色玉を削除し、モノトーンに */}
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
 
-                            {/* 中段：金額と先月比 */}
+                            {/* 中段：金額と先月比を高密度に配置 */}
                             <div className="flex flex-col gap-1 mb-2">
-                              <div className="flex justify-between items-baseline">
+                              <div className="flex items-baseline gap-1">
                                 <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
                                 <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                               </div>
-                              <div className="flex justify-between items-baseline text-[8px] font-bold text-zinc-500">
+                              {/* 先月比テキスト（カラフルをやめてグレーに統一） */}
+                              <div className="flex items-baseline gap-1 text-[8px] font-bold text-zinc-500">
                                 <span>先月 ¥{l.toLocaleString()}</span>
-                                {/* カラフルをやめてグレーのままに */}
                                 <span>{c > l ? '+' : ''}¥{(c - l).toLocaleString()}</span>
                               </div>
                             </div>
 
-                            {/* 下段：プログレスバー */}
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0">
+                            {/* 下段：プログレスバー（白とグレーのモノトーン、オーバー時のみ赤） */}
+                            <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
                               <div 
-                                className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-zinc-500"}`} 
+                                className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
                                 style={{ width: `${percent}%` }} 
                               />
                             </div>
@@ -1339,24 +1341,6 @@ function AppMain() {
                     </div>
                  </SimpleCard>
               </div>
-
-              {/* 🎁 独立した特別費（完全に別枠として復活） */}
-              <div className="space-y-3">
-                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">特別費（別枠）</h3>
-                <SimpleCard className="p-4">
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span className="font-bold">今月の特別費</span>
-                      <span className="text-white font-black tabular-nums">¥{Number(summary.specialTotalSpent || 0).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span className="font-bold">先月の特別費</span>
-                      <span className="text-white font-black tabular-nums">¥{Number(summary.lastSpecialTotalSpent || 0).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </SimpleCard>
-              </div>
-
             </div>
           )}
 
