@@ -157,25 +157,10 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 落ち着いたくすみカラー（Muted Colors）のパレット
-const MUTED_COLORS = [
-  '#60A5FA', // Blue (少し彩度抑えめ)
-  '#34D399', // Emerald
-  '#FBBF24', // Amber
-  '#F472B6', // Pink
-  '#A78BFA', // Purple
-  '#FB923C', // Orange
-  '#4ADE80', // Teal
-  '#FCD34D', // Yellow
-  '#818CF8'  // Indigo
-];
-const getCategoryColor = (name) => {
-  if (name === 'その他') return '#A1A1AA';
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return MUTED_COLORS[Math.abs(hash) % MUTED_COLORS.length];
+// ✅ 洗練されたグレースケールカラーパレット
+const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
+const getCategoryColor = (index) => {
+  return GRAY_PALETTE[index % GRAY_PALETTE.length];
 };
 
 /* --- COMPONENTS --- */
@@ -337,8 +322,6 @@ function AppMain() {
   const [memoText, setMemoText] = useState('');
   const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
-
-  const [selectedDonutSlice, setSelectedDonutSlice] = useState(null);
 
   const FAQ_DATA = [
     {
@@ -564,8 +547,10 @@ function AppMain() {
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
+  // ✅ 有効なカテゴリのみ抽出
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
+  // ✅ 最重要なAIコメント
   const aiMessage = useMemo(() => {
     const d = new Date();
     const isCurrentMonth = month === getMonthString(d);
@@ -601,7 +586,7 @@ function AppMain() {
     return { icon: '📝', text: `生活費予算を設定すると、ここにAIアドバイスが表示されます。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
   }, [summary, month]);
 
-  // ✅ SVG円グラフ用のデータ作成（くすみカラーパレット適用）
+  // ✅ SVG円グラフ用のデータ作成（グレースケール）
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
@@ -613,12 +598,12 @@ function AppMain() {
 
     let items = [];
     if (arr.length <= 6) {
-      items = arr.map(item => ({ ...item, color: getCategoryColor(item.name) }));
+      items = arr.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
     } else {
       const top5 = arr.slice(0, 5);
       const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-      items = top5.map(item => ({ ...item, color: getCategoryColor(item.name) }));
-      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor('その他') });
+      items = top5.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
+      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor(5) });
     }
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
@@ -894,23 +879,30 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  // ✅ インタラクティブな円グラフ（見切れ防止 ＆ 隙間なしの完全なパイチャート）
-  const InteractivePieChart = ({ data, total, selectedSlice, onSelect }) => {
+  // ✅ インタラクティブな円グラフ（放射状の隙間で綺麗に分割）
+  const InteractivePieChart = ({ data, total }) => {
     const radius = 25;
+    const strokeWidth = 50;
     const circumference = 2 * Math.PI * radius;
     let currentOffset = 0;
+    const boundaryAngles = [];
 
     return (
       <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-        <svg viewBox="-20 -20 140 140" className="w-full h-full -rotate-90 drop-shadow-lg">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 drop-shadow-lg">
           {total === 0 && (
-            <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth="50" />
+            <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth={strokeWidth} />
           )}
           {data.map(item => {
             const strokeLength = (item.amount / total) * circumference;
             const offset = currentOffset;
             currentOffset += strokeLength;
-            const isSelected = selectedSlice?.name === item.name;
+
+            // 境界線を引くための角度を記録
+            const angle = (currentOffset / circumference) * 360;
+            if (item.amount > 0 && item !== data[data.length - 1]) {
+               boundaryAngles.push(angle);
+            }
 
             return (
               <circle
@@ -920,15 +912,23 @@ function AppMain() {
                 r={radius}
                 fill="transparent"
                 stroke={item.color}
-                strokeWidth={isSelected ? "60" : "50"}
-                // 隙間を作らずにピッタリくっつける
+                strokeWidth={strokeWidth}
                 strokeDasharray={`${strokeLength} ${circumference}`}
                 strokeDashoffset={-offset}
-                className="transition-all duration-300 cursor-pointer hover:opacity-80"
-                onClick={() => onSelect(isSelected ? null : item)}
               />
             );
           })}
+          {/* ✅ 隙間を背景色で上書き描画し、均等な分割線を表現 */}
+          {boundaryAngles.map((angle, i) => (
+             <line 
+                key={i}
+                x1="50" y1="50" 
+                x2={50 + 50 * Math.cos(angle * Math.PI / 180)} 
+                y2={50 + 50 * Math.sin(angle * Math.PI / 180)} 
+                stroke="#1E1E1E" 
+                strokeWidth="1.5" 
+             />
+          ))}
         </svg>
       </div>
     );
@@ -1061,12 +1061,12 @@ function AppMain() {
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            {/* マージンを詰めて1行に */}
                             <div className="flex items-baseline gap-1 mb-1.5">
                               <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
                               <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
+                              {/* プログレスバーは白ベースに */}
                               <div className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} style={{ width: `${percent}%` }} />
                             </div>
                           </div>
@@ -1107,7 +1107,6 @@ function AppMain() {
                 {/* ④ 貯金セクション */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
-                  {/* ✅ 背景の緑色指定を削除 */}
                   <SimpleCard className="p-5">
                     <div className="flex items-end justify-between">
                        <div>
@@ -1116,7 +1115,7 @@ function AppMain() {
                        </div>
                        <div className="text-right">
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">今月の積立</p>
-                         <p className="text-sm font-bold text-emerald-400">+ ¥{summary.savingsAmount.toLocaleString()}</p>
+                         <p className="text-sm font-bold text-white">+ ¥{summary.savingsAmount.toLocaleString()}</p>
                        </div>
                     </div>
                   </SimpleCard>
@@ -1238,7 +1237,7 @@ function AppMain() {
             </div>
           )}
 
-          {/* ✅ Analysis タブ */}
+          {/* ✅ Analysis タブ（大進化！） */}
           {activeTab === 'analysis' && (
             <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
@@ -1250,105 +1249,93 @@ function AppMain() {
                 </div>
               )}
 
-              {/* 🍩 今月のダッシュボード */}
+              {/* 🍩 今月のサマリー（円グラフ＋特別費統合） */}
               <div className="space-y-3">
                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
                  <SimpleCard className="p-0 overflow-hidden">
-                    
-                    {/* 左に円グラフ、右にテキスト情報の横並びレイアウト */}
-                    <div className="p-4 flex items-center gap-5 border-b border-white/5">
+                    <div className="p-4 flex items-center gap-5">
+                      {/* 左：インタラクティブなパイチャート */}
                       <InteractivePieChart 
                         data={donutChartData.items} 
                         total={donutChartData.total} 
-                        selectedSlice={selectedDonutSlice} 
-                        onSelect={setSelectedDonutSlice} 
                       />
 
+                      {/* 右：総支出・先月比・特別費 */}
                       <div className="flex-1 flex flex-col justify-center min-w-0 pl-2">
-                         {selectedDonutSlice ? (
-                           <div className="animate-in fade-in slide-in-from-left-2">
-                             <div className="flex items-center gap-2 mb-1.5">
-                               <span className="text-xs text-zinc-300 font-bold truncate">{selectedDonutSlice.name}</span>
-                             </div>
-                             <h3 className="text-2xl font-black tracking-tight leading-none mb-1 text-white">
-                               ¥{selectedDonutSlice.amount.toLocaleString()}
-                             </h3>
-                             <span className="text-[10px] text-zinc-500 font-bold">
-                               全体の {Math.round((selectedDonutSlice.amount / donutChartData.total) * 100)}%
-                             </span>
+                         <div className="animate-in fade-in slide-in-from-right-2">
+                           <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
+                           <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1.5">¥{summary.totalSpent.toLocaleString()}</h3>
+                           
+                           <div className="flex items-center gap-1 text-[10px] font-bold mb-3 text-zinc-400">
+                             {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} className="text-zinc-500" /> : <TrendingUp size={12} className="text-zinc-500" />}
+                             <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
                            </div>
-                         ) : (
-                           <div className="animate-in fade-in slide-in-from-right-2">
-                             <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
-                             <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1.5">¥{summary.totalSpent.toLocaleString()}</h3>
-                             
-                             <div className="flex items-center gap-1 text-[10px] font-bold mb-3 text-zinc-400">
-                               {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} className="text-zinc-500" /> : <TrendingUp size={12} className="text-zinc-500" />}
-                               <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
-                             </div>
-                             
-                             <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
-                               <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
-                               <div className="flex items-baseline gap-1">
-                                 <span className="text-sm font-bold text-white">¥{summary.specialTotalSpent.toLocaleString()}</span>
-                                 <span className="text-[9px] text-zinc-500">/ 先月 ¥{summary.lastSpecialTotalSpent.toLocaleString()}</span>
-                               </div>
+                           
+                           {/* 特別費をここに統合 */}
+                           <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
+                             <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
+                             <div className="flex items-baseline gap-1">
+                               <span className="text-sm font-bold text-white">¥{summary.specialTotalSpent.toLocaleString()}</span>
+                               <span className="text-[9px] text-zinc-500">/ 先月 ¥{summary.lastSpecialTotalSpent.toLocaleString()}</span>
                              </div>
                            </div>
-                         )}
+                         </div>
                       </div>
-                    </div>
-
-                    {/* ✅ 高密度化されたカテゴリ別比較リスト */}
-                    <div className="grid grid-cols-2 gap-px bg-white/5">
-                      {activeCategories.map(n => {
-                        const c = summary.catTotals[n] || 0;
-                        const l = summary.lastCatTotals[n] || 0;
-                        const b = monthlyData.catBudgets?.[n] || 0;
-                        
-                        if (b === 0 && c === 0) return null;
-
-                        const isOver = b > 0 && c > b;
-                        const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
-
-                        return (
-                          <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-center">
-                            {/* アイコンと名前（色玉は削除） */}
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
-                              <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
-                            </div>
-
-                            {/* 金額と先月比を高密度に配置 */}
-                            <div className="flex flex-col gap-1 mb-2">
-                              {/* マージンを詰めて1行に */}
-                              <div className="flex items-baseline gap-1">
-                                <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
-                                <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
-                              </div>
-                              {/* 先月比テキスト（グレーに統一） */}
-                              <div className="flex items-baseline gap-1 text-[8px] font-bold text-zinc-500">
-                                <span>先月 ¥{l.toLocaleString()}</span>
-                                <span>{c > l ? '+' : ''}¥{(c - l).toLocaleString()}</span>
-                              </div>
-                            </div>
-
-                            {/* プログレスバー（白とグレーのモノトーン、オーバー時のみ赤） */}
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
-                              <div 
-                                className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
-                                style={{ width: `${percent}%` }} 
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {activeCategories.length % 2 !== 0 && (
-                        <div className="bg-[#1E1E1E]" />
-                      )}
                     </div>
                  </SimpleCard>
               </div>
+
+              {/* 📊 カテゴリ別 比較 */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
+                <SimpleCard className="p-0 overflow-hidden">
+                  {/* 高密度化されたカテゴリ別比較リスト */}
+                  <div className="grid grid-cols-2 gap-px bg-white/5">
+                    {activeCategories.map(n => {
+                      const c = summary.catTotals[n] || 0;
+                      const l = summary.lastCatTotals[n] || 0;
+                      const b = monthlyData.catBudgets?.[n] || 0;
+                      
+                      if (b === 0 && c === 0) return null;
+
+                      const isOver = b > 0 && c > b;
+                      const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
+
+                      return (
+                        <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
+                          <div className="flex items-center justify-between mb-2">
+                            {/* アイコンと名前（色玉なし） */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
+                              <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
+                            </div>
+                            {/* 実績/目標と先月実績を右側に高密度で配置 */}
+                            <div className="text-right flex flex-col">
+                               <div className="flex items-baseline justify-end">
+                                 <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                                 <span className="text-[9px] text-zinc-500 ml-1">/ ¥{b.toLocaleString()}</span>
+                               </div>
+                               <span className="text-[8px] text-zinc-500 font-bold mt-0.5">先月 ¥{l.toLocaleString()}</span>
+                            </div>
+                          </div>
+
+                          {/* プログレスバー（モノトーン、オーバー時のみ赤） */}
+                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
+                            <div 
+                              className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
+                              style={{ width: `${percent}%` }} 
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {activeCategories.length % 2 !== 0 && (
+                      <div className="bg-[#1E1E1E]" />
+                    )}
+                  </div>
+                </SimpleCard>
+              </div>
+
             </div>
           )}
 
@@ -1583,7 +1570,7 @@ function AppMain() {
               <h2 className="text-xs font-black uppercase text-white tracking-widest flex items-center gap-2"><Pencil size={14} /> 今月のメモ</h2>
               <button type="button" onClick={() => setIsMemoModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
-            <div className="p-5 pb-12 flex flex-col gap-4">
+            <div className="p-5 pb-24 flex flex-col gap-4">
               <div className="w-full bg-black/20 rounded-lg p-3">
                 <textarea
                   value={memoText}
@@ -1614,7 +1601,7 @@ function AppMain() {
               <button type="button" onClick={() => setIsCopyModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
 
-            <div className="p-5 pb-12 space-y-4">
+            <div className="p-5 pb-24 space-y-4">
               <div className="text-[10px] text-zinc-500 uppercase font-black pl-1">コピー元の年月</div>
               <div className="w-full overflow-hidden">
                 <input
@@ -1658,12 +1645,12 @@ function AppMain() {
                 <h2 className="text-xs font-black uppercase text-white tracking-widest">{editingTx ? '編集' : '入力'}</h2>
                 <button type="button" onClick={() => setIsTxModalOpen(false)} className="p-2 text-zinc-500"><X size={20} /></button>
               </div>
-              <div className="flex-1 overflow-y-auto p-5 pb-12">
+              <div className="flex-1 overflow-y-auto p-5 pb-24">
                 <form onSubmit={handleTxSubmit} className="space-y-3">
                   
                   {/* 金額 */}
                   <div className="flex items-center">
-                    <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">金額</label>
+                    <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">金額</label>
                     <div className="flex-1 flex items-center bg-black/20 rounded-lg h-11 px-3">
                       <span className="text-zinc-500 font-bold mr-1">¥</span>
                       <input
@@ -1687,7 +1674,7 @@ function AppMain() {
 
                   {/* 内容 */}
                   <div className="flex items-center">
-                    <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">内容</label>
+                    <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">内容</label>
                     <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input 
                         type="text" 
@@ -1701,7 +1688,7 @@ function AppMain() {
 
                   {/* 日付 */}
                   <div className="flex items-center">
-                    <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">日付</label>
+                    <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">日付</label>
                     <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3">
                       <input
                         type="date"
@@ -1714,7 +1701,7 @@ function AppMain() {
 
                   {/* カテゴリ */}
                   <div className="flex items-center relative">
-                    <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">カテゴリ</label>
+                    <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">カテゴリ</label>
                     <div className="flex-1 bg-black/20 rounded-lg h-11 flex items-center px-3 relative">
                       <select
                         value={inputCategory}
@@ -1729,7 +1716,7 @@ function AppMain() {
 
                   {/* 特別費 */}
                   <div className="flex items-center">
-                    <label className="w-16 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">特別費</label>
+                    <label className="w-20 shrink-0 text-[10px] text-zinc-500 font-black uppercase pl-1">特別費</label>
                     <div className="flex-1 flex items-center h-11">
                       <button
                         type="button"
@@ -1801,7 +1788,7 @@ function AppMain() {
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-white/5 flex justify-between items-center"><h2 className="text-xs font-black uppercase text-white tracking-widest">編集</h2><button type="button" onClick={() => setEditingItem(null)} className="p-2 text-zinc-500"><X size={20} /></button></div>
-            <div className="p-5 pb-12 space-y-3">
+            <div className="p-5 pb-24 space-y-3 overflow-y-auto">
 
               {/* Salary / Budgets / Savings */}
               {['salary', 'totalBudget', 'cashBudget', 'savings'].includes(editingItem.type) && (
