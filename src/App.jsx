@@ -544,6 +544,85 @@ function AppMain() {
   // ✅ 有効なカテゴリのみ抽出（予算設定されているもの）
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0);
 
+  // ✅ AI 家計診断ロジック
+  const aiMessages = useMemo(() => {
+    const messages = [];
+    const d = new Date();
+    // 表示している月が「今月」かどうかを判定
+    const isCurrentMonth = month === getMonthString(d);
+    
+    // 月末までの日数を計算
+    const today = d.getDate();
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const progress = today / daysInMonth;
+
+    const variableBudget = summary.variableBudget;
+    const spent = summary.totalSpent;
+    const spentRatio = variableBudget > 0 ? spent / variableBudget : 0;
+
+    if (isCurrentMonth && variableBudget > 0) {
+      if (spent > variableBudget) {
+        messages.push({ icon: '🚨', text: `変動費の予算（¥${variableBudget.toLocaleString()}）をオーバーしています！残りの日数は0円を意識して過ごしましょう。`, color: 'text-red-400' });
+      } else if (spentRatio > progress + 0.15) {
+        messages.push({ icon: '⚠️', text: `ペースが早めです。月の${Math.round(progress * 100)}%が経過しましたが、すでに予算の${Math.round(spentRatio * 100)}%を使っています。`, color: 'text-amber-400' });
+      } else if (spentRatio < progress - 0.1) {
+        messages.push({ icon: '🌟', text: '素晴らしいペースです！予算に対してかなりゆとりを持ってやりくりできています。', color: 'text-emerald-400' });
+      }
+
+      const remainingDays = daysInMonth - today + 1;
+      const dailyAvailable = Math.max(0, variableBudget - spent) / remainingDays;
+      if (spent <= variableBudget && dailyAvailable > 0) {
+         messages.push({ icon: '💡', text: `今月は残り${remainingDays}日。1日あたり約${Math.floor(dailyAvailable).toLocaleString()}円使えます！`, color: 'text-blue-400' });
+      }
+    } else if (!isCurrentMonth && variableBudget > 0) {
+       // 過去（または未来）の月の判定
+       if (spent > variableBudget) {
+         messages.push({ icon: '👀', text: `この月は変動費予算をオーバーしていました。（オーバー額: ¥${(spent - variableBudget).toLocaleString()}）`, color: 'text-amber-400' });
+       } else if (spent > 0) {
+         messages.push({ icon: '🎉', text: `この月は予算内に綺麗に収まりました！（黒字: ¥${(variableBudget - spent).toLocaleString()}）`, color: 'text-emerald-400' });
+       }
+    }
+
+    // 積立の設定があれば褒める
+    if (summary.savingsAmount > 0) {
+       messages.push({ icon: '🐷', text: `今月も ¥${summary.savingsAmount.toLocaleString()} の先取り貯金が設定されています！`, color: 'text-pink-400' });
+    }
+
+    // メッセージが1つもない場合のデフォルト
+    if (messages.length === 0) {
+      messages.push({ icon: '📝', text: `予算が設定されていません。設定タブから「生活費予算」を設定するとアドバイスが表示されます。`, color: 'text-zinc-400' });
+    }
+
+    return messages;
+  }, [summary, month]);
+
+  // ✅ ドーナツチャート（カラフルな横棒）用の内訳データ計算
+  const spendingBreakdown = useMemo(() => {
+    const colors = ['bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400', 'bg-purple-400', 'bg-zinc-400'];
+    const total = summary.totalSpent;
+    if (total === 0) return { items: [], total: 0 };
+
+    // 金額が大きい順にソート
+    const arr = Object.entries(summary.catTotals)
+      .map(([name, amount]) => ({ name, amount }))
+      .filter(item => item.amount > 0);
+    arr.sort((a, b) => b.amount - a.amount);
+
+    let items = [];
+    if (arr.length <= 6) {
+      items = arr.map((item, i) => ({ ...item, color: colors[i], percent: (item.amount / total) * 100 }));
+    } else {
+      // 6個以上の場合は「その他」にまとめる
+      const top5 = arr.slice(0, 5);
+      const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
+      items = top5.map((item, i) => ({ ...item, color: colors[i], percent: (item.amount / total) * 100 }));
+      items.push({ name: 'その他', amount: otherAmount, color: colors[5], percent: (otherAmount / total) * 100 });
+    }
+
+    return { items, total };
+  }, [summary.catTotals, summary.totalSpent]);
+
+
   /* --- ALERTS --- */
   const activeAlerts = useMemo(() => {
     const today = new Date().getDate();
@@ -844,13 +923,11 @@ function AppMain() {
           )}
         </header>
 
-        {/* ✅ log タブの時だけ main 自体のスクロールを停止 */}
         <main ref={mainRef} className={`flex-1 relative ${activeTab === 'log' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
           
           {/* ✅ ホーム画面（1ページ化） */}
           {activeTab === 'home' && (
             <div className="flex flex-col relative">
-              {/* 📌 LINE風 追従アナウンス（メモ）- ヘッダー直下に配置して隙間なし！ */}
               {monthlyData.memo && (
                 <div 
                   onClick={() => setIsMemoExpanded(!isMemoExpanded)}
@@ -866,10 +943,9 @@ function AppMain() {
                 </div>
               )}
 
-              {/* メインコンテンツ */}
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
                 
-                {/* ① 残高セクション（✅ 1つのカードに2カラムで配置） */}
+                {/* ① 残高セクション */}
                 <div className="space-y-4">
                   <SimpleCard className="p-0">
                     <div className="grid grid-cols-2 divide-x divide-white/5">
@@ -892,7 +968,6 @@ function AppMain() {
                             <span>利用済</span><span>¥{summary.spentCard.toLocaleString()}</span>
                           </div>
                           <div className="flex justify-between text-[8px] text-zinc-500 pb-0.5">
-                            {/* ✅ カードの「総枠」も太字に統一 */}
                             <span>総枠</span><span className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</span>
                           </div>
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
@@ -913,7 +988,6 @@ function AppMain() {
                           </h2>
                         </div>
                         <div className="mt-4 flex-1 flex flex-col justify-end space-y-1">
-                          {/* ✅ 口座の方も「利用済」を表示 */}
                           <div className="flex justify-between text-[8px] text-zinc-500">
                             <span>利用済</span><span>¥{summary.spentCash.toLocaleString()}</span>
                           </div>
@@ -929,7 +1003,7 @@ function AppMain() {
                   </SimpleCard>
                 </div>
 
-                {/* ② カテゴリセクション（✅ 1つのカードにまとめてラインで区切る） */}
+                {/* ② カテゴリセクション */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 予算</h3>
                   <SimpleCard className="p-0 overflow-hidden">
@@ -942,17 +1016,14 @@ function AppMain() {
                           <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
                             <div className="flex justify-between items-center text-[9px] font-bold">
                               <div className="flex items-center gap-1.5"><span>{getCategoryIcon(n)}</span><span className="text-zinc-400">{n}</span></div>
-                              {/* ✅ オーバー時は赤字アラート */}
                               <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                              {/* ✅ オーバー時はバーを赤く */}
                               <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${Math.min(100, (s / b) * 100)}%` }} />
                             </div>
                           </div>
                         );
                       })}
-                      {/* ✅ 奇数個の時の空欄を綺麗に埋める */}
                       {activeCategories.length % 2 !== 0 && (
                         <div className="bg-[#1E1E1E]" />
                       )}
@@ -989,7 +1060,6 @@ function AppMain() {
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
                   <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
-                    {/* ✅ 重複した見出しを削除してスッキリ */}
                     <div className="flex items-end justify-between">
                        <div>
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
@@ -1007,10 +1077,9 @@ function AppMain() {
             </div>
           )}
 
-          {/* 🔽 以降は log, analysis, settings タブの表示 */}
+          {/* 🔽 Logタブ */}
           {activeTab === 'log' && (
             <div className="animate-in fade-in flex flex-col h-full pt-3">
-              {/* フィルター部分（固定ではなく flex-none で配置） */}
               <div className="flex-none px-4 pb-3 space-y-3 z-10">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
@@ -1064,7 +1133,6 @@ function AppMain() {
                 </div>
               </div>
 
-              {/* リスト・カレンダー部分（flex-1 で余白を埋め、カードの「内側」だけスクロール） */}
               <div className="flex-1 px-4 pb-6 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
@@ -1121,36 +1189,76 @@ function AppMain() {
             </div>
           )}
 
+          {/* ✅ Analysis タブ（大進化！） */}
           {activeTab === 'analysis' && (
-            <div className="px-4 pt-4 pb-32 space-y-4 animate-in fade-in">
-              <SimpleCard className="p-4">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">特別費（別枠）</p>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-zinc-400">
-                    <span className="font-bold">今月の特別費</span>
-                    <span className="text-white font-black tabular-nums">¥{Number(summary.specialTotalSpent || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-zinc-400">
-                    <span className="font-bold">先月の特別費</span>
-                    <span className="text-white font-black tabular-nums">¥{Number(summary.lastSpecialTotalSpent || 0).toLocaleString()}</span>
-                  </div>
-                </div>
-              </SimpleCard>
-              <SimpleCard className="p-6">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-4">先月との比較</p>
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <h3 className="text-4xl font-black text-white">¥{summary.totalSpent.toLocaleString()}</h3>
-                    <div className={`flex items-center gap-1.5 mt-2 text-xs font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
-                      {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
-                      <span>先月より ¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()} {summary.totalSpent <= summary.lastTotalSpent ? '減少' : '増加'}</span>
-                    </div>
-                  </div>
-                  <div className="text-right text-[10px] text-zinc-600 uppercase font-black">先月総支出<p className="text-sm font-bold text-zinc-500">¥{summary.lastTotalSpent.toLocaleString()}</p></div>
-                </div>
-              </SimpleCard>
+            <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
-              {/* ✅ 「カテゴリ別 比較」のタイトルを外に出してスッキリ統一 */}
+              {/* 💡 AI 家計診断 */}
+              <div className="space-y-3">
+                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1 flex items-center gap-1.5"><Sparkles size={12} className="text-yellow-400" /> AI 家計診断</h3>
+                 <div className="space-y-2">
+                   {aiMessages.map((msg, idx) => (
+                      <SimpleCard key={idx} className="p-4 flex gap-3 items-start bg-white/5 border border-white/10">
+                         <div className="text-xl shrink-0 mt-0.5">{msg.icon}</div>
+                         <p className={`text-xs font-bold leading-relaxed ${msg.color}`}>{msg.text}</p>
+                      </SimpleCard>
+                   ))}
+                 </div>
+              </div>
+
+              {/* 🍩 今月の支出内訳（カラフルバー） */}
+              <div className="space-y-3">
+                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月の支出内訳</h3>
+                 <SimpleCard className="p-5 space-y-6">
+                    <div className="text-center">
+                       <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">総支出（特別費のぞく）</p>
+                       <h3 className="text-3xl font-black text-white tracking-tight">¥{spendingBreakdown.total.toLocaleString()}</h3>
+                    </div>
+                    {spendingBreakdown.total > 0 ? (
+                      <>
+                        {/* Stacked Bar */}
+                        <div className="flex h-4 rounded-full overflow-hidden gap-0.5">
+                          {spendingBreakdown.items.map((item, idx) => (
+                             <div key={idx} className={`h-full ${item.color} transition-all duration-1000`} style={{ width: `${item.percent}%` }} />
+                          ))}
+                        </div>
+                        {/* Legend */}
+                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 pt-2">
+                          {spendingBreakdown.items.map((item, idx) => (
+                             <div key={idx} className="flex items-center gap-2">
+                               <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.color}`} />
+                               <div className="min-w-0 flex-1">
+                                 <p className="text-[10px] font-bold text-zinc-300 truncate">{item.name}</p>
+                                 <p className="text-[9px] text-zinc-500">¥{item.amount.toLocaleString()} ({Math.round(item.percent)}%)</p>
+                               </div>
+                             </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center text-xs text-zinc-600 py-4 font-bold">まだ支出がありません</div>
+                    )}
+                 </SimpleCard>
+              </div>
+
+              {/* 📉 先月との比較 */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">先月との比較</h3>
+                <SimpleCard className="p-6">
+                  <div className="flex items-end justify-between gap-4">
+                    <div>
+                      <h3 className="text-4xl font-black text-white tracking-tight">¥{summary.totalSpent.toLocaleString()}</h3>
+                      <div className={`flex items-center gap-1.5 mt-2 text-xs font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
+                        {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
+                        <span>先月より ¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()} {summary.totalSpent <= summary.lastTotalSpent ? '減少' : '増加'}</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-[10px] text-zinc-600 uppercase font-black">先月総支出<p className="text-sm font-bold text-zinc-500">¥{summary.lastTotalSpent.toLocaleString()}</p></div>
+                  </div>
+                </SimpleCard>
+              </div>
+              
+              {/* 📊 カテゴリ別 比較 */}
               <div className="space-y-3">
                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
                 <SimpleCard className="p-0 overflow-hidden">
@@ -1178,6 +1286,24 @@ function AppMain() {
                   </div>
                 </SimpleCard>
               </div>
+
+              {/* 🎁 特別費 */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">特別費（別枠）</h3>
+                <SimpleCard className="p-4">
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span className="font-bold">今月の特別費</span>
+                      <span className="text-white font-black tabular-nums">¥{Number(summary.specialTotalSpent || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-zinc-400">
+                      <span className="font-bold">先月の特別費</span>
+                      <span className="text-white font-black tabular-nums">¥{Number(summary.lastSpecialTotalSpent || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </SimpleCard>
+              </div>
+
             </div>
           )}
 
@@ -1391,7 +1517,7 @@ function AppMain() {
               <h2 className="text-[10px] font-black uppercase text-white tracking-widest">電卓</h2>
               <button type="button" onClick={() => setShowCalculator(false)} className="p-2 text-zinc-500"><X size={20} /></button>
             </div>
-            <div className="p-5 pb-12">
+            <div className="p-5 pb-16">
               <CalculatorPad
                 initialValue={calcInitialValue}
                 onConfirm={(val) => {
