@@ -591,19 +591,31 @@ function AppMain() {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
 
-    const arr = Object.entries(summary.catTotals)
+    // ✅ 「その他」バグ修正：事前にユーザーの「その他」を取り出し、最後に合算する
+    const catTotalsCopy = { ...summary.catTotals };
+    const explicitOtherAmount = catTotalsCopy['その他'] || 0;
+    delete catTotalsCopy['その他'];
+
+    const arr = Object.entries(catTotalsCopy)
       .map(([name, amount]) => ({ name, amount }))
       .filter(item => item.amount > 0);
     arr.sort((a, b) => b.amount - a.amount);
 
     let items = [];
-    if (arr.length <= 6) {
+    if (arr.length + (explicitOtherAmount > 0 ? 1 : 0) <= 6) {
       items = arr.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
+      if (explicitOtherAmount > 0) {
+        items.push({ name: 'その他', amount: explicitOtherAmount, color: getCategoryColor(items.length) });
+      }
     } else {
       const top5 = arr.slice(0, 5);
-      const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
+      const remainingAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
+      const finalOtherAmount = remainingAmount + explicitOtherAmount;
+      
       items = top5.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
-      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor(5) });
+      if (finalOtherAmount > 0) {
+        items.push({ name: 'その他', amount: finalOtherAmount, color: getCategoryColor(5) });
+      }
     }
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
@@ -1011,6 +1023,7 @@ function AppMain() {
                               <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
+                              {/* プログレスバーは白ベースに */}
                               <div className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} style={{ width: `${percent}%` }} />
                             </div>
                           </div>
@@ -1051,6 +1064,7 @@ function AppMain() {
                 {/* ④ 貯金セクション */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
+                  {/* ✅ 背景の緑色指定を削除 */}
                   <SimpleCard className="p-5">
                     <div className="flex items-end justify-between">
                        <div>
