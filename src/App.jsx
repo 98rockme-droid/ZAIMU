@@ -157,6 +157,27 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
+// ✅ 落ち着いたくすみカラー（Muted Colors）のパレット
+const MUTED_COLORS = [
+  '#60A5FA', // Blue (少し彩度抑えめ)
+  '#34D399', // Emerald
+  '#FBBF24', // Amber
+  '#F472B6', // Pink
+  '#A78BFA', // Purple
+  '#FB923C', // Orange
+  '#4ADE80', // Teal
+  '#FCD34D', // Yellow
+  '#818CF8'  // Indigo
+];
+const getCategoryColor = (name) => {
+  if (name === 'その他') return '#A1A1AA';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return MUTED_COLORS[Math.abs(hash) % MUTED_COLORS.length];
+};
+
 /* --- COMPONENTS --- */
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -317,7 +338,6 @@ function AppMain() {
   const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
 
-  // ✅ 円グラフ用の選択状態
   const [selectedDonutSlice, setSelectedDonutSlice] = useState(null);
 
   const FAQ_DATA = [
@@ -544,10 +564,8 @@ function AppMain() {
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
-  // ✅ 有効なカテゴリのみ抽出
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
-  // ✅ 最重要なAIコメント
   const aiMessage = useMemo(() => {
     const d = new Date();
     const isCurrentMonth = month === getMonthString(d);
@@ -583,8 +601,7 @@ function AppMain() {
     return { icon: '📝', text: `生活費予算を設定すると、ここにAIアドバイスが表示されます。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
   }, [summary, month]);
 
-  // ✅ SVG円グラフ（パイチャート）用のデータ作成
-  // ※カラフルさを抑え、金額が大きい順にグレースケールのグラデーションを適用
+  // ✅ SVG円グラフ用のデータ作成（くすみカラーパレット適用）
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
@@ -594,17 +611,14 @@ function AppMain() {
       .filter(item => item.amount > 0);
     arr.sort((a, b) => b.amount - a.amount);
 
-    // 美しいモノトーンのパレット（金額が多いほど明るい色）
-    const GRAY_PALETTE = ['#FFFFFF', '#F4F4F5', '#E4E4E7', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B'];
-
     let items = [];
     if (arr.length <= 6) {
-      items = arr.map((item, idx) => ({ ...item, color: GRAY_PALETTE[idx % GRAY_PALETTE.length] }));
+      items = arr.map(item => ({ ...item, color: getCategoryColor(item.name) }));
     } else {
       const top5 = arr.slice(0, 5);
       const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-      items = top5.map((item, idx) => ({ ...item, color: GRAY_PALETTE[idx] }));
-      items.push({ name: 'その他', amount: otherAmount, color: GRAY_PALETTE[5] });
+      items = top5.map(item => ({ ...item, color: getCategoryColor(item.name) }));
+      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor('その他') });
     }
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
@@ -880,7 +894,7 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  // ✅ インタラクティブな円グラフ（穴なしの完全なパイチャート・見切れ防止版）
+  // ✅ インタラクティブな円グラフ（見切れ防止 ＆ 隙間なしの完全なパイチャート）
   const InteractivePieChart = ({ data, total, selectedSlice, onSelect }) => {
     const radius = 25;
     const circumference = 2 * Math.PI * radius;
@@ -888,8 +902,7 @@ function AppMain() {
 
     return (
       <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-        {/* viewBoxを広げてはみ出しを防ぐ */}
-        <svg viewBox="-10 -10 120 120" className="w-full h-full -rotate-90 drop-shadow-lg">
+        <svg viewBox="-20 -20 140 140" className="w-full h-full -rotate-90 drop-shadow-lg">
           {total === 0 && (
             <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth="50" />
           )}
@@ -907,8 +920,9 @@ function AppMain() {
                 r={radius}
                 fill="transparent"
                 stroke={item.color}
-                strokeWidth={isSelected ? "56" : "50"}
-                strokeDasharray={`${Math.max(strokeLength - 0.5, 0)} ${circumference}`}
+                strokeWidth={isSelected ? "60" : "50"}
+                // 隙間を作らずにピッタリくっつける
+                strokeDasharray={`${strokeLength} ${circumference}`}
                 strokeDashoffset={-offset}
                 className="transition-all duration-300 cursor-pointer hover:opacity-80"
                 onClick={() => onSelect(isSelected ? null : item)}
@@ -1047,13 +1061,12 @@ function AppMain() {
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            {/* ✅ マージンを詰めて1行にスッキリまとめる */}
+                            {/* マージンを詰めて1行に */}
                             <div className="flex items-baseline gap-1 mb-1.5">
                               <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
                               <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
-                              {/* ✅ プログレスバーの色は白・グレー（オーバー時のみ赤）に統一 */}
                               <div className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} style={{ width: `${percent}%` }} />
                             </div>
                           </div>
@@ -1094,7 +1107,8 @@ function AppMain() {
                 {/* ④ 貯金セクション */}
                 <div className="space-y-3">
                   <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">積立貯金</h3>
-                  <SimpleCard className="p-5 bg-emerald-500/10 border-emerald-500/30">
+                  {/* ✅ 背景の緑色指定を削除 */}
+                  <SimpleCard className="p-5">
                     <div className="flex items-end justify-between">
                        <div>
                          <p className="text-[10px] text-zinc-400 font-bold uppercase mb-1">総額</p>
@@ -1224,11 +1238,11 @@ function AppMain() {
             </div>
           )}
 
-          {/* ✅ Analysis タブ（大進化！） */}
+          {/* ✅ Analysis タブ */}
           {activeTab === 'analysis' && (
             <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
-              {/* 💡 AI 家計診断（1行のコンパクト版） */}
+              {/* 💡 AI 家計診断 */}
               {aiMessage && (
                 <div className={`p-3 rounded-xl border flex items-center gap-3 ${aiMessage.bg} ${aiMessage.border}`}>
                    <span className="text-xl shrink-0">{aiMessage.icon}</span>
@@ -1236,14 +1250,13 @@ function AppMain() {
                 </div>
               )}
 
-              {/* 🍩 今月のダッシュボード（1つの巨大カードに完全統合） */}
+              {/* 🍩 今月のダッシュボード */}
               <div className="space-y-3">
                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
                  <SimpleCard className="p-0 overflow-hidden">
                     
-                    {/* ✅ 左に円グラフ、右にテキスト情報の横並びレイアウト */}
+                    {/* 左に円グラフ、右にテキスト情報の横並びレイアウト */}
                     <div className="p-4 flex items-center gap-5 border-b border-white/5">
-                      {/* インタラクティブなパイチャート（穴なし） */}
                       <InteractivePieChart 
                         data={donutChartData.items} 
                         total={donutChartData.total} 
@@ -1251,10 +1264,8 @@ function AppMain() {
                         onSelect={setSelectedDonutSlice} 
                       />
 
-                      {/* 右側の情報エリア（選択状態に応じて表示切り替え） */}
                       <div className="flex-1 flex flex-col justify-center min-w-0 pl-2">
                          {selectedDonutSlice ? (
-                           // タップ時：カテゴリの詳細
                            <div className="animate-in fade-in slide-in-from-left-2">
                              <div className="flex items-center gap-2 mb-1.5">
                                <span className="text-xs text-zinc-300 font-bold truncate">{selectedDonutSlice.name}</span>
@@ -1267,7 +1278,6 @@ function AppMain() {
                              </span>
                            </div>
                          ) : (
-                           // 未選択時：全体のサマリーと特別費
                            <div className="animate-in fade-in slide-in-from-right-2">
                              <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
                              <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1.5">¥{summary.totalSpent.toLocaleString()}</h3>
@@ -1277,7 +1287,6 @@ function AppMain() {
                                <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
                              </div>
                              
-                             {/* ✅ 特別費をここに統合 */}
                              <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
                                <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
                                <div className="flex items-baseline gap-1">
@@ -1297,7 +1306,6 @@ function AppMain() {
                         const l = summary.lastCatTotals[n] || 0;
                         const b = monthlyData.catBudgets?.[n] || 0;
                         
-                        // 予算もなく支出もない項目は非表示
                         if (b === 0 && c === 0) return null;
 
                         const isOver = b > 0 && c > b;
@@ -1305,27 +1313,27 @@ function AppMain() {
 
                         return (
                           <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-center">
-                            {/* 上段：アイコンと名前 */}
+                            {/* アイコンと名前（色玉は削除） */}
                             <div className="flex items-center gap-1.5 mb-2">
-                              {/* 色玉を削除し、モノトーンに */}
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
 
-                            {/* 中段：金額と先月比を高密度に配置 */}
+                            {/* 金額と先月比を高密度に配置 */}
                             <div className="flex flex-col gap-1 mb-2">
+                              {/* マージンを詰めて1行に */}
                               <div className="flex items-baseline gap-1">
                                 <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
                                 <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                               </div>
-                              {/* 先月比テキスト（カラフルをやめてグレーに統一） */}
+                              {/* 先月比テキスト（グレーに統一） */}
                               <div className="flex items-baseline gap-1 text-[8px] font-bold text-zinc-500">
                                 <span>先月 ¥{l.toLocaleString()}</span>
                                 <span>{c > l ? '+' : ''}¥{(c - l).toLocaleString()}</span>
                               </div>
                             </div>
 
-                            {/* 下段：プログレスバー（白とグレーのモノトーン、オーバー時のみ赤） */}
+                            {/* プログレスバー（白とグレーのモノトーン、オーバー時のみ赤） */}
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
                               <div 
                                 className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
