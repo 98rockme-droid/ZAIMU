@@ -157,8 +157,8 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 洗練されたグレースケールカラーパレット
-const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
+// ✅ 落ち着いたグレースケールパレット（明るすぎないトーンに調整）
+const GRAY_PALETTE = ['#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const getCategoryColor = (index) => {
   return GRAY_PALETTE[index % GRAY_PALETTE.length];
 };
@@ -879,7 +879,7 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  // ✅ インタラクティブな円グラフ（放射状の隙間で綺麗に分割）
+  // ✅ インタラクティブな円グラフ（境界線を細く統一＆色変更）
   const InteractivePieChart = ({ data, total }) => {
     const radius = 25;
     const strokeWidth = 50;
@@ -889,7 +889,7 @@ function AppMain() {
 
     return (
       <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90 drop-shadow-lg">
+        <svg viewBox="-20 -20 140 140" className="w-full h-full -rotate-90 drop-shadow-lg">
           {total === 0 && (
             <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth={strokeWidth} />
           )}
@@ -898,7 +898,6 @@ function AppMain() {
             const offset = currentOffset;
             currentOffset += strokeLength;
 
-            // 境界線を引くための角度を記録
             const angle = (currentOffset / circumference) * 360;
             if (item.amount > 0 && item !== data[data.length - 1]) {
                boundaryAngles.push(angle);
@@ -918,7 +917,7 @@ function AppMain() {
               />
             );
           })}
-          {/* ✅ 隙間を背景色で上書き描画し、均等な分割線を表現 */}
+          {/* ✅ 境界線を極細(0.5)に統一 */}
           {boundaryAngles.map((angle, i) => (
              <line 
                 key={i}
@@ -926,7 +925,7 @@ function AppMain() {
                 x2={50 + 50 * Math.cos(angle * Math.PI / 180)} 
                 y2={50 + 50 * Math.sin(angle * Math.PI / 180)} 
                 stroke="#1E1E1E" 
-                strokeWidth="1.5" 
+                strokeWidth="0.5" 
              />
           ))}
         </svg>
@@ -1066,7 +1065,6 @@ function AppMain() {
                               <span className="text-[8px] text-zinc-500">/ ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
-                              {/* プログレスバーは白ベースに */}
                               <div className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} style={{ width: `${percent}%` }} />
                             </div>
                           </div>
@@ -1237,7 +1235,7 @@ function AppMain() {
             </div>
           )}
 
-          {/* ✅ Analysis タブ（大進化！） */}
+          {/* ✅ Analysis タブ */}
           {activeTab === 'analysis' && (
             <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
@@ -1249,18 +1247,16 @@ function AppMain() {
                 </div>
               )}
 
-              {/* 🍩 今月のサマリー（円グラフ＋特別費統合） */}
+              {/* 🍩 今月のダッシュボード */}
               <div className="space-y-3">
                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
                  <SimpleCard className="p-0 overflow-hidden">
                     <div className="p-4 flex items-center gap-5">
-                      {/* 左：インタラクティブなパイチャート */}
                       <InteractivePieChart 
                         data={donutChartData.items} 
                         total={donutChartData.total} 
                       />
 
-                      {/* 右：総支出・先月比・特別費 */}
                       <div className="flex-1 flex flex-col justify-center min-w-0 pl-2">
                          <div className="animate-in fade-in slide-in-from-right-2">
                            <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
@@ -1271,7 +1267,7 @@ function AppMain() {
                              <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
                            </div>
                            
-                           {/* 特別費をここに統合 */}
+                           {/* 特別費 */}
                            <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
                              <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
                              <div className="flex items-baseline gap-1">
@@ -1289,7 +1285,6 @@ function AppMain() {
               <div className="space-y-3">
                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
                 <SimpleCard className="p-0 overflow-hidden">
-                  {/* 高密度化されたカテゴリ別比較リスト */}
                   <div className="grid grid-cols-2 gap-px bg-white/5">
                     {activeCategories.map(n => {
                       const c = summary.catTotals[n] || 0;
@@ -1304,12 +1299,10 @@ function AppMain() {
                       return (
                         <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
                           <div className="flex items-center justify-between mb-2">
-                            {/* アイコンと名前（色玉なし） */}
                             <div className="flex items-center gap-1.5">
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            {/* 実績/目標と先月実績を右側に高密度で配置 */}
                             <div className="text-right flex flex-col">
                                <div className="flex items-baseline justify-end">
                                  <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
@@ -1319,7 +1312,6 @@ function AppMain() {
                             </div>
                           </div>
 
-                          {/* プログレスバー（モノトーン、オーバー時のみ赤） */}
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
                             <div 
                               className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
