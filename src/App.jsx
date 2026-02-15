@@ -378,6 +378,17 @@ function AppMain() {
   const paymentMethodsSafe = config?.paymentMethods?.length ? config.paymentMethods : [CASH];
   const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL', special: false }); };
 
+  // ✅ カテゴリ用のカラーパレット
+  const CAT_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#C084FC', '#F87171', '#2DD4BF', '#FCD34D', '#A855F7', '#A1A1AA'];
+  const categoryColors = useMemo(() => {
+    const map = {};
+    getCategoryNames().forEach((name, i) => {
+      map[name] = CAT_COLORS[i % CAT_COLORS.length];
+    });
+    map['その他'] = '#A1A1AA';
+    return map;
+  }, [config]);
+
   /* --- AUTH --- */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -541,86 +552,64 @@ function AppMain() {
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
-  // ✅ 有効なカテゴリのみ抽出（予算設定されているもの）
-  const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0);
+  // ✅ 有効なカテゴリのみ抽出（予算設定されているもの、または支出があったもの）
+  const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
-  // ✅ AI 家計診断ロジック
-  const aiMessages = useMemo(() => {
-    const messages = [];
+  // ✅ 最重要なAIコメントを1つだけ選出する
+  const aiMessage = useMemo(() => {
     const d = new Date();
-    // 表示している月が「今月」かどうかを判定
     const isCurrentMonth = month === getMonthString(d);
-    
-    // 月末までの日数を計算
     const today = d.getDate();
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const progress = today / daysInMonth;
-
     const variableBudget = summary.variableBudget;
     const spent = summary.totalSpent;
     const spentRatio = variableBudget > 0 ? spent / variableBudget : 0;
 
     if (isCurrentMonth && variableBudget > 0) {
       if (spent > variableBudget) {
-        messages.push({ icon: '🚨', text: `変動費の予算（¥${variableBudget.toLocaleString()}）をオーバーしています！残りの日数は0円を意識して過ごしましょう。`, color: 'text-red-400' });
-      } else if (spentRatio > progress + 0.15) {
-        messages.push({ icon: '⚠️', text: `ペースが早めです。月の${Math.round(progress * 100)}%が経過しましたが、すでに予算の${Math.round(spentRatio * 100)}%を使っています。`, color: 'text-amber-400' });
-      } else if (spentRatio < progress - 0.1) {
-        messages.push({ icon: '🌟', text: '素晴らしいペースです！予算に対してかなりゆとりを持ってやりくりできています。', color: 'text-emerald-400' });
+        return { icon: '🚨', text: `予算オーバー！残りは0円を意識して乗り切りましょう。`, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' };
       }
-
+      if (spentRatio > progress + 0.15) {
+        return { icon: '⚠️', text: `支出ペースが早めです！予算の${Math.round(spentRatio * 100)}%を消費しました。`, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
+      }
+      if (spentRatio < progress - 0.1) {
+        return { icon: '🌟', text: `素晴らしいペース！予算に対してかなりゆとりがあります。`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
+      }
       const remainingDays = daysInMonth - today + 1;
       const dailyAvailable = Math.max(0, variableBudget - spent) / remainingDays;
-      if (spent <= variableBudget && dailyAvailable > 0) {
-         messages.push({ icon: '💡', text: `今月は残り${remainingDays}日。1日あたり約${Math.floor(dailyAvailable).toLocaleString()}円使えます！`, color: 'text-blue-400' });
-      }
-    } else if (!isCurrentMonth && variableBudget > 0) {
-       // 過去（または未来）の月の判定
+      return { icon: '💡', text: `今月は残り${remainingDays}日。1日あたり約${Math.floor(dailyAvailable).toLocaleString()}円使えます！`, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' };
+    }
+    
+    if (!isCurrentMonth && variableBudget > 0) {
        if (spent > variableBudget) {
-         messages.push({ icon: '👀', text: `この月は変動費予算をオーバーしていました。（オーバー額: ¥${(spent - variableBudget).toLocaleString()}）`, color: 'text-amber-400' });
-       } else if (spent > 0) {
-         messages.push({ icon: '🎉', text: `この月は予算内に綺麗に収まりました！（黒字: ¥${(variableBudget - spent).toLocaleString()}）`, color: 'text-emerald-400' });
+         return { icon: '👀', text: `この月は変動費予算を ¥${(spent - variableBudget).toLocaleString()} オーバーしていました。`, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
        }
+       return { icon: '🎉', text: `この月は予算内に収まりました！（黒字: ¥${(variableBudget - spent).toLocaleString()}）`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
     }
-
-    // 積立の設定があれば褒める
-    if (summary.savingsAmount > 0) {
-       messages.push({ icon: '🐷', text: `今月も ¥${summary.savingsAmount.toLocaleString()} の先取り貯金が設定されています！`, color: 'text-pink-400' });
-    }
-
-    // メッセージが1つもない場合のデフォルト
-    if (messages.length === 0) {
-      messages.push({ icon: '📝', text: `予算が設定されていません。設定タブから「生活費予算」を設定するとアドバイスが表示されます。`, color: 'text-zinc-400' });
-    }
-
-    return messages;
+    
+    return { icon: '📝', text: `生活費予算を設定すると、ここにAIアドバイスが表示されます。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
   }, [summary, month]);
 
-  // ✅ ドーナツチャート（カラフルな横棒）用の内訳データ計算
-  const spendingBreakdown = useMemo(() => {
-    const colors = ['bg-blue-400', 'bg-emerald-400', 'bg-amber-400', 'bg-pink-400', 'bg-purple-400', 'bg-zinc-400'];
-    const total = summary.totalSpent;
-    if (total === 0) return { items: [], total: 0 };
-
-    // 金額が大きい順にソート
-    const arr = Object.entries(summary.catTotals)
-      .map(([name, amount]) => ({ name, amount }))
-      .filter(item => item.amount > 0);
-    arr.sort((a, b) => b.amount - a.amount);
-
-    let items = [];
-    if (arr.length <= 6) {
-      items = arr.map((item, i) => ({ ...item, color: colors[i], percent: (item.amount / total) * 100 }));
-    } else {
-      // 6個以上の場合は「その他」にまとめる
-      const top5 = arr.slice(0, 5);
-      const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-      items = top5.map((item, i) => ({ ...item, color: colors[i], percent: (item.amount / total) * 100 }));
-      items.push({ name: 'その他', amount: otherAmount, color: colors[5], percent: (otherAmount / total) * 100 });
-    }
-
-    return { items, total };
-  }, [summary.catTotals, summary.totalSpent]);
+  // ✅ ドーナツチャートの描画用文字列（CSS conic-gradient）を生成
+  const conicGradientString = useMemo(() => {
+    if (summary.totalSpent === 0) return 'transparent 0 100%';
+    let cumulative = 0;
+    const parts = [];
+    
+    // 支出額が大きい順に描画
+    const sorted = Object.entries(summary.catTotals)
+      .filter(([_, amount]) => amount > 0)
+      .sort((a, b) => b[1] - a[1]);
+    
+    sorted.forEach(([name, amount]) => {
+      const pct = (amount / summary.totalSpent) * 100;
+      const color = categoryColors[name] || '#A1A1AA';
+      parts.push(`${color} ${cumulative}% ${cumulative + pct}%`);
+      cumulative += pct;
+    });
+    return parts.join(', ');
+  }, [summary.totalSpent, summary.catTotals, categoryColors]);
 
 
   /* --- ALERTS --- */
@@ -1011,7 +1000,7 @@ function AppMain() {
                       {activeCategories.map(n => {
                         const s = summary.catTotals[n] || 0;
                         const b = monthlyData.catBudgets?.[n] || 0;
-                        const isOver = s > b;
+                        const isOver = b > 0 && s > b;
                         return (
                           <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
                             <div className="flex justify-between items-center text-[9px] font-bold">
@@ -1019,7 +1008,7 @@ function AppMain() {
                               <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                              <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${Math.min(100, (s / b) * 100)}%` }} />
+                              <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${b > 0 ? Math.min(100, (s / b) * 100) : 0}%` }} />
                             </div>
                           </div>
                         );
@@ -1193,115 +1182,91 @@ function AppMain() {
           {activeTab === 'analysis' && (
             <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
-              {/* 💡 AI 家計診断 */}
-              <div className="space-y-3">
-                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1 flex items-center gap-1.5"><Sparkles size={12} className="text-yellow-400" /> AI 家計診断</h3>
-                 <div className="space-y-2">
-                   {aiMessages.map((msg, idx) => (
-                      <SimpleCard key={idx} className="p-4 flex gap-3 items-start bg-white/5 border border-white/10">
-                         <div className="text-xl shrink-0 mt-0.5">{msg.icon}</div>
-                         <p className={`text-xs font-bold leading-relaxed ${msg.color}`}>{msg.text}</p>
-                      </SimpleCard>
-                   ))}
-                 </div>
-              </div>
+              {/* 💡 AI 家計診断（1行のコンパクト版） */}
+              {aiMessage && (
+                <div className={`p-3 rounded-xl border flex items-center gap-3 ${aiMessage.bg} ${aiMessage.border}`}>
+                   <span className="text-xl shrink-0">{aiMessage.icon}</span>
+                   <span className={`text-xs font-bold leading-snug ${aiMessage.color}`}>{aiMessage.text}</span>
+                </div>
+              )}
 
-              {/* 🍩 今月の支出内訳（カラフルバー） */}
+              {/* 🍩 今月のダッシュボード（1つの巨大カードに完全統合） */}
               <div className="space-y-3">
-                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月の支出内訳</h3>
-                 <SimpleCard className="p-5 space-y-6">
-                    <div className="text-center">
-                       <p className="text-[10px] text-zinc-500 font-bold uppercase mb-1">総支出（特別費のぞく）</p>
-                       <h3 className="text-3xl font-black text-white tracking-tight">¥{spendingBreakdown.total.toLocaleString()}</h3>
-                    </div>
-                    {spendingBreakdown.total > 0 ? (
-                      <>
-                        {/* Stacked Bar */}
-                        <div className="flex h-4 rounded-full overflow-hidden gap-0.5">
-                          {spendingBreakdown.items.map((item, idx) => (
-                             <div key={idx} className={`h-full ${item.color} transition-all duration-1000`} style={{ width: `${item.percent}%` }} />
-                          ))}
+                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
+                 <SimpleCard className="p-0 overflow-hidden">
+                    
+                    {/* ドーナツチャート ＆ 総支出エリア */}
+                    <div className="p-6 flex flex-col items-center border-b border-white/5">
+                      <div className="relative w-48 h-48 flex items-center justify-center rounded-full" style={{ background: `conic-gradient(${conicGradientString})` }}>
+                        <div className="absolute inset-0 m-4 rounded-full bg-[#1E1E1E] flex flex-col items-center justify-center shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
+                           <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
+                           <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1">¥{summary.totalSpent.toLocaleString()}</h3>
+                           <div className={`flex items-center gap-0.5 text-[9px] font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
+                             {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                             <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
+                           </div>
                         </div>
-                        {/* Legend */}
-                        <div className="grid grid-cols-2 gap-y-3 gap-x-2 pt-2">
-                          {spendingBreakdown.items.map((item, idx) => (
-                             <div key={idx} className="flex items-center gap-2">
-                               <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.color}`} />
-                               <div className="min-w-0 flex-1">
-                                 <p className="text-[10px] font-bold text-zinc-300 truncate">{item.name}</p>
-                                 <p className="text-[9px] text-zinc-500">¥{item.amount.toLocaleString()} ({Math.round(item.percent)}%)</p>
-                               </div>
-                             </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-center text-xs text-zinc-600 py-4 font-bold">まだ支出がありません</div>
-                    )}
-                 </SimpleCard>
-              </div>
-
-              {/* 📉 先月との比較 */}
-              <div className="space-y-3">
-                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">先月との比較</h3>
-                <SimpleCard className="p-6">
-                  <div className="flex items-end justify-between gap-4">
-                    <div>
-                      <h3 className="text-4xl font-black text-white tracking-tight">¥{summary.totalSpent.toLocaleString()}</h3>
-                      <div className={`flex items-center gap-1.5 mt-2 text-xs font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
-                        {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
-                        <span>先月より ¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()} {summary.totalSpent <= summary.lastTotalSpent ? '減少' : '増加'}</span>
                       </div>
-                    </div>
-                    <div className="text-right text-[10px] text-zinc-600 uppercase font-black">先月総支出<p className="text-sm font-bold text-zinc-500">¥{summary.lastTotalSpent.toLocaleString()}</p></div>
-                  </div>
-                </SimpleCard>
-              </div>
-              
-              {/* 📊 カテゴリ別 比較 */}
-              <div className="space-y-3">
-                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
-                <SimpleCard className="p-0 overflow-hidden">
-                  <div className="grid grid-cols-2 gap-px bg-white/5">
-                    {getCategoryNames().map(n => {
-                      const c = summary.catTotals[n] || 0;
-                      const l = summary.lastCatTotals[n] || 0;
-                      const max = Math.max(c, l, 1);
-                      return (
-                        <div key={n} className="bg-[#1E1E1E] p-4 space-y-2">
-                          <div className="flex justify-between items-center font-bold text-[10px]">
-                            <div className="flex items-center gap-2"><span className="text-sm">{getCategoryIcon(n)}</span><span className="text-zinc-300">{n}</span></div>
-                            <div className="text-right flex flex-col leading-tight"><span className="text-zinc-600 text-[8px]">先月 ¥{l.toLocaleString()}</span> <span className="text-white">今月 ¥{c.toLocaleString()}</span></div>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden"><div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${(c / max) * 100}%` }} /></div>
-                            <div className="h-1 bg-white/5 rounded-full overflow-hidden opacity-30"><div className="h-full bg-zinc-400" style={{ width: `${(l / max) * 100}%` }} /></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {getCategoryNames().length % 2 !== 0 && (
-                      <div className="bg-[#1E1E1E]" />
-                    )}
-                  </div>
-                </SimpleCard>
-              </div>
 
-              {/* 🎁 特別費 */}
-              <div className="space-y-3">
-                <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">特別費（別枠）</h3>
-                <SimpleCard className="p-4">
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span className="font-bold">今月の特別費</span>
-                      <span className="text-white font-black tabular-nums">¥{Number(summary.specialTotalSpent || 0).toLocaleString()}</span>
+                      {/* 特別費の表示 */}
+                      {summary.specialTotalSpent > 0 && (
+                        <div className="mt-5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] text-zinc-400 font-bold">
+                          上記のうち特別費: ¥{summary.specialTotalSpent.toLocaleString()} (先月: ¥{summary.lastSpecialTotalSpent.toLocaleString()})
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span className="font-bold">先月の特別費</span>
-                      <span className="text-white font-black tabular-nums">¥{Number(summary.lastSpecialTotalSpent || 0).toLocaleString()}</span>
+
+                    {/* カテゴリ別比較リスト（ドーナツの色とリンク） */}
+                    <div className="divide-y divide-white/5">
+                      {getCategoryNames().map(n => {
+                        const c = summary.catTotals[n] || 0;
+                        const l = summary.lastCatTotals[n] || 0;
+                        const b = monthlyData.catBudgets?.[n] || 0;
+                        
+                        // 予算もなく支出もない項目は非表示にしてスッキリさせる
+                        if (b === 0 && c === 0) return null;
+
+                        const color = categoryColors[n];
+                        const isOver = b > 0 && c > b;
+                        const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
+
+                        return (
+                          <div key={n} className="p-4 flex flex-col gap-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                                <span className="text-lg w-6 text-center">{getCategoryIcon(n)}</span>
+                                <span className="text-xs font-bold text-zinc-200">{n}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className={`text-sm font-black ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                                <span className="text-[10px] text-zinc-500 ml-1">/ ¥{b.toLocaleString()}</span>
+                              </div>
+                            </div>
+                            <div className="pl-12 flex flex-col gap-1.5">
+                              {/* プログレスバー */}
+                              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full transition-all duration-1000" 
+                                  style={{ 
+                                    width: `${percent}%`, 
+                                    backgroundColor: isOver ? '#F87171' : color // オーバー時は赤、通常時はカテゴリ色
+                                  }} 
+                                />
+                              </div>
+                              {/* 先月比テキスト */}
+                              <div className="flex justify-between text-[9px] font-bold">
+                                <span className="text-zinc-600">先月: ¥{l.toLocaleString()}</span>
+                                <span className={c > l ? 'text-red-400/80' : 'text-green-400/80'}>
+                                  {c > l ? `+¥${(c - l).toLocaleString()}` : `-¥${(l - c).toLocaleString()}`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                </SimpleCard>
+                 </SimpleCard>
               </div>
 
             </div>
