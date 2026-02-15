@@ -157,6 +157,17 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
+// ✅ 名前からブレない色を生成する関数（ハッシュ値を利用）
+const CAT_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#C084FC', '#F87171', '#2DD4BF', '#FCD34D', '#A855F7'];
+const getCategoryColor = (name) => {
+  if (name === 'その他') return '#A1A1AA';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CAT_COLORS[Math.abs(hash) % CAT_COLORS.length];
+};
+
 /* --- COMPONENTS --- */
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -317,6 +328,9 @@ function AppMain() {
   const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
 
+  // ✅ SVGドーナツチャート用の選択状態
+  const [selectedDonutSlice, setSelectedDonutSlice] = useState(null);
+
   const FAQ_DATA = [
     {
       category: '💰 予算・残高の計算',
@@ -377,17 +391,6 @@ function AppMain() {
   };
   const paymentMethodsSafe = config?.paymentMethods?.length ? config.paymentMethods : [CASH];
   const clearLogFilters = () => { setSearchText(''); setFilter({ category: 'ALL', method: 'ALL', special: false }); };
-
-  // ✅ カテゴリ用のカラーパレット
-  const CAT_COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F472B6', '#C084FC', '#F87171', '#2DD4BF', '#FCD34D', '#A855F7', '#A1A1AA'];
-  const categoryColors = useMemo(() => {
-    const map = {};
-    getCategoryNames().forEach((name, i) => {
-      map[name] = CAT_COLORS[i % CAT_COLORS.length];
-    });
-    map['その他'] = '#A1A1AA';
-    return map;
-  }, [config]);
 
   /* --- AUTH --- */
   useEffect(() => {
@@ -591,25 +594,28 @@ function AppMain() {
     return { icon: '📝', text: `生活費予算を設定すると、ここにAIアドバイスが表示されます。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
   }, [summary, month]);
 
-  // ✅ ドーナツチャートの描画用文字列（CSS conic-gradient）を生成
-  const conicGradientString = useMemo(() => {
-    if (summary.totalSpent === 0) return 'transparent 0 100%';
-    let cumulative = 0;
-    const parts = [];
-    
-    // 支出額が大きい順に描画
-    const sorted = Object.entries(summary.catTotals)
-      .filter(([_, amount]) => amount > 0)
-      .sort((a, b) => b[1] - a[1]);
-    
-    sorted.forEach(([name, amount]) => {
-      const pct = (amount / summary.totalSpent) * 100;
-      const color = categoryColors[name] || '#A1A1AA';
-      parts.push(`${color} ${cumulative}% ${cumulative + pct}%`);
-      cumulative += pct;
-    });
-    return parts.join(', ');
-  }, [summary.totalSpent, summary.catTotals, categoryColors]);
+  // ✅ SVGドーナツチャート用のデータ作成
+  const donutChartData = useMemo(() => {
+    const total = summary.totalSpent;
+    if (total === 0) return { items: [], total: 0 };
+
+    // 金額が大きい順にソートしてその他にまとめる処理
+    const arr = Object.entries(summary.catTotals)
+      .map(([name, amount]) => ({ name, amount }))
+      .filter(item => item.amount > 0);
+    arr.sort((a, b) => b.amount - a.amount);
+
+    let items = [];
+    if (arr.length <= 6) {
+      items = arr.map(item => ({ ...item, color: getCategoryColor(item.name) }));
+    } else {
+      const top5 = arr.slice(0, 5);
+      const otherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
+      items = top5.map(item => ({ ...item, color: getCategoryColor(item.name) }));
+      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor('その他') });
+    }
+    return { items, total };
+  }, [summary.totalSpent, summary.catTotals]);
 
 
   /* --- ALERTS --- */
@@ -882,6 +888,60 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
+  // ✅ SVG円グラフの描画用コンポーネント
+  const InteractiveDonutChart = ({ data, total, selectedSlice, onSelect }) => {
+    const radius = 42;
+    const circumference = 2 * Math.PI * radius;
+    let currentOffset = 0;
+
+    return (
+      <div className="relative w-48 h-48 flex items-center justify-center">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+          {data.map(item => {
+            const strokeLength = (item.amount / total) * circumference;
+            const offset = currentOffset;
+            currentOffset += strokeLength;
+            const isSelected = selectedSlice?.name === item.name;
+
+            return (
+              <circle
+                key={item.name}
+                cx="50"
+                cy="50"
+                r={radius}
+                fill="transparent"
+                stroke={item.color}
+                strokeWidth={isSelected ? "14" : "10"}
+                strokeDasharray={`${Math.max(strokeLength - 1, 0)} ${circumference}`}
+                strokeDashoffset={-offset}
+                className="transition-all duration-300 cursor-pointer drop-shadow-md hover:opacity-80"
+                onClick={() => onSelect(isSelected ? null : item)}
+              />
+            );
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+           {selectedSlice ? (
+             <>
+               <span className="text-[10px] text-zinc-400 font-bold mb-0.5">{selectedSlice.name}</span>
+               <span className="text-xl font-black text-white" style={{ color: selectedSlice.color }}>¥{selectedSlice.amount.toLocaleString()}</span>
+               <span className="text-[9px] text-zinc-500 mt-0.5">{Math.round((selectedSlice.amount / total) * 100)}%</span>
+             </>
+           ) : (
+             <>
+               <span className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</span>
+               <span className="text-2xl font-black text-white tracking-tight leading-none mb-1">¥{total.toLocaleString()}</span>
+               <div className={`flex items-center gap-0.5 text-[9px] font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
+                 {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
+                 <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
+               </div>
+             </>
+           )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -1008,6 +1068,7 @@ function AppMain() {
                               <span className={isOver ? "text-red-400" : "text-white"}>¥{s.toLocaleString()} / ¥{b.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                              {/* ✅ プログレスバーをシンプルな色に修正 */}
                               <div className={`h-full ${isOver ? "bg-red-400" : "bg-zinc-500"} transition-all duration-1000`} style={{ width: `${b > 0 ? Math.min(100, (s / b) * 100) : 0}%` }} />
                             </div>
                           </div>
@@ -1197,21 +1258,18 @@ function AppMain() {
                     
                     {/* ドーナツチャート ＆ 総支出エリア */}
                     <div className="p-6 flex flex-col items-center border-b border-white/5">
-                      <div className="relative w-48 h-48 flex items-center justify-center rounded-full" style={{ background: `conic-gradient(${conicGradientString})` }}>
-                        <div className="absolute inset-0 m-4 rounded-full bg-[#1E1E1E] flex flex-col items-center justify-center shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
-                           <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
-                           <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1">¥{summary.totalSpent.toLocaleString()}</h3>
-                           <div className={`flex items-center gap-0.5 text-[9px] font-bold ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
-                             {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
-                             <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
-                           </div>
-                        </div>
-                      </div>
+                      {/* ✅ インタラクティブなSVG円グラフ */}
+                      <InteractiveDonutChart 
+                        data={donutChartData.items} 
+                        total={donutChartData.total} 
+                        selectedSlice={selectedDonutSlice} 
+                        onSelect={setSelectedDonutSlice} 
+                      />
 
-                      {/* 特別費の表示 */}
+                      {/* ✅ 独立した特別費表示 */}
                       {summary.specialTotalSpent > 0 && (
-                        <div className="mt-5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] text-zinc-400 font-bold">
-                          上記のうち特別費: ¥{summary.specialTotalSpent.toLocaleString()} (先月: ¥{summary.lastSpecialTotalSpent.toLocaleString()})
+                        <div className="mt-5 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-[9px] text-zinc-400 font-bold text-center">
+                          上記のうち特別費: ¥{summary.specialTotalSpent.toLocaleString()} <br className="sm:hidden" />(先月: ¥{summary.lastSpecialTotalSpent.toLocaleString()})
                         </div>
                       )}
                     </div>
@@ -1226,14 +1284,16 @@ function AppMain() {
                         // 予算もなく支出もない項目は非表示にしてスッキリさせる
                         if (b === 0 && c === 0) return null;
 
-                        const color = categoryColors[n];
+                        const color = getCategoryColor(n);
                         const isOver = b > 0 && c > b;
+                        // ✅ リスト内のプログレスバーはシンプルな白/グレーに戻す
                         const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
 
                         return (
                           <div key={n} className="p-4 flex flex-col gap-2.5">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
+                                {/* 色玉 */}
                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
                                 <span className="text-lg w-6 text-center">{getCategoryIcon(n)}</span>
                                 <span className="text-xs font-bold text-zinc-200">{n}</span>
@@ -1244,14 +1304,11 @@ function AppMain() {
                               </div>
                             </div>
                             <div className="pl-12 flex flex-col gap-1.5">
-                              {/* プログレスバー */}
+                              {/* プログレスバー（白/赤/グレー） */}
                               <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                                 <div 
-                                  className="h-full transition-all duration-1000" 
-                                  style={{ 
-                                    width: `${percent}%`, 
-                                    backgroundColor: isOver ? '#F87171' : color // オーバー時は赤、通常時はカテゴリ色
-                                  }} 
+                                  className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-zinc-500"}`} 
+                                  style={{ width: `${percent}%` }} 
                                 />
                               </div>
                               {/* 先月比テキスト */}
@@ -1268,6 +1325,25 @@ function AppMain() {
                     </div>
                  </SimpleCard>
               </div>
+
+              {/* ✅ 特別費が全くない時用、または完全に分けて見たい時のための予備カード（不要なら削除可ですが、全体像として残します） */}
+              {summary.specialTotalSpent === 0 && summary.lastSpecialTotalSpent > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">特別費（別枠）</h3>
+                    <SimpleCard className="p-4">
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center text-zinc-400">
+                          <span className="font-bold">今月の特別費</span>
+                          <span className="text-white font-black tabular-nums">¥{Number(summary.specialTotalSpent || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-zinc-400">
+                          <span className="font-bold">先月の特別費</span>
+                          <span className="text-white font-black tabular-nums">¥{Number(summary.lastSpecialTotalSpent || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </SimpleCard>
+                  </div>
+              )}
 
             </div>
           )}
