@@ -157,8 +157,8 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 落ち着いたグレースケールパレット（明るすぎないトーンに調整）
-const GRAY_PALETTE = ['#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
+// ✅ 落ち着いたグレースケールパレット（明るすぎないトーン）
+const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const getCategoryColor = (index) => {
   return GRAY_PALETTE[index % GRAY_PALETTE.length];
 };
@@ -586,7 +586,7 @@ function AppMain() {
     return { icon: '📝', text: `生活費予算を設定すると、ここにAIアドバイスが表示されます。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
   }, [summary, month]);
 
-  // ✅ SVG円グラフ用のデータ作成（グレースケール）
+  // ✅ iPhoneストレージ風 横棒グラフ用のデータ作成
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
@@ -878,60 +878,6 @@ function AppMain() {
     { id: 'faq', label: 'よくある質問・計算ロジック', icon: <HelpCircle size={18} /> },
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
-
-  // ✅ インタラクティブな円グラフ（境界線を細く統一＆色変更）
-  const InteractivePieChart = ({ data, total }) => {
-    const radius = 25;
-    const strokeWidth = 50;
-    const circumference = 2 * Math.PI * radius;
-    let currentOffset = 0;
-    const boundaryAngles = [];
-
-    return (
-      <div className="relative w-32 h-32 flex items-center justify-center shrink-0">
-        <svg viewBox="-20 -20 140 140" className="w-full h-full -rotate-90 drop-shadow-lg">
-          {total === 0 && (
-            <circle cx="50" cy="50" r={radius} fill="transparent" stroke="#27272A" strokeWidth={strokeWidth} />
-          )}
-          {data.map(item => {
-            const strokeLength = (item.amount / total) * circumference;
-            const offset = currentOffset;
-            currentOffset += strokeLength;
-
-            const angle = (currentOffset / circumference) * 360;
-            if (item.amount > 0 && item !== data[data.length - 1]) {
-               boundaryAngles.push(angle);
-            }
-
-            return (
-              <circle
-                key={item.name}
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="transparent"
-                stroke={item.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${strokeLength} ${circumference}`}
-                strokeDashoffset={-offset}
-              />
-            );
-          })}
-          {/* ✅ 境界線を極細(0.5)に統一 */}
-          {boundaryAngles.map((angle, i) => (
-             <line 
-                key={i}
-                x1="50" y1="50" 
-                x2={50 + 50 * Math.cos(angle * Math.PI / 180)} 
-                y2={50 + 50 * Math.sin(angle * Math.PI / 180)} 
-                stroke="#1E1E1E" 
-                strokeWidth="0.5" 
-             />
-          ))}
-        </svg>
-      </div>
-    );
-  };
 
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
@@ -1235,11 +1181,11 @@ function AppMain() {
             </div>
           )}
 
-          {/* ✅ Analysis タブ */}
+          {/* ✅ Analysis タブ（大進化！） */}
           {activeTab === 'analysis' && (
             <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               
-              {/* 💡 AI 家計診断 */}
+              {/* 💡 AI 家計診断（コンパクト版） */}
               {aiMessage && (
                 <div className={`p-3 rounded-xl border flex items-center gap-3 ${aiMessage.bg} ${aiMessage.border}`}>
                    <span className="text-xl shrink-0">{aiMessage.icon}</span>
@@ -1247,41 +1193,63 @@ function AppMain() {
                 </div>
               )}
 
-              {/* 🍩 今月のダッシュボード */}
+              {/* 📱 iPhoneストレージ風 サマリーダッシュボード */}
               <div className="space-y-3">
                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
                  <SimpleCard className="p-0 overflow-hidden">
-                    <div className="p-4 flex items-center gap-5">
-                      <InteractivePieChart 
-                        data={donutChartData.items} 
-                        total={donutChartData.total} 
-                      />
-
-                      <div className="flex-1 flex flex-col justify-center min-w-0 pl-2">
-                         <div className="animate-in fade-in slide-in-from-right-2">
-                           <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
-                           <h3 className="text-3xl font-black text-white tracking-tight leading-none mb-1.5">¥{summary.totalSpent.toLocaleString()}</h3>
-                           
-                           <div className="flex items-center gap-1 text-[10px] font-bold mb-3 text-zinc-400">
-                             {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} className="text-zinc-500" /> : <TrendingUp size={12} className="text-zinc-500" />}
-                             <span>先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
-                           </div>
-                           
-                           {/* 特別費 */}
-                           <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-white/10">
-                             <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費</p>
-                             <div className="flex items-baseline gap-1">
-                               <span className="text-sm font-bold text-white">¥{summary.specialTotalSpent.toLocaleString()}</span>
-                               <span className="text-[9px] text-zinc-500">/ 先月 ¥{summary.lastSpecialTotalSpent.toLocaleString()}</span>
-                             </div>
-                           </div>
-                         </div>
+                    <div className="p-5 flex flex-col gap-5">
+                      
+                      {/* 総支出 & 先月比 */}
+                      <div>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
+                        <div className="flex items-end gap-3">
+                          <h3 className="text-3xl font-black text-white tracking-tight leading-none">¥{summary.totalSpent.toLocaleString()}</h3>
+                          <div className={`flex items-center gap-0.5 text-[10px] font-bold mb-0.5 ${summary.totalSpent <= summary.lastTotalSpent ? 'text-green-400' : 'text-red-400'}`}>
+                            {summary.totalSpent <= summary.lastTotalSpent ? <TrendingDown size={12} className="text-zinc-500" /> : <TrendingUp size={12} className="text-zinc-500" />}
+                            <span className="text-zinc-400">先月比 {summary.totalSpent <= summary.lastTotalSpent ? '-' : '+'}¥{Math.abs(summary.totalSpent - summary.lastTotalSpent).toLocaleString()}</span>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* ストレージ風バー（1本の横棒）＆ 凡例リスト */}
+                      {donutChartData.total > 0 ? (
+                        <div className="space-y-3">
+                          <div className="flex w-full h-5 rounded-md overflow-hidden gap-[1px]">
+                            {donutChartData.items.map(item => (
+                              <div key={item.name} className="h-full" style={{ width: `${(item.amount / donutChartData.total) * 100}%`, backgroundColor: item.color }} />
+                            ))}
+                          </div>
+                          
+                          {/* 凡例リスト */}
+                          <div className="grid grid-cols-2 gap-y-2 gap-x-3">
+                            {donutChartData.items.map(item => (
+                              <div key={item.name} className="flex items-center gap-2">
+                                <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                                <span className="text-[10px] text-zinc-300 font-bold truncate flex-1">{item.name}</span>
+                                <span className="text-[10px] font-black text-white tabular-nums">¥{item.amount.toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-xs text-zinc-500 font-bold">まだ支出がありません</div>
+                      )}
+
+                      {/* 特別費（サマリーに統合） */}
+                      {summary.specialTotalSpent > 0 && (
+                        <div className="flex flex-col gap-0.5 pt-4 border-t border-white/10">
+                          <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費（別枠）</p>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-sm font-black text-white tabular-nums">¥{summary.specialTotalSpent.toLocaleString()}</span>
+                            <span className="text-[9px] text-zinc-500 font-bold">/ 先月 ¥{summary.lastSpecialTotalSpent.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                  </SimpleCard>
               </div>
 
-              {/* 📊 カテゴリ別 比較 */}
+              {/* 📊 カテゴリ別 比較（超・高密度化リスト） */}
               <div className="space-y-3">
                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
                 <SimpleCard className="p-0 overflow-hidden">
@@ -1298,20 +1266,25 @@ function AppMain() {
 
                       return (
                         <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
+                          <div className="flex items-start justify-between mb-2 gap-2">
+                            {/* 左：アイコンと名前 */}
+                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            <div className="text-right flex flex-col">
-                               <div className="flex items-baseline justify-end">
-                                 <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
-                                 <span className="text-[9px] text-zinc-500 ml-1">/ ¥{b.toLocaleString()}</span>
-                               </div>
-                               <span className="text-[8px] text-zinc-500 font-bold mt-0.5">先月 ¥{l.toLocaleString()}</span>
+                            {/* 右：実績 / 目標、先月実績を高密度に */}
+                            <div className="text-right flex flex-col min-w-0">
+                              <div className="text-[11px] truncate">
+                                <span className={`font-black ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                                <span className="text-zinc-500 font-bold ml-1">/ ¥{b.toLocaleString()}</span>
+                              </div>
+                              <div className="text-[9px] text-zinc-500 font-bold mt-0.5 truncate">
+                                先月 ¥{l.toLocaleString()} {c !== l ? (c > l ? `+¥${(c - l).toLocaleString()}` : `-¥${(l - c).toLocaleString()}`) : ''}
+                              </div>
                             </div>
                           </div>
 
+                          {/* プログレスバー（モノトーン、オーバー時のみ赤） */}
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
                             <div 
                               className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
@@ -1331,6 +1304,7 @@ function AppMain() {
             </div>
           )}
 
+          {/* Settings タブ */}
           {activeTab === 'settings' && (
             <div className="px-4 pt-4 pb-32 animate-in fade-in">
               {settingTab === 'menu' ? (
