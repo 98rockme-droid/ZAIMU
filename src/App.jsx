@@ -315,13 +315,14 @@ function AppMain() {
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL', special: false });
 
-  const mainRef = useRef(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
   const [memoText, setMemoText] = useState('');
   const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
+
+  const [selectedDonutSlice, setSelectedDonutSlice] = useState(null);
 
   const FAQ_DATA = [
     {
@@ -932,6 +933,7 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
+  // ✅ 外側の箱（main）は常にスクロール禁止（overflow-hidden）に固定
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -962,11 +964,12 @@ function AppMain() {
           )}
         </header>
 
-        <main ref={mainRef} className={`flex-1 relative ${activeTab === 'log' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto scrollbar-hide'}`}>
+        {/* ✅ スクロールコンテナの統一：ここは絶対にスクロールさせず、各タブの中でスクロールさせる */}
+        <main className="flex-1 relative flex flex-col overflow-hidden">
           
           {/* ✅ ホーム画面 */}
           {activeTab === 'home' && (
-            <div className="flex flex-col relative">
+            <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col relative">
               {monthlyData.memo && (
                 <div 
                   onClick={() => setIsMemoExpanded(!isMemoExpanded)}
@@ -983,12 +986,10 @@ function AppMain() {
               )}
 
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
-                
                 {/* ① 残高セクション */}
                 <div className="space-y-4">
                   <SimpleCard className="p-0">
                     <div className="grid grid-cols-2 divide-x divide-white/5">
-                      {/* カード */}
                       <div className="p-4 flex flex-col">
                         <div>
                           <div className="flex items-center gap-1 mb-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
@@ -1014,8 +1015,6 @@ function AppMain() {
                           </div>
                         </div>
                       </div>
-
-                      {/* 口座 */}
                       <div className="p-4 flex flex-col">
                         <div>
                           <div className="flex items-center gap-1 mb-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
@@ -1052,7 +1051,6 @@ function AppMain() {
                         const b = monthlyData.catBudgets?.[n] || 0;
                         const isOver = b > 0 && c > b;
                         const percent = b > 0 ? Math.min(100, (c / b) * 100) : 0;
-                        
                         return (
                           <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-center">
                             <div className="flex items-center gap-1.5 mb-1.5">
@@ -1117,15 +1115,13 @@ function AppMain() {
                     </div>
                   </SimpleCard>
                 </div>
-
               </div>
             </div>
           )}
 
           {/* 🔽 Logタブ */}
           {activeTab === 'log' && (
-            <div className="animate-in fade-in flex flex-col h-full pt-3">
-              {/* ✅ 検索・フィルタ・合計を1つのブロックに高密度化 */}
+            <div className="flex-1 flex flex-col h-full pt-3 overflow-hidden animate-in fade-in">
               <div className="flex-none px-4 pt-3 pb-1 z-10">
                 <div className="flex flex-col gap-2.5">
                   <div className="flex gap-2">
@@ -1179,7 +1175,6 @@ function AppMain() {
                     </button>
                   </div>
                   
-                  {/* ✅ フォントウェイトを通常にし、マージンを詰めた合計表示 */}
                   <div className="flex justify-between items-center px-1 text-[10px] text-zinc-500 font-normal">
                     <span>表示中の合計</span>
                     <div className="flex gap-3">
@@ -1190,7 +1185,7 @@ function AppMain() {
                 </div>
               </div>
 
-              {/* ✅ pb-4 にしてフッターとの被りを防ぐ適度なマージンを確保 */}
+              {/* ✅ リスト部分自身がスクロールする */}
               <div className="flex-1 px-4 pb-4 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
@@ -1249,9 +1244,7 @@ function AppMain() {
 
           {/* ✅ Analysis タブ */}
           {activeTab === 'analysis' && (
-            <div className="px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
-              
-              {/* 💡 AI 家計診断 */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-32 space-y-6 animate-in fade-in">
               {aiMessage && (
                 <div className={`p-3 rounded-xl border flex items-center gap-3 ${aiMessage.bg} ${aiMessage.border}`}>
                    <span className="text-xl shrink-0">{aiMessage.icon}</span>
@@ -1259,13 +1252,10 @@ function AppMain() {
                 </div>
               )}
 
-              {/* 📱 iPhoneストレージ風 サマリーダッシュボード */}
               <div className="space-y-3">
                  <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">今月のサマリー</h3>
                  <SimpleCard className="p-0 overflow-hidden">
                     <div className="p-5 flex flex-col gap-5">
-                      
-                      {/* 総支出 & 先月比 */}
                       <div>
                         <p className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">総支出</p>
                         <div className="flex items-end gap-3">
@@ -1277,7 +1267,6 @@ function AppMain() {
                         </div>
                       </div>
 
-                      {/* ストレージ風バー（1本の横棒）＆ 凡例リスト */}
                       {donutChartData.total > 0 ? (
                         <div className="space-y-3">
                           <div className="flex w-full h-5 rounded-md overflow-hidden gap-[1px]">
@@ -1286,7 +1275,6 @@ function AppMain() {
                             ))}
                           </div>
                           
-                          {/* 凡例リスト */}
                           <div className="grid grid-cols-2 gap-y-2 gap-x-3">
                             {donutChartData.items.map(item => (
                               <div key={item.name} className="flex items-center gap-2">
@@ -1301,7 +1289,6 @@ function AppMain() {
                         <div className="text-center py-6 text-xs text-zinc-500 font-bold">まだ支出がありません</div>
                       )}
 
-                      {/* 特別費（サマリーに統合） */}
                       {summary.specialTotalSpent > 0 && (
                         <div className="flex flex-col gap-0.5 pt-4 border-t border-white/10">
                           <p className="text-[9px] text-zinc-500 font-bold uppercase">特別費（別枠）</p>
@@ -1315,7 +1302,6 @@ function AppMain() {
                  </SimpleCard>
               </div>
 
-              {/* 📊 カテゴリ別 比較（超・高密度化リスト） */}
               <div className="space-y-3">
                 <h3 className="text-[10px] text-zinc-500 uppercase font-black tracking-widest pl-1">カテゴリ別 比較</h3>
                 <SimpleCard className="p-0 overflow-hidden">
@@ -1332,26 +1318,22 @@ function AppMain() {
 
                       return (
                         <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
-                          <div className="flex items-start justify-between mb-2 gap-2">
-                            {/* 左：アイコンと名前 */}
-                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                          <div className="flex items-start justify-between mb-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0 pr-1">
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            {/* 右：実績 / 目標、先月実績を高密度に */}
-                            <div className="text-right flex flex-col min-w-0">
-                              <div className="text-[11px] truncate">
-                                <span className={`font-black ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
-                                <span className="text-zinc-500 font-bold ml-1">/ ¥{b.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[9px] text-zinc-500 font-bold mt-0.5 truncate">
-                                先月 ¥{l.toLocaleString()} {c !== l ? (c > l ? `+¥${(c - l).toLocaleString()}` : `-¥${(l - c).toLocaleString()}`) : ''}
-                              </div>
+                            <div className="text-[8px] text-zinc-500 font-bold shrink-0 mt-0.5">
+                              先月 ¥{l.toLocaleString()}
                             </div>
                           </div>
 
-                          {/* プログレスバー（モノトーン、オーバー時のみ赤） */}
-                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
+                          <div className="flex items-baseline gap-1 mb-1.5">
+                            <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                            <span className="text-[9px] text-zinc-500 font-bold">/ ¥{b.toLocaleString()}</span>
+                          </div>
+
+                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
                             <div 
                               className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
                               style={{ width: `${percent}%` }} 
@@ -1366,13 +1348,12 @@ function AppMain() {
                   </div>
                 </SimpleCard>
               </div>
-
             </div>
           )}
 
           {/* Settings タブ */}
           {activeTab === 'settings' && (
-            <div className="px-4 pt-4 pb-32 animate-in fade-in">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-32 animate-in fade-in">
               {settingTab === 'menu' ? (
                 <div className="space-y-6 pb-10">
                   <div className="flex items-center justify-between px-2">
@@ -1414,12 +1395,12 @@ function AppMain() {
                               />
                               <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
                               {faqSearchText && (
-                                <button 
-                                  onClick={() => setFaqSearchText('')}
-                                  className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
-                                >
-                                  <X size={14} />
-                                </button>
+                                  <button 
+                                      onClick={() => setFaqSearchText('')}
+                                      className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
+                                  >
+                                      <X size={14} />
+                                  </button>
                               )}
                           </div>
 
