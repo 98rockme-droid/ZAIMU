@@ -157,7 +157,7 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 落ち着いたグレースケールパレット（明るすぎないトーン）
+// ✅ 落ち着いたグレースケールパレット
 const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const getCategoryColor = (index) => {
   return GRAY_PALETTE[index % GRAY_PALETTE.length];
@@ -547,10 +547,8 @@ function AppMain() {
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
-  // ✅ 有効なカテゴリのみ抽出
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
-  // ✅ AI 家計診断（真のトータル予算ベース）
   const aiMessage = useMemo(() => {
     const d = new Date();
     const isCurrentMonth = month === getMonthString(d);
@@ -623,36 +621,35 @@ function AppMain() {
     }
   }, [summary, month, config]);
 
-  // ✅ iPhoneストレージ風 横棒グラフ用のデータ作成（「その他」バグ完全修正版）
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
 
-    // すべてのカテゴリを一旦金額順にソートする
-    const sortedCats = Object.entries(summary.catTotals)
+    const catTotalsCopy = { ...summary.catTotals };
+    const explicitOtherAmount = catTotalsCopy['その他'] || 0;
+    delete catTotalsCopy['その他'];
+
+    const arr = Object.entries(catTotalsCopy)
       .map(([name, amount]) => ({ name, amount }))
-      .filter(item => item.amount > 0)
-      .sort((a, b) => b.amount - a.amount);
+      .filter(item => item.amount > 0);
+    arr.sort((a, b) => b.amount - a.amount);
 
-    let mainItems = [];
-    let otherAmount = 0;
-
-    // 「その他」という名前のカテゴリ、または6位以下のカテゴリの金額はすべて合算する
-    sortedCats.forEach(cat => {
-      if (cat.name === 'その他') {
-        otherAmount += cat.amount;
-      } else if (mainItems.length < 5) {
-        mainItems.push(cat);
-      } else {
-        otherAmount += cat.amount;
+    let items = [];
+    if (arr.length + (explicitOtherAmount > 0 ? 1 : 0) <= 6) {
+      items = arr.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
+      if (explicitOtherAmount > 0) {
+        items.push({ name: 'その他', amount: explicitOtherAmount, color: getCategoryColor(items.length) });
       }
-    });
-
-    const items = mainItems.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
-    if (otherAmount > 0) {
-      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor(items.length) });
+    } else {
+      const top5 = arr.slice(0, 5);
+      const remainingAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
+      const finalOtherAmount = remainingAmount + explicitOtherAmount;
+      
+      items = top5.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
+      if (finalOtherAmount > 0) {
+        items.push({ name: 'その他', amount: finalOtherAmount, color: getCategoryColor(5) });
+      }
     }
-
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
 
@@ -866,7 +863,6 @@ function AppMain() {
     return matchSearch && matchCat && matchMethod && matchSpecial;
   });
 
-  // ✅ 履歴ページの現金・カードの合計
   const filteredCashTotal = useMemo(() => {
     return finalFilteredTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + toNumber(t.amount), 0);
   }, [finalFilteredTx]);
@@ -1129,70 +1125,73 @@ function AppMain() {
           {/* 🔽 Logタブ */}
           {activeTab === 'log' && (
             <div className="animate-in fade-in flex flex-col h-full pt-3">
-              <div className="flex-none px-4 pb-3 space-y-3 z-10">
-                <div className="flex gap-2">
-                  <div className="flex-1 relative">
-                    <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors" />
-                    <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+              {/* ✅ 検索・フィルタ・合計を1つのブロックに高密度化 */}
+              <div className="flex-none px-4 pt-3 pb-1 z-10">
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input type="text" value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..." className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white outline-none focus:border-white/30 transition-colors" />
+                      <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+                    </div>
+                    <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
+                      <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView === 'list' ? 'bg-white text-black' : 'text-zinc-500'}`}><AlignJustify size={16} /></button>
+                      <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView === 'calendar' ? 'bg-white text-black' : 'text-zinc-500'}`}><CalendarDays size={16} /></button>
+                    </div>
                   </div>
-                  <div className="flex bg-[#1E1E1E] rounded-lg border border-white/10 p-0.5">
-                    <button onClick={() => setLogView('list')} className={`p-2 rounded ${logView === 'list' ? 'bg-white text-black' : 'text-zinc-500'}`}><AlignJustify size={16} /></button>
-                    <button onClick={() => setLogView('calendar')} className={`p-2 rounded ${logView === 'calendar' ? 'bg-white text-black' : 'text-zinc-500'}`}><CalendarDays size={16} /></button>
-                  </div>
-                </div>
 
-                <div className="flex gap-2 items-center">
-                  <div className="relative flex-[1] min-w-0">
-                    <select
-                      value={filter.category}
-                      onChange={e => setFilter({ ...filter, category: e.target.value })}
-                      className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-[1] min-w-0">
+                      <select
+                        value={filter.category}
+                        onChange={e => setFilter({ ...filter, category: e.target.value })}
+                        className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
+                      >
+                        <option value="ALL">すべて</option>
+                        {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
+                    </div>
+
+                    <div className="relative flex-[1] min-w-0">
+                      <select
+                        value={filter.method}
+                        onChange={e => setFilter({ ...filter, method: e.target.value })}
+                        className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
+                      >
+                        <option value="ALL">すべて</option>
+                        {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
+                      className={`h-10 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
+                        filter.special ? 'bg-white text-black border-white' : 'bg-black/20 text-zinc-400 border-white/10'
+                      }`}
                     >
-                      <option value="ALL">すべて</option>
-                      {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
+                      特別費
+                    </button>
+
+                    <button type="button" onClick={clearLogFilters} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
+                      <X size={16} className="text-zinc-500" />
+                    </button>
                   </div>
-
-                  <div className="relative flex-[1] min-w-0">
-                    <select
-                      value={filter.method}
-                      onChange={e => setFilter({ ...filter, method: e.target.value })}
-                      className="w-full h-10 bg-black/20 border border-white/10 rounded-lg pl-3 pr-7 text-xs text-white outline-none appearance-none focus:border-white/30 transition-colors"
-                    >
-                      <option value="ALL">すべて</option>
-                      {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <ChevronDown size={14} className="absolute right-2.5 top-3 text-zinc-500 pointer-events-none" />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setFilter(prev => ({ ...prev, special: !prev.special }))}
-                    className={`h-10 px-3 rounded-lg border text-[10px] font-black tracking-widest shrink-0 transition-colors ${
-                      filter.special ? 'bg-white text-black border-white' : 'bg-black/20 text-zinc-400 border-white/10'
-                    }`}
-                  >
-                    特別費
-                  </button>
-
-                  <button type="button" onClick={clearLogFilters} className="w-10 h-10 bg-black/20 border border-white/10 rounded-lg flex items-center justify-center active:bg-white/10 transition-colors shrink-0">
-                    <X size={16} className="text-zinc-500" />
-                  </button>
-                </div>
-                
-                {/* ✅ 絞り込みの下に「現金・カードの合計」をスッキリと表示 */}
-                <div className="flex justify-between items-center px-1 pt-1 text-[10px] text-zinc-500">
-                  <span>表示中の合計</span>
-                  <div className="flex gap-3">
-                    <span>現金: ¥{filteredCashTotal.toLocaleString()}</span>
-                    <span>カード: ¥{filteredCardTotal.toLocaleString()}</span>
+                  
+                  {/* ✅ フォントウェイトを通常にし、マージンを詰めた合計表示 */}
+                  <div className="flex justify-between items-center px-1 text-[10px] text-zinc-500 font-normal">
+                    <span>表示中の合計</span>
+                    <div className="flex gap-3">
+                      <span>現金: ¥{filteredCashTotal.toLocaleString()}</span>
+                      <span>カード: ¥{filteredCardTotal.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* ✅ リストの pb-20 を削除して不要なマージンを消去 */}
-              <div className="flex-1 px-4 overflow-hidden flex flex-col">
+              {/* ✅ pb-4 にしてフッターとの被りを防ぐ適度なマージンを確保 */}
+              <div className="flex-1 px-4 pb-4 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
                     {finalFilteredTx.length === 0 ? (
@@ -1333,25 +1332,26 @@ function AppMain() {
 
                       return (
                         <div key={n} className="bg-[#1E1E1E] p-3 flex flex-col justify-between">
-                          {/* 上：アイコン、名前、先月実績を高密度に */}
-                          <div className="flex items-start justify-between mb-1.5">
-                            <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                          <div className="flex items-start justify-between mb-2 gap-2">
+                            {/* 左：アイコンと名前 */}
+                            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                               <span className="text-sm shrink-0">{getCategoryIcon(n)}</span>
                               <span className="text-[10px] font-bold text-zinc-200 truncate">{n}</span>
                             </div>
-                            <div className="text-[8px] text-zinc-500 font-bold shrink-0 mt-0.5">
-                              先月 ¥{l.toLocaleString()}
+                            {/* 右：実績 / 目標、先月実績を高密度に */}
+                            <div className="text-right flex flex-col min-w-0">
+                              <div className="text-[11px] truncate">
+                                <span className={`font-black ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
+                                <span className="text-zinc-500 font-bold ml-1">/ ¥{b.toLocaleString()}</span>
+                              </div>
+                              <div className="text-[9px] text-zinc-500 font-bold mt-0.5 truncate">
+                                先月 ¥{l.toLocaleString()} {c !== l ? (c > l ? `+¥${(c - l).toLocaleString()}` : `-¥${(l - c).toLocaleString()}`) : ''}
+                              </div>
                             </div>
                           </div>
 
-                          {/* 中：実績 / 目標 を大きく1行で */}
-                          <div className="flex items-baseline gap-1 mb-1.5">
-                            <span className={`text-xs font-black leading-none ${isOver ? 'text-red-400' : 'text-white'}`}>¥{c.toLocaleString()}</span>
-                            <span className="text-[9px] text-zinc-500 font-bold">/ ¥{b.toLocaleString()}</span>
-                          </div>
-
-                          {/* 下：プログレスバー */}
-                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-auto">
+                          {/* プログレスバー（モノトーン、オーバー時のみ赤） */}
+                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
                             <div 
                               className={`h-full transition-all duration-1000 ${isOver ? "bg-red-400" : "bg-white"}`} 
                               style={{ width: `${percent}%` }} 
@@ -1414,12 +1414,12 @@ function AppMain() {
                               />
                               <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
                               {faqSearchText && (
-                                  <button 
-                                      onClick={() => setFaqSearchText('')}
-                                      className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
-                                  >
-                                      <X size={14} />
-                                  </button>
+                                <button 
+                                  onClick={() => setFaqSearchText('')}
+                                  className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
                               )}
                           </div>
 
