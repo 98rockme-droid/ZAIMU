@@ -157,7 +157,7 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 洗練されたグレースケールカラーパレット
+// ✅ 落ち着いたグレースケールパレット（明るすぎないトーン）
 const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const getCategoryColor = (index) => {
   return GRAY_PALETTE[index % GRAY_PALETTE.length];
@@ -530,7 +530,7 @@ function AppMain() {
       cashRemainingPercent: cashBudget > 0 ? Math.round((cashRemaining / cashBudget) * 100) : 0,
       catTotals,
       lastCatTotals,
-      totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0), // 特別費を除く現金＋カードの総支出
+      totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       spentCard, 
       spentCash,
@@ -547,25 +547,23 @@ function AppMain() {
     };
   }, [monthlyData, transactions, lastMonthTransactions, month, config]);
 
+  // ✅ 有効なカテゴリのみ抽出
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
-  // ✅ AI 家計診断（真のトータル予算ベース ＆ バリエーション増加）
+  // ✅ AI 家計診断（真のトータル予算ベース）
   const aiMessage = useMemo(() => {
     const d = new Date();
     const isCurrentMonth = month === getMonthString(d);
     const today = d.getDate();
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    const progress = today / daysInMonth; // 月の経過率
+    const progress = today / daysInMonth;
     
-    // 【真のトータルやりくり予算】 ＝ (カード生活費予算 - 固定費) + (現金予算 - 積立額)
     const totalVariableBudget = Math.max(0, summary.variableBudget) + Math.max(0, summary.cashBudget - summary.savingsAmount);
-    // トータル支出 (特別費を除く)
     const spent = summary.totalSpent;
     const spentRatio = totalVariableBudget > 0 ? spent / totalVariableBudget : 0;
 
     const hasSpecial = summary.specialTotalSpent > 0;
     
-    // 最も支出の多いカテゴリを特定
     let topCategory = null;
     let topCategoryRatio = 0;
     if (spent > 0) {
@@ -576,11 +574,9 @@ function AppMain() {
       }
     }
 
-    // 先月同日時点との簡易比較（今月の経過率を掛けて算出）
     const lastMonthPacedSpent = summary.lastTotalSpent * progress;
     const isDoingBetterThanLastMonth = spent < lastMonthPacedSpent - 3000;
 
-    // 予算が設定されていない場合
     if (totalVariableBudget <= 0) {
       return { icon: '📝', text: `設定タブで「生活費予算」と「現金予算」を設定しましょう。`, color: 'text-zinc-400', bg: 'bg-white/5', border: 'border-white/10' };
     }
@@ -590,61 +586,39 @@ function AppMain() {
       const remainingBudget = totalVariableBudget - spent;
       const dailyAvailable = Math.max(0, remainingBudget) / remainingDays;
 
-      // ① 予算オーバー
       if (spent > totalVariableBudget) {
         return { icon: '🚨', text: `トータル予算を ¥${(spent - totalVariableBudget).toLocaleString()} オーバー！残りは0円を意識しましょう。`, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' };
       }
-      
-      // ② 月末ラストスパート（無買デー提案）
       if (remainingDays <= 5 && remainingBudget > 0 && remainingBudget < 5000) {
         return { icon: '🏁', text: `予算残り ¥${remainingBudget.toLocaleString()}！『無買デー』で黒字フィニッシュを目指しましょう！`, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' };
       }
-      // ③ 月末ラストスパート（余裕あり）
       if (remainingDays <= 3 && remainingBudget >= 5000) {
         return { icon: '📅', text: `残りあと${remainingDays}日！このペースなら見事な黒字でフィニッシュできそうです！`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
       }
-
-      // ④ ペースが早すぎる
       if (spentRatio > progress + 0.2) {
         return { icon: '⚠️', text: `ペースが早めです！すでにトータル予算の ${Math.round(spentRatio * 100)}% を消費しました。`, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
       }
-      
-      // ⑤ 特定カテゴリへの偏り指摘
       if (topCategoryRatio > 0.5 && spent > totalVariableBudget * 0.3) {
         return { icon: getCategoryIcon(topCategory), text: `今月は「${topCategory}」が全体の${Math.round(topCategoryRatio*100)}%を占めています。少し意識してみましょう。`, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
       }
-
-      // ⑥ 先月より優秀
       if (isDoingBetterThanLastMonth && spent > 0) {
         return { icon: '📉', text: `先月の今頃より支出が約 ¥${Math.round(lastMonthPacedSpent - spent).toLocaleString()} 抑えられています！その調子です。`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
       }
-
-      // ⑦ かなりゆとりがある
       if (spentRatio < progress - 0.1) {
         return { icon: '🌟', text: `素晴らしいペース！1日あたり約 ¥${Math.floor(dailyAvailable).toLocaleString()} 使えるゆとりがあります。`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
       }
-
-      // ⑧ 通常時
       return { icon: '💡', text: `今月は残り ${remainingDays}日。1日あたり約 ¥${Math.floor(dailyAvailable).toLocaleString()} 使えます！`, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' };
-    
     } else {
-      // 過去の月
       if (spent > totalVariableBudget) {
          return { icon: '👀', text: `この月はトータル予算を ¥${(spent - totalVariableBudget).toLocaleString()} オーバーして着地しました。`, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
       }
-      
       const kuroji = totalVariableBudget - spent;
-      
-      // ギリギリ黒字の称賛
       if (spentRatio >= 0.95 && spentRatio <= 1.0) {
         return { icon: '🎯', text: `予算をフル活用し、見事 ¥${kuroji.toLocaleString()} の黒字で着地！完璧なペース配分でした。`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
       }
-      
-      // 特別費はあったけどやりくりは成功
       if (hasSpecial) {
         return { icon: '🎁', text: `特別費の出費はありましたが、日々のやりくりは ¥${kuroji.toLocaleString()} の黒字でした！`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
       }
-
       return { icon: '🎉', text: `素晴らしい！この月はトータルで ¥${kuroji.toLocaleString()} の黒字でした。`, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
     }
   }, [summary, month, config]);
@@ -654,32 +628,31 @@ function AppMain() {
     const total = summary.totalSpent;
     if (total === 0) return { items: [], total: 0 };
 
-    // 事前にユーザーが作った「その他」カテゴリをよけておく
-    const catTotalsCopy = { ...summary.catTotals };
-    const explicitOtherAmount = catTotalsCopy['その他'] || 0;
-    delete catTotalsCopy['その他'];
-
-    const arr = Object.entries(catTotalsCopy)
+    // すべてのカテゴリを一旦金額順にソートする
+    const sortedCats = Object.entries(summary.catTotals)
       .map(([name, amount]) => ({ name, amount }))
-      .filter(item => item.amount > 0);
-    arr.sort((a, b) => b.amount - a.amount);
+      .filter(item => item.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
 
-    let items = [];
-    if (arr.length + (explicitOtherAmount > 0 ? 1 : 0) <= 6) {
-      items = arr.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
-      if (explicitOtherAmount > 0) {
-        items.push({ name: 'その他', amount: explicitOtherAmount, color: getCategoryColor(items.length) });
+    let mainItems = [];
+    let otherAmount = 0;
+
+    // 「その他」という名前のカテゴリ、または6位以下のカテゴリの金額はすべて合算する
+    sortedCats.forEach(cat => {
+      if (cat.name === 'その他') {
+        otherAmount += cat.amount;
+      } else if (mainItems.length < 5) {
+        mainItems.push(cat);
+      } else {
+        otherAmount += cat.amount;
       }
-    } else {
-      const top5 = arr.slice(0, 5);
-      const remainingAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-      const finalOtherAmount = remainingAmount + explicitOtherAmount; // 計算で出たその他と、ユーザーのその他を合体！
-      
-      items = top5.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
-      if (finalOtherAmount > 0) {
-        items.push({ name: 'その他', amount: finalOtherAmount, color: getCategoryColor(5) });
-      }
+    });
+
+    const items = mainItems.map((item, idx) => ({ ...item, color: getCategoryColor(idx) }));
+    if (otherAmount > 0) {
+      items.push({ name: 'その他', amount: otherAmount, color: getCategoryColor(items.length) });
     }
+
     return { items, total };
   }, [summary.totalSpent, summary.catTotals]);
 
@@ -893,7 +866,7 @@ function AppMain() {
     return matchSearch && matchCat && matchMethod && matchSpecial;
   });
 
-  // ✅ 履歴ページの絞り込み下に出す現金・カードの合計
+  // ✅ 履歴ページの現金・カードの合計
   const filteredCashTotal = useMemo(() => {
     return finalFilteredTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + toNumber(t.amount), 0);
   }, [finalFilteredTx]);
@@ -1208,8 +1181,8 @@ function AppMain() {
                   </button>
                 </div>
                 
-                {/* ✅ 絞り込みの下に「現金・カードの合計」を表示 */}
-                <div className="flex justify-between items-center px-1 pt-2 pb-1 text-[10px] font-bold text-zinc-500">
+                {/* ✅ 絞り込みの下に「現金・カードの合計」をスッキリと表示 */}
+                <div className="flex justify-between items-center px-1 pt-1 text-[10px] text-zinc-500">
                   <span>表示中の合計</span>
                   <div className="flex gap-3">
                     <span>現金: ¥{filteredCashTotal.toLocaleString()}</span>
@@ -1218,8 +1191,8 @@ function AppMain() {
                 </div>
               </div>
 
-              {/* ✅ pb-20 を pb-2 に修正して余分な余白を削除 */}
-              <div className="flex-1 px-4 pb-2 overflow-hidden flex flex-col">
+              {/* ✅ リストの pb-20 を削除して不要なマージンを消去 */}
+              <div className="flex-1 px-4 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
                     {finalFilteredTx.length === 0 ? (
@@ -1228,7 +1201,7 @@ function AppMain() {
                         <p className="text-xs uppercase font-black">No Spending! 🎉</p>
                       </div>
                     ) : (
-                      <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-hide pb-20">
+                      <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-hide">
                         {finalFilteredTx.map(t => (
                           <div key={t.id} onClick={() => startEditingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1249,8 +1222,8 @@ function AppMain() {
                     <div className="flex-none grid grid-cols-7 gap-1 text-center mb-2 text-[10px] text-zinc-600 uppercase">
                       {['日', '月', '火', '水', '木', '金', '土'].map(d => <div key={d}>{d}</div>)}
                     </div>
-                    <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
-                      <div className="grid grid-cols-7 gap-1">
+                    <div className="flex-1 overflow-y-auto scrollbar-hide">
+                      <div className="grid grid-cols-7 gap-1 pb-2">
                         {calendarDaysList.map((day, i) => {
                           if (!day) return <div key={i} />;
                           const a = summary.dailyTotals[day] || 0;
@@ -1441,12 +1414,12 @@ function AppMain() {
                               />
                               <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
                               {faqSearchText && (
-                                <button 
-                                  onClick={() => setFaqSearchText('')}
-                                  className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
-                                >
-                                  <X size={14} />
-                                </button>
+                                  <button 
+                                      onClick={() => setFaqSearchText('')}
+                                      className="absolute right-3 top-2.5 text-zinc-500 hover:text-white transition-colors"
+                                  >
+                                      <X size={14} />
+                                  </button>
                               )}
                           </div>
 
@@ -1517,7 +1490,7 @@ function AppMain() {
 
                   {settingTab === 'fixed' && (
                     <div className="space-y-3 animate-in slide-in-from-right-2">
-                      <button type="button" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} className="w-full h-12 bg-white text-black rounded-lg text-xs tracking-widest active:scale-scale-95 flex items-center justify-center gap-2"><Plus size={16} /> 追加</button>
+                      <button type="button" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} className="w-full h-12 bg-white text-black rounded-lg text-xs tracking-widest active:scale-95 flex items-center justify-center gap-2"><Plus size={16} /> 追加</button>
                       <SimpleCard className="overflow-hidden">
                         <div className="divide-y divide-white/5">
                           {(monthlyData.fixedCosts || []).map((f, idx) => (
