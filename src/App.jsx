@@ -96,6 +96,14 @@ const formatDateShort = (isoDateStr) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
+// 詳細画面用の丁寧な日付フォーマット
+const formatFullDateJP = (isoDateStr) => {
+  if (!isoDateStr) return '';
+  const d = new Date(isoDateStr);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+};
+
 const getTodayString = () => {
   const d = new Date();
   const year = d.getFullYear();
@@ -284,6 +292,9 @@ function AppMain() {
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
 
+  // ✅ 新たに追加した「閲覧（詳細）」用のステート
+  const [viewingTx, setViewingTx] = useState(null);
+
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const [calcInitialValue, setCalcInitialValue] = useState(0);
@@ -315,6 +326,7 @@ function AppMain() {
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ category: 'ALL', method: 'ALL', special: false });
 
+  const mainRef = useRef(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
   const [copySourceMonth, setCopySourceMonth] = useState('');
   
@@ -933,7 +945,6 @@ function AppMain() {
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
 
-  // ✅ 外側の箱（main）は常にスクロール禁止（overflow-hidden）に固定
   return (
     <div className="fixed inset-0 w-full bg-[#121212] text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
       <Toast message={toast.message} isVisible={toast.visible} />
@@ -964,7 +975,6 @@ function AppMain() {
           )}
         </header>
 
-        {/* ✅ スクロールコンテナの統一：ここは絶対にスクロールさせず、各タブの中でスクロールさせる */}
         <main className="flex-1 relative flex flex-col overflow-hidden">
           
           {/* ✅ ホーム画面 */}
@@ -1185,7 +1195,6 @@ function AppMain() {
                 </div>
               </div>
 
-              {/* ✅ リスト部分自身がスクロールする */}
               <div className="flex-1 px-4 pb-4 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <SimpleCard className="flex-1 flex flex-col overflow-hidden p-0">
@@ -1197,7 +1206,8 @@ function AppMain() {
                     ) : (
                       <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-hide">
                         {finalFilteredTx.map(t => (
-                          <div key={t.id} onClick={() => startEditingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
+                          // ✅ リストタップで「詳細モーダル（閲覧用）」を開くように変更
+                          <div key={t.id} onClick={() => setViewingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <div className="w-8 font-bold font-mono text-[10px] text-zinc-500">{formatDateShort(t.date)}</div>
                               <div className={`w-12 text-center text-[9px] rounded py-0.5 truncate ${t.isSpecial === true ? 'bg-transparent border border-white/10 text-zinc-400' : 'bg-white/5 text-zinc-400'}`}>
@@ -1554,6 +1564,80 @@ function AppMain() {
         </footer>
       </div>
 
+      {/* ✅ 支出の詳細（閲覧）モーダル */}
+      {viewingTx && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setViewingTx(null)}>
+          <div className="w-full sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
+              <h2 className="text-xs font-black uppercase text-white tracking-widest">支出の詳細</h2>
+              <button type="button" onClick={() => setViewingTx(null)} className="p-2 text-zinc-500"><X size={20} /></button>
+            </div>
+            <div className="p-6 pb-24 space-y-8 overflow-y-auto">
+              
+              {/* 金額とカテゴリ（メインビジュアル） */}
+              <div className="flex flex-col items-center justify-center space-y-3 mt-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+                  <span className="text-lg">{getCategoryIcon(viewingTx.category)}</span>
+                  <span className="text-xs font-bold text-zinc-300">{viewingTx.category}</span>
+                </div>
+                <h3 className="text-4xl font-black text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</h3>
+              </div>
+
+              {/* 詳細情報ボックス */}
+              <div className="bg-black/20 rounded-xl border border-white/5 divide-y divide-white/5">
+                <div className="p-4 flex justify-between items-center">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">内容</span>
+                  <span className="text-sm font-bold text-white">{viewingTx.title}</span>
+                </div>
+                <div className="p-4 flex justify-between items-center">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">日付</span>
+                  <span className="text-sm font-bold text-white">{formatFullDateJP(viewingTx.date)}</span>
+                </div>
+                <div className="p-4 flex justify-between items-center">
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">支払方法</span>
+                  <span className="text-sm font-bold text-white">{viewingTx.paymentMethod}</span>
+                </div>
+                {viewingTx.isSpecial && (
+                  <div className="p-4 flex justify-between items-center">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">特別費</span>
+                    <span className="text-sm font-black text-yellow-400">該当する</span>
+                  </div>
+                )}
+              </div>
+
+              {/* アクションボタン */}
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={async () => {
+                    if (window.confirm('この支出を削除しますか？')) {
+                      await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id));
+                      setViewingTx(null);
+                      showToastMsg('削除しました');
+                    }
+                  }} 
+                  className="flex-1 h-12 bg-red-900/20 text-red-500 font-black rounded-xl text-xs uppercase tracking-widest active:bg-red-900/40 flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Trash2 size={16} /> 削除
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    const tx = viewingTx;
+                    setViewingTx(null); // 詳細を閉じて
+                    startEditingTx(tx); // 編集フォームを開く
+                  }} 
+                  className="flex-1 h-12 bg-white text-black font-black rounded-xl text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Pencil size={16} /> 編集
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ✅ GLOBAL CALCULATOR MODAL */}
       {showCalculator && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowCalculator(false)}>
@@ -1649,9 +1733,9 @@ function AppMain() {
         </div>
       )}
 
-      {/* ✅ TX MODAL */}
+      {/* ✅ TX MODAL (編集・入力フォーム) */}
       {isTxModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsTxModalOpen(false)}>
+        <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsTxModalOpen(false)}>
           <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1E1E1E] sm:rounded-lg rounded-t-2xl border border-white/5 shadow-2xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <>
               <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
@@ -1776,18 +1860,11 @@ function AppMain() {
                     </div>
                   )}
 
-                  {/* 保存ボタンエリア */}
-                  <div className="flex gap-2 pt-4 border-t border-white/5 mt-2">
-                    {editingTx && (
-                      <button type="button" onClick={async () => {
-                        if (window.confirm('削除しますか？')) {
-                          await deleteDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id));
-                          setIsTxModalOpen(false);
-                          showToastMsg('削除しました');
-                        }
-                      }} className="w-11 h-11 flex items-center justify-center bg-red-900/20 text-red-500 rounded-lg active:bg-red-900/40"><Trash2 size={18} /></button>
-                    )}
-                    <button type="submit" className="flex-1 h-11 bg-white text-black font-black rounded-lg text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl">保存する</button>
+                  {/* ✅ 保存ボタンエリア（ゴミ箱ボタンを削除し、全幅の美しいボタンに変更） */}
+                  <div className="pt-4 border-t border-white/5 mt-2">
+                    <button type="submit" className="w-full h-12 bg-white text-black font-black rounded-xl text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl transition-transform">
+                      保存する
+                    </button>
                   </div>
                 </form>
               </div>
