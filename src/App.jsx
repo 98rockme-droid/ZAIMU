@@ -1,62 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore,
-  collection,
-  doc,
-  setDoc,
-  onSnapshot,
-  query,
-  deleteDoc,
-  where,
-  getDocs,
-  getDoc,
-  orderBy,
-  addDoc,
-  updateDoc,
-  serverTimestamp,
-  runTransaction,
-  documentId
+  getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc,
+  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp,
+  runTransaction, documentId
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
-  Wallet,
-  CreditCard,
-  Landmark,
-  Plus,
-  Settings,
-  Trash2,
-  History,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  Tags,
-  ArrowLeft,
-  CopyCheck,
-  Calendar,
-  CheckCircle2,
-  BarChart3,
-  TrendingDown,
-  TrendingUp,
-  Banknote,
-  LayoutGrid,
-  ListChecks,
-  Search,
-  CalendarDays,
-  AlignJustify,
-  Zap,
-  Calculator,
-  Delete,
-  LogOut,
-  Lock,
-  User,
-  FileText,
-  Home,
-  Sparkles,
-  ChevronDown,
-  PiggyBank,
-  HelpCircle,
-  Pencil
+  Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History,
+  ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
+  CheckCircle2, BarChart3, TrendingDown, TrendingUp, Banknote,
+  LayoutGrid, ListChecks, Search, CalendarDays, AlignJustify, Zap,
+  Calculator, Delete, LogOut, Lock, User, FileText, Home, Sparkles,
+  ChevronDown, PiggyBank, HelpCircle, Pencil
 } from 'lucide-react';
 
 /* --- FIREBASE CONFIG --- */
@@ -96,7 +52,6 @@ const formatDateShort = (isoDateStr) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
-// 詳細画面用の丁寧な日付フォーマット
 const formatFullDateJP = (isoDateStr) => {
   if (!isoDateStr) return '';
   const d = new Date(isoDateStr);
@@ -165,7 +120,6 @@ const normalizeConfig = (data) => ({
   templates: data?.templates || []
 });
 
-// ✅ 落ち着いたグレースケールパレット
 const GRAY_PALETTE = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const getCategoryColor = (index) => {
   return GRAY_PALETTE[index % GRAY_PALETTE.length];
@@ -292,7 +246,6 @@ function AppMain() {
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
 
-  // ✅ 新たに追加した「閲覧（詳細）」用のステート
   const [viewingTx, setViewingTx] = useState(null);
 
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -333,8 +286,6 @@ function AppMain() {
   const [memoText, setMemoText] = useState('');
   const [isMemoExpanded, setIsMemoExpanded] = useState(false);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
-
-  const [selectedDonutSlice, setSelectedDonutSlice] = useState(null);
 
   const FAQ_DATA = [
     {
@@ -448,29 +399,12 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'cash'), (s) => { if (s.exists()) setCashBalance(s.data().balance); });
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid, 'wallet', 'savings'), (s) => { if (s.exists()) setSavingsBalance(s.data().balance || 0); });
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
     const fetchSavingsTotalToMonth = async () => {
       try {
-        const q = query(
-          collection(db, 'users', user.uid, 'months'),
-          where(documentId(), '<=', month),
-          orderBy(documentId(), 'asc')
-        );
+        const q = query(collection(db, 'users', user.uid, 'months'), where(documentId(), '<=', month), orderBy(documentId(), 'asc'));
         const s = await getDocs(q);
         let sum = 0;
-        s.forEach(d => {
-          const md = normalizeMonthlyData(d.data());
-          sum += Number(md.savings || 0);
-        });
+        s.forEach(d => { sum += Number(normalizeMonthlyData(d.data()).savings || 0); });
         setSavingsTotalToMonth(sum);
       } catch (e) {
         console.error(e);
@@ -506,10 +440,17 @@ function AppMain() {
 
     const cashRemaining = cashBudget - spentCash - savingsAmount;
 
+    // 🌟 今回新しく追加したロジック 🌟
+    // 目安となるカード決済額（設定の生活費予算を使用するか、設定がなければ10万円を基準とする）
+    const cardTarget = totalBudget > 0 ? totalBudget : 100000;
+    const cardPacePercent = cardTarget > 0 ? Math.min(100, (spentCard / cardTarget) * 100) : 0;
+    
+    // 今月手元に残る現金予測 = 給与 - 先取り貯金 - 固定費合計 - 今までの支出(カード+現金)
+    const projectedCash = (Number(monthlyData?.salary) || 0) - savingsAmount - fixedTotal - spentCard - spentCash;
+
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-    const totalWithdrawal = fixedCash + billTotal + savingsAmount;
     const withdrawalOnly = fixedCash + billTotal;
-    const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - totalWithdrawal;
+    const bankBalanceProjected = (Number(monthlyData?.salary) || 0) - (withdrawalOnly + savingsAmount);
 
     const catTotals = normalTx.reduce((acc, t) => { 
       const cat = t.category || '未分類';
@@ -535,12 +476,17 @@ function AppMain() {
       bankBalanceProjected,
       fixedTotal,
       fixedCard,
-      totalWithdrawal,
       withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
       savingsAmount,
       cardRemainingPercent: (totalBudget - fixedTotal) > 0 ? Math.round((cardRemaining / (totalBudget - fixedTotal)) * 100) : 0,
       cashRemainingPercent: cashBudget > 0 ? Math.round((cashRemaining / cashBudget) * 100) : 0,
+      
+      // 新しいUI用の変数をExport
+      cardTarget,
+      cardPacePercent,
+      projectedCash,
+
       catTotals,
       lastCatTotals,
       totalSpent: normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
@@ -684,29 +630,6 @@ function AppMain() {
     if (!confirmed.includes(cardName)) {
       await setDoc(doc(db, 'users', user.uid, 'months', month), { confirmedPayments: [...confirmed, cardName] }, { merge: true });
       showToastMsg('支払いを完了しました');
-    }
-  };
-
-  const executeSavings = async () => {
-    if (!user || monthlyData.isSavingsDone) return;
-    const amount = Number(monthlyData.savings || 0);
-    if (amount <= 0) return showToastMsg('積立額が設定されていません');
-
-    try {
-      await runTransaction(db, async (t) => {
-        const monthRef = doc(db, 'users', user.uid, 'months', month);
-        t.set(monthRef, { isSavingsDone: true }, { merge: true });
-        const savingsRef = doc(db, 'users', user.uid, 'wallet', 'savings');
-        const savingsDoc = await t.get(savingsRef);
-        t.set(savingsRef, { balance: (savingsDoc.exists() ? savingsDoc.data().balance : 0) + amount }, { merge: true });
-        const cashRef = doc(db, 'users', user.uid, 'wallet', 'cash');
-        const cashDoc = await t.get(cashRef);
-        t.set(cashRef, { balance: (cashDoc.exists() ? cashDoc.data().balance : 0) - amount }, { merge: true });
-      });
-      showToastMsg('積立を完了しました！🎉');
-    } catch (e) {
-      console.error(e);
-      showToastMsg('エラーが発生しました');
     }
   };
 
@@ -857,16 +780,6 @@ function AppMain() {
     setEditingItem(null); showToastMsg('削除しました');
   };
 
-  const handleMoveCategory = async (index, direction, e) => {
-    e.stopPropagation();
-    const newCats = [...(config.categories || [])];
-    if (direction === 'up' && index > 0) [newCats[index], newCats[index - 1]] = [newCats[index - 1], newCats[index]];
-    else if (direction === 'down' && index < newCats.length - 1) [newCats[index], newCats[index + 1]] = [newCats[index + 1], newCats[index]];
-    else return;
-    setConfig({ ...config, categories: newCats });
-    await setDoc(doc(db, 'users', user.uid, 'settings', 'config'), { ...config, categories: newCats }, { merge: true });
-  };
-
   /* --- OTHERS --- */
   const finalFilteredTx = transactions.filter(t => {
     const matchSearch = searchText === '' || String(t.title || '').includes(searchText);
@@ -996,54 +909,48 @@ function AppMain() {
               )}
 
               <div className="px-4 pb-32 space-y-6 pt-4 animate-in fade-in duration-300">
-                {/* ① 残高セクション */}
+                {/* 🌟 修正ポイント：トップの残高セクション 🌟 */}
                 <div className="space-y-4">
                   <SimpleCard className="p-0">
                     <div className="grid grid-cols-2 divide-x divide-white/5">
+                      {/* 左側：カード利用ペース（積み上げ型） */}
                       <div className="p-4 flex flex-col">
                         <div>
                           <div className="flex items-center gap-1 mb-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
                             <CreditCard size={12} className="shrink-0" />
-                            <p className="truncate">使える (カード)</p>
+                            <p className="truncate">カード利用ペース</p>
                           </div>
-                          <h2 className={`text-2xl font-bold tracking-tight ${summary.cardRemaining < 0 ? 'text-red-400' : 'text-white'}`}>
-                            ¥{summary.cardRemaining.toLocaleString()}
+                          <h2 className={`text-2xl font-bold tracking-tight text-white`}>
+                            ¥{summary.spentCard.toLocaleString()}
                           </h2>
                         </div>
                         <div className="mt-4 flex-1 flex flex-col justify-end space-y-1">
-                          <div className="flex justify-between text-[8px] text-zinc-500">
-                            <span>変動予算</span><span>¥{summary.variableBudget.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between text-[8px] text-zinc-500">
-                            <span>利用済</span><span>¥{summary.spentCard.toLocaleString()}</span>
-                          </div>
                           <div className="flex justify-between text-[8px] text-zinc-500 pb-0.5">
-                            <span>総枠</span><span className="text-zinc-400 font-bold">¥{summary.cardBudget.toLocaleString()}</span>
+                            {/* 設定の「生活費予算」をカードの目安として使用します */}
+                            <span>目安</span><span className="text-zinc-400 font-bold">¥{summary.cardTarget.toLocaleString()}</span>
                           </div>
                           <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
-                            <div className="h-full bg-white transition-all duration-1000" style={{ width: `${summary.cardRemainingPercent}%` }} />
+                            {/* 目安を超えたら黄色くなる安心・安全のバー */}
+                            <div className={`h-full transition-all duration-1000 ${summary.spentCard > summary.cardTarget ? 'bg-amber-400' : 'bg-white'}`} style={{ width: `${summary.cardPacePercent}%` }} />
                           </div>
                         </div>
                       </div>
+                      
+                      {/* 右側：手元に残る現金（安心感の可視化） */}
                       <div className="p-4 flex flex-col">
                         <div>
                           <div className="flex items-center gap-1 mb-1 text-[9px] text-zinc-400 font-bold uppercase tracking-wider">
                             <Wallet size={12} className="shrink-0" />
-                            <p className="truncate">使える (口座)</p>
+                            <p className="truncate">残る現金 (予測)</p>
                           </div>
-                          <h2 className={`text-2xl font-bold tracking-tight ${summary.cashRemaining < 0 ? 'text-red-400' : 'text-white'}`}>
-                            ¥{summary.cashRemaining.toLocaleString()}
+                          <h2 className={`text-2xl font-bold tracking-tight text-emerald-400`}>
+                            ¥{summary.projectedCash.toLocaleString()}
                           </h2>
                         </div>
                         <div className="mt-4 flex-1 flex flex-col justify-end space-y-1">
-                          <div className="flex justify-between text-[8px] text-zinc-500">
-                            <span>利用済</span><span>¥{summary.spentCash.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between text-[8px] text-zinc-500 pb-0.5">
-                            <span>軍資金</span><span className="text-zinc-400 font-bold">¥{summary.cashBudget.toLocaleString()}</span>
-                          </div>
-                          <div className="h-1 bg-white/5 rounded-full overflow-hidden shrink-0 mt-1">
-                            <div className="h-full bg-zinc-500 transition-all duration-1000" style={{ width: `${summary.cashRemainingPercent}%` }} />
+                          <div className="flex justify-between items-center bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-1 mt-1">
+                            <span className="text-[8px] text-emerald-400 font-bold">🔒 先取り貯金</span>
+                            <span className="text-[10px] font-black text-emerald-400">¥{summary.savingsAmount.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
@@ -1206,7 +1113,6 @@ function AppMain() {
                     ) : (
                       <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-hide">
                         {finalFilteredTx.map(t => (
-                          // ✅ リストタップで「詳細モーダル（閲覧用）」を開くように変更
                           <div key={t.id} onClick={() => setViewingTx(t)} className="flex items-center justify-between p-4 cursor-pointer active:bg-white/5 transition-colors">
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <div className="w-8 font-bold font-mono text-[10px] text-zinc-500">{formatDateShort(t.date)}</div>
@@ -1860,7 +1766,7 @@ function AppMain() {
                     </div>
                   )}
 
-                  {/* ✅ 保存ボタンエリア（ゴミ箱ボタンを削除し、全幅の美しいボタンに変更） */}
+                  {/* ✅ 保存ボタンエリア */}
                   <div className="pt-4 border-t border-white/5 mt-2">
                     <button type="submit" className="w-full h-12 bg-white text-black font-black rounded-xl text-xs uppercase tracking-widest active:bg-zinc-200 shadow-xl transition-transform">
                       保存する
