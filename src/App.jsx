@@ -154,7 +154,7 @@ class ErrorBoundary extends React.Component {
 const SimpleCard = ({ children, className = "", onClick }) => (
   <div
     onClick={onClick}
-    className={`bg-[#1C1C1E] rounded-[18px] border border-white/5 shadow-[0_1px_2px_rgba(0,0,0,0.2)] overflow-hidden w-full box-border ${className}`}
+    className={`bg-[#1C1C1E] rounded-[16px] border border-white/5 shadow-[0_1px_2px_rgba(0,0,0,0.18)] overflow-hidden w-full box-border ${className}`}
   >
     {children}
   </div>
@@ -243,7 +243,7 @@ const CalculatorPad = ({ initialValue, onConfirm }) => {
   ];
   return (
     <div className="w-full flex flex-col gap-3">
-      <div className="bg-[#1C1C1E] rounded-[18px] p-4 text-right border border-white/5 font-mono text-2xl text-white break-all tabular-nums">
+      <div className="bg-[#1C1C1E] rounded-[16px] p-4 text-right border border-white/5 font-mono text-2xl text-white break-all tabular-nums">
         {display}
       </div>
       <div className="grid grid-cols-4 gap-2.5 h-64">
@@ -529,7 +529,8 @@ function AppMain() {
   const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
 
   const aiMessage = useMemo(() => {
-    const messages = [];
+    if (summary.totalSpent === 0 && summary.specialTotalSpent === 0) return null;
+
     const cardRatio = summary.cardTarget > 0 ? summary.spentCard / summary.cardTarget : 0;
     const overCategories = activeCategories.filter((n) => {
       const budget = monthlyData.catBudgets?.[n] || 0;
@@ -537,129 +538,32 @@ function AppMain() {
       return budget > 0 && current > budget;
     });
 
-    if (summary.totalSpent === 0) {
-      return {
-        icon: '🌙',
-        text: 'まだ支出がありません。最初の1件を入れると、今月の景色が見えやすくなります。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      };
-    }
-
     if (summary.cashRemaining < 0) {
-      messages.push({
-        icon: '⚠️',
-        text: '現金残りがマイナスです。現金払いが続くなら、ここをいちばん先に立て直したいです。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+      return { text: '現金が少し赤字です。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    if (cardRatio >= 1) {
-      messages.push({
-        icon: '🚨',
-        text: `カード利用が目安を超えています。今月はカードより現金寄せにすると着地が安定しやすいです。`,
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
-    }
-
-    if (cardRatio >= 0.8 && cardRatio < 1) {
-      messages.push({
-        icon: '👀',
-        text: 'カード利用が目安の8割を超えました。ここからの数件で着地の印象が変わります。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
-    }
-
-    if (summary.projectedCash >= 80000) {
-      messages.push({
-        icon: '🌟',
-        text: 'かなりいいペースです。このままなら来月も余裕を持って着地できそうです。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
-    }
-
-    if (summary.projectedCash >= 30000 && summary.projectedCash < 80000) {
-      messages.push({
-        icon: '🙂',
-        text: '今のところ安定ペースです。大きい出費がなければ、きれいに着地できそうです。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
-    }
-
     if (summary.projectedCash < 0) {
-      messages.push({
-        icon: '🫠',
-        text: '今のペースだと着地が赤字予想です。カード・特別費・固定費の順で見直すと効きやすいです。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+      return { text: 'このままだと着地が赤字寄りです。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    if (summary.specialTotalSpent > 0) {
-      messages.push({
-        icon: '🎟️',
-        text: `今月は特別費が入っています。通常出費と分けて見られているのはかなりえらいです。`,
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+    if (cardRatio >= 1) {
+      return { text: 'カード利用が目安オーバーです。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    if (summary.savingsAmount > 0) {
-      messages.push({
-        icon: '🪙',
-        text: `今月の積立 ¥${summary.savingsAmount.toLocaleString()} は先に確保できています。これはかなり強いです。`,
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+    if (cardRatio >= 0.8) {
+      return { text: 'カード利用、やや早めです。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
     if (overCategories.length > 0) {
-      messages.push({
-        icon: '📌',
-        text: `予算オーバー中のカテゴリがあります。いま気にするなら ${overCategories[0]} からがいちばん効きます。`,
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+      return { text: `${overCategories[0]} が予算オーバーです。`, color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    if (summary.spentCash === 0 && summary.totalSpent > 0) {
-      messages.push({
-        icon: '💳',
-        text: '今月はカード中心で回っています。現金残りを守りやすい反面、引落月の見え方は要チェックです。',
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+    if (summary.specialTotalSpent > 0) {
+      return { text: '特別費ありの月です。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    if (messages.length === 0) {
-      messages.push({
-        icon: '💡',
-        text: `現在の${nextMonthNum}月の着地予想は ¥${summary.projectedCash.toLocaleString()} です。今のところ大きな崩れはなさそうです。`,
-        color: 'text-zinc-100',
-        bg: 'bg-[#2C2C2E]',
-        border: 'border-white/5'
-      });
+    if (summary.projectedCash >= 80000) {
+      return { text: 'かなり安定してます。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
     }
-
-    const index = (transactions.length + currentMonthNum + Math.floor(summary.totalSpent / 1000)) % messages.length;
-    return messages[index];
-  }, [summary, activeCategories, monthlyData.catBudgets, transactions.length, currentMonthNum, nextMonthNum]);
+    if (summary.projectedCash >= 30000) {
+      return { text: '今のところ順調です。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
+    }
+    return { text: '今月は少し慎重めがよさそうです。', color: 'text-white', bg: 'bg-[#2C2C2E]', border: 'border-white/5' };
+  }, [summary, activeCategories, monthlyData.catBudgets]);
 
   const donutChartData = useMemo(() => {
     const total = summary.totalSpent;
@@ -1000,26 +904,27 @@ function AppMain() {
 
               <div className="px-4 space-y-4 pt-4 animate-in fade-in duration-300">
                 {aiMessage && (
-                  <div className={`p-3 rounded-[16px] border ${aiMessage.border} ${aiMessage.bg} flex items-start gap-3`}>
-                    <span className="text-base shrink-0 mt-0.5">{aiMessage.icon}</span>
+                  <div className={`px-3.5 py-2.5 rounded-[14px] border ${aiMessage.border} ${aiMessage.bg}`}>
                     <span className={`text-[13px] font-medium leading-snug ${aiMessage.color}`}>{aiMessage.text}</span>
                   </div>
                 )}
 
                 <div className="space-y-2.5">
-                  <SectionTitle>今月の概要</SectionTitle>
+                  <SectionTitle>今月</SectionTitle>
                   <SimpleCard className="p-0 overflow-hidden">
-                    <div className="p-4 border-b border-white/5">
-                      <div className="flex items-end justify-between gap-3">
+                    <div className="p-4">
+                      <div className="flex items-end justify-between gap-4">
                         <div>
-                          <p className="text-[11px] text-[#8E8E93] font-medium mb-1">今月の利用額</p>
+                          <p className="text-[11px] text-[#8E8E93] font-medium mb-1">利用額</p>
                           <h2 className="text-[32px] leading-none font-semibold tracking-tight text-white">
                             ¥{summary.totalSpent.toLocaleString()}
                           </h2>
                         </div>
                         <div className="text-right">
-                          <p className="text-[11px] text-[#8E8E93] font-medium mb-1">カード目安</p>
-                          <p className="text-[14px] font-semibold text-white">¥{summary.cardTarget.toLocaleString()}</p>
+                          <p className="text-[11px] text-[#8E8E93] font-medium mb-1">着地予想</p>
+                          <p className="text-[22px] leading-none font-semibold text-white">
+                            ¥{summary.projectedCash.toLocaleString()}
+                          </p>
                         </div>
                       </div>
 
@@ -1031,50 +936,45 @@ function AppMain() {
                           />
                         </div>
                         <div className="flex justify-between text-[11px] text-[#8E8E93]">
-                          <span>💳 ¥{summary.spentCard.toLocaleString()}</span>
-                          <span>💴 ¥{summary.spentCash.toLocaleString()}</span>
+                          <span>カード ¥{summary.spentCard.toLocaleString()}</span>
+                          <span>現金 ¥{summary.spentCash.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="divide-y divide-white/5">
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-[11px] text-[#8E8E93] font-medium">今の現金残り</p>
-                        </div>
-                        <div className={`text-[17px] leading-none font-semibold tabular-nums ${summary.cashRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                        <p className="text-sm text-zinc-300">今の現金残り</p>
+                        <div className={`text-[16px] leading-none font-semibold tabular-nums ${summary.cashRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                           ¥{summary.cashRemaining.toLocaleString()}
                         </div>
                       </div>
 
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-[11px] text-[#8E8E93] font-medium">{currentMonthNum}月の自由な現金</p>
-                        </div>
-                        <div className="text-[17px] leading-none font-semibold tabular-nums text-white">
+                        <p className="text-sm text-zinc-300">{currentMonthNum}月の自由な現金</p>
+                        <div className="text-[16px] leading-none font-semibold tabular-nums text-white">
                           ¥{summary.currentFreeCash.toLocaleString()}
                         </div>
                       </div>
 
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-[11px] text-[#8E8E93] font-medium">{nextMonthNum}月の着地予想</p>
-                        </div>
-                        <div className="text-[17px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.projectedCash.toLocaleString()}
+                        <p className="text-sm text-zinc-300">積立総額</p>
+                        <div className="text-right">
+                          <div className="text-[16px] leading-none font-semibold tabular-nums text-white">
+                            ¥{Number(savingsTotalToMonth || 0).toLocaleString()}
+                          </div>
+                          <div className="text-[10px] text-[#8E8E93] mt-1">今月 +¥{summary.savingsAmount.toLocaleString()}</div>
                         </div>
                       </div>
                     </div>
                   </SimpleCard>
                 </div>
 
-                <div className="space-y-2.5">
-                  <SectionTitle>カテゴリ別 予算状況</SectionTitle>
-                  <SimpleCard className="divide-y divide-white/5 p-0">
-                    {activeCategories.length === 0 ? (
-                      <div className="p-4 text-sm text-[#8E8E93]">まだカテゴリ予算のデータがありません。</div>
-                    ) : (
-                      activeCategories.map((n) => {
+                {activeCategories.length > 0 && (
+                  <div className="space-y-2.5">
+                    <SectionTitle>カテゴリ予算</SectionTitle>
+                    <SimpleCard className="divide-y divide-white/5 p-0">
+                      {activeCategories.map((n) => {
                         const current = summary.catTotals[n] || 0;
                         const budget = monthlyData.catBudgets?.[n] || 0;
                         const isOver = budget > 0 && current > budget;
@@ -1084,7 +984,7 @@ function AppMain() {
                           <div key={n} className="px-4 py-3">
                             <div className="flex items-center justify-between gap-3 mb-2">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-lg shrink-0">{getCategoryIcon(n)}</span>
+                                <span className="text-base shrink-0">{getCategoryIcon(n)}</span>
                                 <span className="text-sm font-medium text-white truncate">{n}</span>
                               </div>
                               <div className="text-right shrink-0">
@@ -1099,10 +999,10 @@ function AppMain() {
                             </div>
                           </div>
                         );
-                      })
-                    )}
-                  </SimpleCard>
-                </div>
+                      })}
+                    </SimpleCard>
+                  </div>
+                )}
 
                 {activeAlerts.length > 0 && (
                   <div className="space-y-2.5">
@@ -1124,22 +1024,6 @@ function AppMain() {
                     </SimpleCard>
                   </div>
                 )}
-
-                <div className="space-y-2.5">
-                  <SectionTitle>積立貯金</SectionTitle>
-                  <SimpleCard className="p-4">
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-[11px] text-[#8E8E93] font-medium mb-1.5">総額</p>
-                        <h3 className="text-[28px] leading-none font-semibold text-white tracking-tight">¥{Number(savingsTotalToMonth || 0).toLocaleString()}</h3>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[11px] text-[#8E8E93] font-medium mb-1.5">今月の積立</p>
-                        <p className="text-sm font-semibold text-white">+ ¥{summary.savingsAmount.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </SimpleCard>
-                </div>
               </div>
             </div>
           )}
@@ -1343,7 +1227,7 @@ function AppMain() {
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-28 animate-in fade-in">
               {settingTab === 'menu' ? (
                 <div className="space-y-6 pb-8">
-                  <div className="flex items-center justify-between p-4 bg-[#1C1C1E] border border-white/5 rounded-[20px]">
+                  <div className="flex items-center justify-between p-4 bg-[#1C1C1E] border border-white/5 rounded-[18px]">
                     <div className="flex items-center gap-3.5 min-w-0">
                       {user.photoURL ? (
                         <img src={user.photoURL} referrerPolicy="no-referrer" alt="icon" className="w-11 h-11 rounded-2xl border border-white/5" />
@@ -1401,7 +1285,7 @@ function AppMain() {
                               <SectionTitle>{section.category}</SectionTitle>
                               <SimpleCard className="divide-y divide-white/5 p-0">
                                 {section.items.map((item, idx) => (
-                                  <div key={idx} className="p-4 cursor-pointer hover:bg-white/[0.03] transition-colors" onClick={() => setExpandedFaq(expandedFaq === `${sIdx}-${idx}` ? null : `${sIdx}-${idx}`)}>
+                                  <div key={idx} className="p-4 cursor-pointer hover:bgwhite/[0.03] transition-colors" onClick={() => setExpandedFaq(expandedFaq === `${sIdx}-${idx}` ? null : `${sIdx}-${idx}`)}>
                                     <div className="flex justify-between items-start gap-4">
                                       <div className="flex items-start gap-3">
                                         <HelpCircle size={18} className="text-[#636366] mt-0.5 shrink-0" />
@@ -1509,8 +1393,8 @@ function AppMain() {
         <footer className="fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-2xl border-t border-white/5 h-20 flex items-center justify-around px-5 pb-4 pt-2">
           <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Home size={21} />} />
           <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={21} />} />
-          <button onClick={openTxModalNew} className="w-14 h-14 bg-[#0A84FF] text-white rounded-[18px] flex items-center justify-center active:scale-90 transition-transform shadow-[0_8px_24px_rgba(10,132,255,0.28)]">
-            <Plus size={28} />
+          <button onClick={openTxModalNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-[16px] flex items-center justify-center active:scale-90 transition-transform shadow-[0_4px_12px_rgba(10,132,255,0.2)]">
+            <Plus size={24} />
           </button>
           <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={21} />} />
           <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu') }} icon={<Settings size={21} />} />
@@ -1520,28 +1404,28 @@ function AppMain() {
       {/* MODALS */}
       {viewingTx && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setViewingTx(null)}>
-          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[24px] sm:rounded-[24px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex-none p-5 border-b border-white/5 flex justify-between items-center">
+          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
               <h2 className="text-sm font-medium text-white">支出の詳細</h2>
-              <button type="button" onClick={() => setViewingTx(null)} className="w-9 h-9 flex items-center justify-center rounded-full bg-[#2C2C2E] text-[#8E8E93] hover:text-white transition-colors">
-                <X size={18} />
+              <button type="button" onClick={() => setViewingTx(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C2C2E] text-[#8E8E93] hover:text-white transition-colors">
+                <X size={16} />
               </button>
             </div>
-            <div className="p-6 pb-28 space-y-6 overflow-y-auto">
-              <div className="flex flex-col items-center justify-center space-y-4 mt-1">
-                <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#2C2C2E] border border-white/5">
-                  <span className="text-xl">{getCategoryIcon(viewingTx.category)}</span>
+            <div className="p-5 pb-24 space-y-5 overflow-y-auto">
+              <div className="flex flex-col items-center justify-center space-y-3 mt-1">
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[#2C2C2E] border border-white/5">
+                  <span className="text-lg">{getCategoryIcon(viewingTx.category)}</span>
                   <span className="text-sm font-medium text-white">{viewingTx.category}</span>
                 </div>
-                <h3 className="text-[42px] leading-none font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</h3>
+                <h3 className="text-[40px] leading-none font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</h3>
               </div>
-              <div className="bg-[#2C2C2E] rounded-[18px] border border-white/5 divide-y divide-white/5">
+              <div className="bg-[#2C2C2E] rounded-[16px] border border-white/5 divide-y divide-white/5">
                 <div className="p-4 flex justify-between items-center gap-4"><span className="text-[11px] text-[#8E8E93] font-medium">内容</span><span className="text-sm font-medium text-white text-right">{viewingTx.title}</span></div>
                 <div className="p-4 flex justify-between items-center gap-4"><span className="text-[11px] text-[#8E8E93] font-medium">日付</span><span className="text-sm font-medium text-white text-right">{formatFullDateJP(viewingTx.date)}</span></div>
                 <div className="p-4 flex justify-between items-center gap-4"><span className="text-[11px] text-[#8E8E93] font-medium">支払方法</span><span className="text-sm font-medium text-white text-right">{viewingTx.paymentMethod}</span></div>
                 {viewingTx.isSpecial && <div className="p-4 flex justify-between items-center gap-4"><span className="text-[11px] text-white font-medium">特別費</span><span className="text-sm font-medium text-white">該当する</span></div>}
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-1">
                 <button type="button" onClick={async () => { if (window.confirm('この支出を削除しますか？')) { await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id)); setViewingTx(null); showToastMsg('削除しました'); } }} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] font-medium rounded-2xl flex items-center justify-center active:scale-95 transition-transform">
                   <Trash2 size={20} />
                 </button>
@@ -1564,10 +1448,10 @@ function AppMain() {
 
       {isMemoModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
-          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[24px] sm:rounded-[24px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-semibold text-white tracking-tight">月次メモ</h2><button type="button" onClick={() => setIsMemoModalOpen(false)} className="w-9 h-9 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93]"><X size={18} /></button></div>
-            <div className="flex flex-col gap-5">
-              <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[18px] p-4">
+          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-semibold text-white tracking-tight">月次メモ</h2><button type="button" onClick={() => setIsMemoModalOpen(false)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93]"><X size={16} /></button></div>
+            <div className="flex flex-col gap-4">
+              <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[16px] p-4">
                 <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="今月のやりくりや、特別費の理由などをメモしておけます。" className="w-full h-36 bg-transparent text-white font-medium text-sm outline-none resize-none leading-relaxed" autoFocus />
               </div>
               <button type="button" onClick={handleMemoSave} className="w-full h-11 bg-[#0A84FF] text-white font-medium rounded-2xl text-sm active:scale-[0.98] transition-transform">
@@ -1580,14 +1464,14 @@ function AppMain() {
 
       {isCopyModalOpen && (
         <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsCopyModalOpen(false)}>
-          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[24px] sm:rounded-[24px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-semibold text-white tracking-tight">設定をコピー</h2><button type="button" onClick={() => setIsCopyModalOpen(false)} className="w-9 h-9 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93]"><X size={18} /></button></div>
-            <div className="space-y-5">
+          <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-semibold text-white tracking-tight">設定をコピー</h2><button type="button" onClick={() => setIsCopyModalOpen(false)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93]"><X size={16} /></button></div>
+            <div className="space-y-4">
               <div className="space-y-2.5">
                 <label className="text-[11px] text-[#8E8E93] font-medium pl-1">Copy Source Month</label>
                 <input type="month" value={copySourceMonth} onChange={e => setCopySourceMonth(e.target.value)} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-sm font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-all" />
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setIsCopyModalOpen(false)} className="flex-1 h-11 bg-[#2C2C2E] text-zinc-300 rounded-2xl font-medium text-sm active:bg-white/[0.08] transition-colors">
                   キャンセル
                 </button>
@@ -1602,15 +1486,15 @@ function AppMain() {
 
       {isTxModalOpen && (
         <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsTxModalOpen(false)}>
-          <div className="w-full max-h-[95vh] sm:max-w-md bg-[#1C1C1E] rounded-t-[24px] sm:rounded-[24px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex-none p-5 border-b border-white/5 flex justify-between items-center">
+          <div className="w-full max-h-[95vh] sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white tracking-tight">{editingTx ? '支出を編集' : '支出を入力'}</h2>
-              <button type="button" onClick={() => setIsTxModalOpen(false)} className="w-9 h-9 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors">
-                <X size={18} />
+              <button type="button" onClick={() => setIsTxModalOpen(false)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors">
+                <X size={16} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 pb-28">
-              <form onSubmit={handleTxSubmit} className="space-y-5">
+            <div className="flex-1 overflow-y-auto p-5 pb-24">
+              <form onSubmit={handleTxSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-medium text-[#8E8E93] ml-1">Amount</label>
                   <div className="flex gap-3">
@@ -1654,7 +1538,7 @@ function AppMain() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-3.5 bg-[#2C2C2E] rounded-2xl border border-white/5 mt-2">
+                <div className="flex items-center justify-between p-3.5 bg-[#2C2C2E] rounded-2xl border border-white/5 mt-1">
                   <span className="text-[12px] font-medium text-zinc-300 ml-1">特別費として記録する</span>
                   <button type="button" onClick={() => setInputIsSpecial(prev => !prev)} className={`w-11 h-6 rounded-full relative transition-colors ${inputIsSpecial ? 'bg-[#0A84FF]' : 'bg-black/30 border border-white/5'}`}>
                     <div className={`absolute top-[3px] w-4.5 h-4.5 rounded-full transition-transform ${inputIsSpecial ? 'translate-x-[21px] bg-white' : 'translate-x-1 bg-[#8E8E93]'}`} />
@@ -1674,7 +1558,7 @@ function AppMain() {
                   </div>
                 )}
 
-                <div className="pt-5 mt-2 flex gap-4 border-t border-white/5">
+                <div className="pt-4 mt-1 flex gap-4 border-t border-white/5">
                   <button type="submit" className="w-full h-11 bg-[#0A84FF] text-white font-medium rounded-2xl text-sm active:scale-[0.98] transition-transform">
                     保存する
                   </button>
@@ -1687,14 +1571,14 @@ function AppMain() {
 
       {editingItem && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
-          <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1C1C1E] rounded-t-[24px] sm:rounded-[24px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-white/5 flex justify-between items-center">
+          <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-white/5 flex justify-between items-center">
               <h2 className="text-xl font-semibold text-white tracking-tight">編集する</h2>
-              <button type="button" onClick={() => setEditingItem(null)} className="w-9 h-9 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors">
-                <X size={18} />
+              <button type="button" onClick={() => setEditingItem(null)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors">
+                <X size={16} />
               </button>
             </div>
-            <div className="p-6 pb-28 space-y-5 overflow-y-auto">
+            <div className="p-5 pb-24 space-y-4 overflow-y-auto">
 
               {['salary', 'totalBudget', 'cashBudget', 'savings'].includes(editingItem.type) && (
                 <div className="space-y-2">
@@ -1716,14 +1600,14 @@ function AppMain() {
               {editingItem.type === 'memo' && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-medium text-[#8E8E93] ml-1">今月のメモ</label>
-                  <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[18px] p-4">
+                  <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[16px] p-4">
                     <textarea value={editingItem.data.memo || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })} className="w-full h-36 bg-transparent text-white font-medium text-sm outline-none resize-none leading-relaxed" autoFocus />
                   </div>
                 </div>
               )}
 
               {editingItem.type === 'bill' && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-2xl border border-white/5">
                     <CreditCard size={18} className="text-[#8E8E93]" />
                     <span className="text-base font-medium text-white">{editingItem.data.name}</span>
@@ -1751,7 +1635,7 @@ function AppMain() {
               )}
 
               {editingItem.type === 'category' && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div className="grid grid-cols-4 gap-3">
                     <div className="space-y-2 col-span-1">
                       <label className="text-[11px] font-medium text-[#8E8E93] ml-1">Icon</label>
@@ -1778,7 +1662,7 @@ function AppMain() {
               )}
 
               {editingItem.type === 'fixed' && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-[11px] font-medium text-[#8E8E93] ml-1">Description</label>
                     <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-sm font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
@@ -1806,7 +1690,7 @@ function AppMain() {
               )}
 
               {editingItem.type === 'template' && (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-[11px] font-medium text-[#8E8E93] ml-1">Template Name</label>
                     <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-sm font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
@@ -1849,7 +1733,7 @@ function AppMain() {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-5 border-t border-white/5 mt-2">
+              <div className="flex gap-3 pt-4 border-t border-white/5 mt-1">
                 {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'savings', 'bill', 'memo'].includes(editingItem.type) && (
                   <button onClick={handleDeleteItem} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-2xl flex items-center justify-center active:scale-95 transition-transform">
                     <Trash2 size={20} />
