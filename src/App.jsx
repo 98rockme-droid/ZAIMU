@@ -108,6 +108,7 @@ const normalizeMonthlyData = (data) => {
     cardDueDates: absorbedDueDates,
     confirmedPayments: d.confirmedPayments || [],
     savings: d.savings || 0,
+    savingsBuckets: d.savingsBuckets || [],
     memo: d.memo || ''
   };
 };
@@ -347,8 +348,7 @@ function AppMain() {
         { q: '手取り給与', a: `家計のベース収入です。ホーム画面の「${currentMonthNum}月の自由な現金」「${nextMonthNum}月の着地予想」の計算の起点になります。` },
         { q: 'クレジットカード利用目安', a: 'カードを使いすぎていないかを見る目安です。ホーム画面の「今月の利用額」のプログレスバーに使われます。' },
         { q: '月初のスタート現金', a: '毎月1日時点で、お財布や口座にある今月使える現金の実数です。ホーム画面の「今の現金残り」の計算元になります。' },
-        { q: '今月の積立額', a: '先に避けておくお金です。ホームの各予測値から差し引かれ、積立総額に加算されます。' },
-        { q: '引落予定のカード（引落額）', a: `先月使った分のツケとして扱われます。ホーム画面の「${currentMonthNum}月の自由な現金」から差し引かれます。` },
+        { q: '先取り設定', a: '貯金やイベント積立など、毎月最初に避けておくお金です。合計額が生活費原資や可変費の計算に使われます。' },
         { q: '固定費管理', a: `現金払いの固定費は「${currentMonthNum}月の自由な現金」から引かれ、全固定費の合計は「${nextMonthNum}月の着地予想」に反映されます。` },
         { q: 'カテゴリ予算', a: 'カテゴリごとの使いすぎ防止枠です。分析タブの比較に使われます。' }
       ]
@@ -356,17 +356,17 @@ function AppMain() {
     {
       category: '🏠 2. ホーム画面の金額の見方',
       items: [
-        { q: '今月の利用額', a: '今月の通常支出の合計です。カード利用額と現金利用額の内訳が表示されます。' },
+        { q: '今月あと使える可変費', a: '先取りと固定費を除いたうえで、今月あとどれだけ通常支出に使えるかを表します。' },
+        { q: '生活費原資', a: '手取りから先取り設定の合計を引いた金額です。' },
+        { q: '可変費総額', a: '生活費原資から固定費を引いた、毎月調整する予算です。' },
         { q: '今の現金残り', a: '月初のスタート現金から、今月「現金」で使った金額を引いたものです。' },
-        { q: `${currentMonthNum}月の自由な現金`, a: `${currentMonthNum}月中に使ってよい現金の総枠です。` },
-        { q: `${nextMonthNum}月の着地予想`, a: '今のペースを続けた場合に、来月末時点でどれくらい残りそうかのシミュレーションです。' },
-        { q: '積立総額', a: 'ZAIMUを使い始めてから今までの積立合計です。' }
+        { q: `${nextMonthNum}月の着地予想`, a: '今のペースを続けた場合に、来月末時点でどれくらい残りそうかのシミュレーションです。' }
       ]
     },
     {
       category: '💡 その他・操作',
       items: [
-        { q: '来月の設定はどうすればいいですか？', a: '月が変わったら、設定タブの下部にある「先月の設定をコピー」を使うと、目安・固定費・積立額などをそのまま引き継げます。' },
+        { q: '来月の設定はどうすればいいですか？', a: '月が変わったら、設定タブの下部にある「先月の設定をコピー」を使うと、目安・固定費・先取り設定などをそのまま引き継げます。' },
         { q: 'データのバックアップはできますか？', a: '設定タブの「CSVを書き出す」から、これまでの全取引データをダウンロードできます。' },
       ]
     }
@@ -400,6 +400,15 @@ function AppMain() {
     setSearchText('');
     setFilter({ category: 'ALL', method: 'ALL', special: false });
   };
+
+  const savingsBucketsSafe = useMemo(() => {
+    if (monthlyData?.savingsBuckets?.length) return monthlyData.savingsBuckets;
+    const legacySavings = Number(monthlyData?.savings || 0);
+    if (legacySavings > 0) {
+      return [{ id: 'legacy_savings', name: '貯金', amount: legacySavings }];
+    }
+    return [];
+  }, [monthlyData]);
 
   /* --- AUTH --- */
   useEffect(() => {
@@ -463,7 +472,11 @@ function AppMain() {
         let sum = 0;
         s.forEach(d => {
           const md = normalizeMonthlyData(d.data());
-          sum += Number(md.savings || 0);
+          if (md.savingsBuckets?.length) {
+            sum += md.savingsBuckets.reduce((bucketSum, item) => bucketSum + (Number(item.amount) || 0), 0);
+          } else {
+            sum += Number(md.savings || 0);
+          }
         });
         setSavingsTotalToMonth(sum);
       } catch (e) {
@@ -485,7 +498,6 @@ function AppMain() {
     const fixedTotal = fixedCash + fixedCard;
 
     const salary = Number(monthlyData?.salary) || 0;
-    const savingsAmount = Number(monthlyData?.savings) || 0;
     const cashBudget = Number(monthlyData?.cashBudget) || 0;
     const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -501,9 +513,18 @@ function AppMain() {
     const cardTarget = Number(monthlyData?.budget) > 0 ? Number(monthlyData?.budget) : 100000;
     const cardPacePercent = cardTarget > 0 ? Math.min(100, (spentCard / cardTarget) * 100) : 0;
 
-    const currentFreeCash = salary - withdrawalOnly - savingsAmount;
+    const savingsTotal =
+      (monthlyData?.savingsBuckets?.length
+        ? monthlyData.savingsBuckets.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+        : Number(monthlyData?.savings || 0));
+
+    const lifeBudget = salary - savingsTotal;
+    const variableBudget = lifeBudget - fixedTotal;
+    const variableRemaining = variableBudget - totalSpent;
+
+    const currentFreeCash = salary - withdrawalOnly - savingsTotal;
     const cashRemaining = cashBudget - spentCash;
-    const projectedCash = salary - spentCard - fixedTotal - savingsAmount;
+    const projectedCash = salary - spentCard - fixedTotal - savingsTotal;
 
     const catTotals = normalTx.reduce((acc, t) => {
       const cat = t.category || '未分類';
@@ -533,7 +554,11 @@ function AppMain() {
       fixedCard,
       withdrawalOnly: withdrawalOnly || 0,
       catBudgetSum,
-      savingsAmount,
+      savingsAmount: savingsTotal,
+      savingsTotal,
+      lifeBudget,
+      variableBudget,
+      variableRemaining,
       catTotals,
       lastCatTotals,
       totalSpent,
@@ -686,6 +711,23 @@ function AppMain() {
           cardBills: newBills,
           cardDueDates: newDues
         }, { merge: true });
+      } else if (type === 'savingsBucket') {
+        const list = [...savingsBucketsSafe];
+        const item = {
+          id: data.id || `sb_${Date.now()}`,
+          name: data.name || '',
+          amount: toNumber(data.amount)
+        };
+        if (index === -1) {
+          list.unshift(item);
+        } else {
+          list[index] = item;
+        }
+        const total = list.reduce((sum, bucket) => sum + (Number(bucket.amount) || 0), 0);
+        await setDoc(doc(db, 'users', user.uid, 'months', month), {
+          savingsBuckets: list,
+          savings: total
+        }, { merge: true });
       } else if (type === 'fixed') {
         const list = [...(monthlyData.fixedCosts || [])];
         const item = { ...data, amount: toNumber(data.amount) };
@@ -739,6 +781,13 @@ function AppMain() {
       delete newBills[data.name];
       delete newDues[data.name];
       await setDoc(doc(db, 'users', user.uid, 'months', month), { cardBills: newBills, cardDueDates: newDues }, { merge: true });
+    } else if (type === 'savingsBucket') {
+      const list = savingsBucketsSafe.filter((_, i) => i !== index);
+      const total = list.reduce((sum, bucket) => sum + (Number(bucket.amount) || 0), 0);
+      await setDoc(doc(db, 'users', user.uid, 'months', month), {
+        savingsBuckets: list,
+        savings: total
+      }, { merge: true });
     }
     setEditingItem(null);
     showToastMsg('削除しました');
@@ -792,7 +841,8 @@ function AppMain() {
           catBudgets: d.catBudgets || {},
           cardBills: d.cardBills || {},
           cardDueDates: d.cardDueDates || {},
-          savings: d.savings || 0
+          savings: d.savings || 0,
+          savingsBuckets: d.savingsBuckets || []
         }, { merge: true });
         showToastMsg('コピーしました');
         setIsCopyModalOpen(false);
@@ -852,6 +902,11 @@ function AppMain() {
     { id: 'faq', label: 'お金の設計図・FAQ', icon: <HelpCircle size={18} /> },
   ];
   const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || '設定';
+
+  const variableProgressPercent =
+    summary.variableBudget > 0
+      ? Math.min(100, (summary.totalSpent / summary.variableBudget) * 100)
+      : 0;
 
   return (
     <div className="fixed inset-0 w-full bg-black text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
@@ -916,9 +971,9 @@ function AppMain() {
                     <div className="p-4">
                       <div className="flex items-end justify-between gap-4">
                         <div>
-                          <p className="text-[10px] text-[#8E8E93] font-medium mb-1">利用額</p>
-                          <h2 className="text-[29px] leading-none font-semibold tracking-tight text-white">
-                            ¥{summary.totalSpent.toLocaleString()}
+                          <p className="text-[10px] text-[#8E8E93] font-medium mb-1">今月あと使える可変費</p>
+                          <h2 className={`text-[29px] leading-none font-semibold tracking-tight ${summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                            ¥{summary.variableRemaining.toLocaleString()}
                           </h2>
                         </div>
                       </div>
@@ -926,29 +981,43 @@ function AppMain() {
                       <div className="mt-3 space-y-2">
                         <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                           <div
-                            className={`h-full transition-all duration-1000 ${summary.spentCard > summary.cardTarget ? 'bg-[#FF453A]' : 'bg-white'}`}
-                            style={{ width: `${summary.cardPacePercent}%` }}
+                            className={`h-full transition-all duration-1000 ${summary.variableRemaining < 0 ? 'bg-[#FF453A]' : 'bg-white'}`}
+                            style={{ width: `${variableProgressPercent}%` }}
                           />
                         </div>
                         <div className="flex justify-between text-[10px] text-[#8E8E93]">
-                          <span>カード ¥{summary.spentCard.toLocaleString()} / ¥{summary.cardTarget.toLocaleString()}</span>
-                          <span>現金 ¥{summary.spentCash.toLocaleString()}</span>
+                          <span>可変費 ¥{summary.totalSpent.toLocaleString()} / ¥{summary.variableBudget.toLocaleString()}</span>
+                          <span>カード ¥{summary.spentCard.toLocaleString()}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="divide-y divide-white/5">
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">今の現金残り</p>
-                        <div className={`text-[15px] leading-none font-semibold tabular-nums ${summary.cashRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                          ¥{summary.cashRemaining.toLocaleString()}
+                        <p className="text-[13px] text-zinc-300">生活費原資</p>
+                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
+                          ¥{summary.lifeBudget.toLocaleString()}
                         </div>
                       </div>
 
                       <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">{currentMonthNum}月の自由な現金</p>
+                        <p className="text-[13px] text-zinc-300">固定費</p>
                         <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.currentFreeCash.toLocaleString()}
+                          ¥{summary.fixedTotal.toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="px-4 py-3 flex items-center justify-between gap-4">
+                        <p className="text-[13px] text-zinc-300">今月の利用額</p>
+                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
+                          ¥{summary.totalSpent.toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div className="px-4 py-3 flex items-center justify-between gap-4">
+                        <p className="text-[13px] text-zinc-300">今の現金残り</p>
+                        <div className={`text-[15px] leading-none font-semibold tabular-nums ${summary.cashRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                          ¥{summary.cashRemaining.toLocaleString()}
                         </div>
                       </div>
 
@@ -965,7 +1034,7 @@ function AppMain() {
                           <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
                             ¥{Number(savingsTotalToMonth || 0).toLocaleString()}
                           </div>
-                          <div className="text-[10px] text-[#8E8E93] mt-1">今月 +¥{summary.savingsAmount.toLocaleString()}</div>
+                          <div className="text-[10px] text-[#8E8E93] mt-1">今月 +¥{summary.savingsTotal.toLocaleString()}</div>
                         </div>
                       </div>
                     </div>
@@ -1146,6 +1215,25 @@ function AppMain() {
               <SimpleCard className="p-0 overflow-hidden">
                 <div className="divide-y divide-white/5">
                   <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-[13px] text-zinc-300">可変費総額</span>
+                    <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.variableBudget.toLocaleString()}</span>
+                  </div>
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-[13px] text-zinc-300">使った額</span>
+                    <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.totalSpent.toLocaleString()}</span>
+                  </div>
+                  <div className="px-4 py-3 flex items-center justify-between">
+                    <span className="text-[13px] text-zinc-300">残り</span>
+                    <span className={`text-[13px] font-semibold tabular-nums ${summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                      ¥{summary.variableRemaining.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              </SimpleCard>
+
+              <SimpleCard className="p-0 overflow-hidden">
+                <div className="divide-y divide-white/5">
+                  <div className="px-4 py-3 flex items-center justify-between">
                     <span className="text-[13px] text-zinc-300">カード支出</span>
                     <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.spentCard.toLocaleString()}</span>
                   </div>
@@ -1158,8 +1246,8 @@ function AppMain() {
                     <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.fixedTotal.toLocaleString()}</span>
                   </div>
                   <div className="px-4 py-3 flex items-center justify-between">
-                    <span className="text-[13px] text-zinc-300">積立額</span>
-                    <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.savingsAmount.toLocaleString()}</span>
+                    <span className="text-[13px] text-zinc-300">先取り合計</span>
+                    <span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.savingsTotal.toLocaleString()}</span>
                   </div>
                 </div>
               </SimpleCard>
@@ -1293,10 +1381,39 @@ function AppMain() {
                           <SettingsRow onClick={() => openEdit('salary', { value: monthlyData.salary }, 0)} left="手取り給与" right={`¥${Number(monthlyData.salary || 0).toLocaleString()}`} />
                           <SettingsRow onClick={() => openEdit('totalBudget', { value: monthlyData.budget }, 0)} left="クレジットカード利用目安" right={`¥${Number(monthlyData.budget || 0).toLocaleString()}`} />
                           <SettingsRow onClick={() => openEdit('cashBudget', { value: monthlyData.cashBudget }, 0)} left="月初のスタート現金" right={`¥${Number(monthlyData.cashBudget || 0).toLocaleString()}`} />
-                          <SettingsRow onClick={() => openEdit('savings', { value: monthlyData.savings }, 0)} left="今月の積立額" right={`¥${Number(monthlyData.savings || 0).toLocaleString()}`} />
                           <SettingsRow onClick={() => openEdit('memo', { memo: monthlyData.memo }, 0)} left="今月のメモ" right={<span className="truncate max-w-[100px]">{monthlyData.memo ? '設定済み' : '未設定'}</span>} />
                         </SimpleCard>
                       </div>
+
+                      <div className="space-y-3">
+                        <SectionTitle subText={`合計 ¥${Number(summary.savingsTotal || 0).toLocaleString()}`}>先取り設定</SectionTitle>
+
+                        <button
+                          type="button"
+                          onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)}
+                          className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                        >
+                          <Plus size={15} /> 先取り項目を追加
+                        </button>
+
+                        <SimpleCard className="divide-y divide-white/5 p-0">
+                          {savingsBucketsSafe.length > 0 ? (
+                            savingsBucketsSafe.map((bucket, idx) => (
+                              <SettingsRow
+                                key={bucket.id || idx}
+                                onClick={() => openEdit('savingsBucket', bucket, idx)}
+                                left={<span className="text-[13px] font-medium text-white">{bucket.name}</span>}
+                                right={`¥${Number(bucket.amount || 0).toLocaleString()}`}
+                              />
+                            ))
+                          ) : (
+                            <div className="px-4 py-4 text-[12px] text-[#8E8E93]">
+                              先取り項目がありません
+                            </div>
+                          )}
+                        </SimpleCard>
+                      </div>
+
                       <div className="space-y-2.5">
                         <SectionTitle>引落予定のカード</SectionTitle>
                         <SimpleCard className="divide-y divide-white/5 p-0">
@@ -1639,6 +1756,48 @@ function AppMain() {
                     <div className="flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors w-1/2">
                       <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })} className="w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" />
                       <span className="text-[#8E8E93] font-medium text-sm ml-2">日</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {editingItem.type === 'savingsBucket' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">項目名</label>
+                    <input
+                      value={editingItem.data.name || ''}
+                      onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
+                      className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">金額</label>
+                    <div className="flex gap-3">
+                      <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+                        <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
+                          onChange={e => {
+                            const v = e.target.value.replace(/,/g, '');
+                            if (!isNaN(v)) {
+                              setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } });
+                            }
+                          }}
+                          className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))}
+                        className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"
+                      >
+                        <Calculator size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>
