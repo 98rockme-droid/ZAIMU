@@ -1515,7 +1515,20 @@ function AppMain() {
 
                 <div className="space-y-2 min-w-0">
                   <label className="text-[11px] font-medium text-[#8E8E93] ml-1">日付</label>
-                  <input type="date" value={inputDate} onChange={e => setInputDate(e.target.value)} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" required />
+                  <div className="relative w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl overflow-hidden">
+                    <div className="absolute inset-0 flex items-center justify-center px-4 pointer-events-none">
+                      <span className="text-[13px] font-medium text-white tabular-nums">
+                        {inputDate ? inputDate.split('-').join('/') : '日付を選択'}
+                      </span>
+                    </div>
+                    <input
+                      type="date"
+                      value={inputDate}
+                      onChange={e => setInputDate(e.target.value)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2.5 pt-1">
