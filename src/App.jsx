@@ -188,6 +188,17 @@ const SectionTitle = ({ children, subText }) => (
   </div>
 );
 
+const Row = ({ label, value, strong = false, danger = false }) => (
+  <div className="px-4 py-3 flex items-center justify-between gap-4">
+    <span className="text-[13px] text-zinc-300">{label}</span>
+    <span
+      className={`tabular-nums font-semibold ${strong ? 'text-[15px]' : 'text-[13px]'} ${danger ? 'text-[#FF453A]' : 'text-white'}`}
+    >
+      {value}
+    </span>
+  </div>
+);
+
 const NavButton = ({ active, onClick, icon }) => (
   <button
     onClick={onClick}
@@ -1008,117 +1019,130 @@ function AppMain() {
               <div className="px-4 space-y-4 pt-4 animate-in fade-in duration-300">
                 <div className="space-y-2.5">
                   <SectionTitle>今月</SectionTitle>
+
                   <SimpleCard className="p-0 overflow-hidden">
                     <div className="p-4">
-                      <div className="flex items-end justify-between gap-4">
-                        <div>
-                          <p className="text-[10px] text-[#8E8E93] font-medium mb-1">今月あと使える可変費</p>
-                          <h2 className={`text-[29px] leading-none font-semibold tracking-tight ${summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                            ¥{summary.variableRemaining.toLocaleString()}
-                          </h2>
-                        </div>
-                      </div>
+                      <p className="text-[10px] text-[#8E8E93] font-medium mb-1">今月あと使える可変費</p>
+                      <h2
+                        className={`text-[29px] leading-none font-semibold tracking-tight ${
+                          summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'
+                        }`}
+                      >
+                        ¥{summary.variableRemaining.toLocaleString()}
+                      </h2>
+                    </div>
 
-                      <div className="mt-3 space-y-2">
-                        <div className="flex justify-between text-[10px] text-[#8E8E93]">
+                    <div className="divide-y divide-white/5">
+                      <Row
+                        label="手取り給与"
+                        value={`¥${Number(monthlyData.salary || 0).toLocaleString()}`}
+                      />
+                      <Row
+                        label="先取り合計"
+                        value={`- ¥${summary.savingsTotal.toLocaleString()}`}
+                      />
+                      <Row
+                        label="固定費合計"
+                        value={`- ¥${summary.fixedTotal.toLocaleString()}`}
+                      />
+                      <Row
+                        label="通常支出"
+                        value={`- ¥${summary.totalSpent.toLocaleString()}`}
+                      />
+                      <Row
+                        label="可変費総額"
+                        value={`¥${summary.variableBudget.toLocaleString()}`}
+                        strong
+                      />
+                    </div>
+
+                    {savingsBreakdownList.length > 0 && (
+                      <div className="px-4 py-3 border-t border-white/5 space-y-2">
+                        <p className="text-[10px] text-[#8E8E93] font-medium">先取り内訳</p>
+                        {savingsBreakdownList.map(([name, amount]) => (
+                          <div key={name} className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="text-[#8E8E93]">{name}</span>
+                            <span className="text-white font-medium tabular-nums">
+                              ¥{Number(amount || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </SimpleCard>
+                </div>
+
+                <div className="space-y-2.5">
+                  <SectionTitle>進捗</SectionTitle>
+
+                  <SimpleCard className="p-0 overflow-hidden">
+                    <div className="p-4 space-y-4">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-[#8E8E93] mb-1">
                           <span>可変費進捗</span>
                           <span>¥{summary.totalSpent.toLocaleString()} / ¥{summary.variableBudget.toLocaleString()}</span>
                         </div>
                         <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
                           <div
-                            className={`h-full transition-all duration-1000 ${summary.variableRemaining < 0 ? 'bg-[#FF453A]' : 'bg-white'}`}
+                            className={`h-full transition-all duration-1000 ${
+                              summary.variableRemaining < 0 ? 'bg-[#FF453A]' : 'bg-white'
+                            }`}
                             style={{ width: `${variableProgressPercent}%` }}
                           />
                         </div>
                       </div>
 
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <div className="flex justify-between text-[10px] text-[#8E8E93] mb-1">
-                            <span>カード目安</span>
-                            <span>¥{summary.spentCard.toLocaleString()} / ¥{summary.cardTarget.toLocaleString()}</span>
-                          </div>
-                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className={`${summary.spentCard > summary.cardTarget ? 'bg-[#FF453A]' : 'bg-[#A1A1AA]'} h-full transition-all duration-1000`}
-                              style={{ width: `${summary.cardPacePercent}%` }}
-                            />
-                          </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-[#8E8E93] mb-1">
+                          <span>カード目安</span>
+                          <span>¥{summary.spentCard.toLocaleString()} / ¥{summary.cardTarget.toLocaleString()}</span>
                         </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-1000 ${
+                              summary.spentCard > summary.cardTarget ? 'bg-[#FF453A]' : 'bg-[#A1A1AA]'
+                            }`}
+                            style={{ width: `${summary.cardPacePercent}%` }}
+                          />
+                        </div>
+                      </div>
 
-                        <div>
-                          <div className="flex justify-between text-[10px] text-[#8E8E93] mb-1">
-                            <span>現金目安</span>
-                            <span>{summary.cashTarget > 0 ? `¥${summary.spentCash.toLocaleString()} / ¥${summary.cashTarget.toLocaleString()}` : `¥${summary.spentCash.toLocaleString()} / 未設定`}</span>
-                          </div>
-                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className={`${summary.cashTarget > 0 && summary.spentCash > summary.cashTarget ? 'bg-[#FF453A]' : 'bg-[#71717A]'} h-full transition-all duration-1000`}
-                              style={{ width: `${summary.cashPacePercent}%` }}
-                            />
-                          </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-[#8E8E93] mb-1">
+                          <span>現金目安</span>
+                          <span>
+                            {summary.cashTarget > 0
+                              ? `¥${summary.spentCash.toLocaleString()} / ¥${summary.cashTarget.toLocaleString()}`
+                              : `¥${summary.spentCash.toLocaleString()} / 未設定`}
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-1000 ${
+                              summary.cashTarget > 0 && summary.spentCash > summary.cashTarget
+                                ? 'bg-[#FF453A]'
+                                : 'bg-[#71717A]'
+                            }`}
+                            style={{ width: `${summary.cashPacePercent}%` }}
+                          />
                         </div>
                       </div>
                     </div>
 
                     <div className="divide-y divide-white/5">
-                      <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">生活費原資</p>
-                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.lifeBudget.toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">固定費</p>
-                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.fixedTotal.toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">通常支出</p>
-                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.totalSpent.toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">現金残高</p>
-                        <div className={`text-[15px] leading-none font-semibold tabular-nums ${summary.cashRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                          ¥{summary.cashRemaining.toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3 flex items-center justify-between gap-4">
-                        <p className="text-[13px] text-zinc-300">{nextMonthNum}月の着地予想</p>
-                        <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                          ¥{summary.projectedCash.toLocaleString()}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3">
-                        <div className="flex items-center justify-between gap-4">
-                          <p className="text-[13px] text-zinc-300">先取り累計</p>
-                          <div className="text-right">
-                            <div className="text-[15px] leading-none font-semibold tabular-nums text-white">
-                              ¥{Number(savingsTotalToMonth || 0).toLocaleString()}
-                            </div>
-                            <div className="text-[10px] text-[#8E8E93] mt-1">今月の先取り合計 +¥{summary.savingsTotal.toLocaleString()}</div>
-                          </div>
-                        </div>
-
-                        {savingsBreakdownList.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
-                            {savingsBreakdownList.map(([name, amount]) => (
-                              <div key={name} className="flex items-center justify-between gap-3 text-[11px]">
-                                <span className="text-[#8E8E93]">{name}</span>
-                                <span className="text-white font-medium tabular-nums">¥{Number(amount || 0).toLocaleString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <Row
+                        label="現金残高"
+                        value={`¥${summary.cashRemaining.toLocaleString()}`}
+                        danger={summary.cashRemaining < 0}
+                      />
+                      <Row
+                        label={`${nextMonthNum}月の着地予想`}
+                        value={`¥${summary.projectedCash.toLocaleString()}`}
+                      />
+                      <Row
+                        label="先取り累計"
+                        value={`¥${Number(savingsTotalToMonth || 0).toLocaleString()}`}
+                      />
                     </div>
                   </SimpleCard>
                 </div>
@@ -1577,7 +1601,6 @@ function AppMain() {
               )}
             </div>
           )}
-
         </main>
 
         <footer className="fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-2xl border-t border-white/5 h-20 flex items-center justify-around px-5 pb-4 pt-2">
