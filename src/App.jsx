@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from ‘react’;
+import React, { useState, useEffect, useMemo, useCallback, useRef } from ‘react’;
 import { initializeApp, getApps } from ‘firebase/app’;
 import {
 getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc,
@@ -9,11 +9,15 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signO
 import {
 Wallet, CreditCard, Landmark, Plus, Settings, Trash2, History,
 ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
-CheckCircle2, BarChart3, TrendingDown, TrendingUp,
-Search, CalendarDays, AlignJustify, Zap,
-Calculator, Delete, LogOut, Lock, User, FileText, Home,
-ChevronDown, HelpCircle, Pencil, AlertTriangle
+BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify, Zap,
+Calculator, LogOut, Lock, User, FileText, Home, ChevronDown, HelpCircle, Pencil
 } from ‘lucide-react’;
+import {
+ErrorBoundary, SimpleCard, SectionTitle, Row, Divider, NavButton, Toast,
+OfflineBanner, SettingsRow, CalculatorPad, useConfirm, toNumber,
+EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
+EditFormCategory, EditFormFixed, EditFormTemplate, EditFormPayment
+} from ‘./components’;
 
 /* — FIREBASE CONFIG — */
 const firebaseConfig = {
@@ -32,11 +36,7 @@ const auth = getAuth(app);
 /* — UTILS — */
 const CASH = ‘現金’;
 
-const getMonthString = (date) => {
-const y = date.getFullYear();
-const m = String(date.getMonth() + 1).padStart(2, ‘0’);
-return `${y}-${m}`;
-};
+const getMonthString = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 const formatMonthJP = (monthStr) => {
 if (!monthStr) return “”;
@@ -47,66 +47,49 @@ return `${y}年 ${Number(m)}月`;
 
 const formatDateShort = (isoDateStr) => {
 if (!isoDateStr) return ‘’;
-// タイムゾーンズレを防ぐためUTC固定でパース
 const d = new Date(isoDateStr);
 if (isNaN(d.getTime())) return ‘’;
-const month = d.getUTCMonth() + 1;
-const day = d.getUTCDate();
-return `${month}/${day}`;
+return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 };
 
 const formatFullDateJP = (isoDateStr) => {
 if (!isoDateStr) return ‘’;
 const d = new Date(isoDateStr);
 if (isNaN(d.getTime())) return ‘’;
-// UTCで日付を取得してズレを防止
 return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
 };
 
 const getTodayString = () => {
 const d = new Date();
-const year = d.getFullYear();
-const month = String(d.getMonth() + 1).padStart(2, ‘0’);
-const day = String(d.getDate()).padStart(2, ‘0’);
-return `${year}-${month}-${day}`;
+return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const toNumber = (val) => {
-if (val === null || val === undefined || val === ‘’) return 0;
-const num = Number(String(val).replace(/,/g, ‘’));
-return Number.isFinite(num) ? num : 0;
+const getTodayLocal = () => {
+const d = new Date();
+return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
 };
 
-// タイムゾーンズレを防ぐため、YYYY-MM-DDをUTC正午として保存
 const toISODateSafe = (yyyyMmDd) => {
 if (!yyyyMmDd) return new Date().toISOString();
 return new Date(`${yyyyMmDd}T12:00:00Z`).toISOString();
 };
 
-// UTCベースでYYYY-MM-DDに変換（ローカルタイムゾーンに依存しない）
 const isoToLocalYMD = (iso) => {
 if (!iso) return getTodayString();
 const d = new Date(iso);
 if (isNaN(d.getTime())) return getTodayString();
-const y = d.getUTCFullYear();
-const m = String(d.getUTCMonth() + 1).padStart(2, ‘0’);
-const day = String(d.getUTCDate()).padStart(2, ‘0’);
-return `${y}-${m}-${day}`;
+return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 };
 
 const getSavingsBucketsSafe = (monthlyData) => {
 if (monthlyData?.savingsBuckets?.length) return monthlyData.savingsBuckets;
 const legacySavings = Number(monthlyData?.savings || 0);
-if (legacySavings > 0) {
-return [{ id: ‘legacy_savings’, name: ‘貯金’, amount: legacySavings }];
-}
+if (legacySavings > 0) return [{ id: ‘legacy_savings’, name: ‘貯金’, amount: legacySavings }];
 return [];
 };
 
-const getSavingsTotalFromMonthlyData = (monthlyData) => {
-const buckets = getSavingsBucketsSafe(monthlyData);
-return buckets.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-};
+const getSavingsTotalFromMonthlyData = (monthlyData) =>
+getSavingsBucketsSafe(monthlyData).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
 const getPacePercent = (spent, target) => {
 if (!target || target <= 0) return 0;
@@ -122,19 +105,12 @@ if (k.startsWith(‘cardDueDates.’)) absorbedDueDates[k.split(’.’)[1]] = d
 if (k.startsWith(‘cardBills.’)) absorbedCardBills[k.split(’.’)[1]] = d[k];
 });
 return {
-salary: d.salary || 0,
-budget: d.budget || 0,
-cashTarget: d.cashTarget || 0,
-cashBudget: d.cashBudget || 0,
-cardBills: absorbedCardBills,
-fixedCosts: d.fixedCosts || [],
-catBudgets: d.catBudgets || {},
-cardDueDates: absorbedDueDates,
-confirmedPayments: d.confirmedPayments || [],
-savings: d.savings || 0,
-savingsBuckets: d.savingsBuckets || [],
-memo: d.memo || ‘’,
-savingsCumulative: d.savingsCumulative || null,
+salary: d.salary || 0, budget: d.budget || 0, cashTarget: d.cashTarget || 0,
+cashBudget: d.cashBudget || 0, cardBills: absorbedCardBills,
+fixedCosts: d.fixedCosts || [], catBudgets: d.catBudgets || {},
+cardDueDates: absorbedDueDates, confirmedPayments: d.confirmedPayments || [],
+savings: d.savings || 0, savingsBuckets: d.savingsBuckets || [],
+memo: d.memo || ‘’, savingsCumulative: d.savingsCumulative || null,
 };
 };
 
@@ -147,520 +123,11 @@ templates: data?.templates || []
 const GRAY_PALETTE = [’#F4F4F5’, ‘#D4D4D8’, ‘#A1A1AA’, ‘#71717A’, ‘#52525B’, ‘#3F3F46’, ‘#27272A’];
 const getCategoryColor = (index) => GRAY_PALETTE[index % GRAY_PALETTE.length];
 
-/* —————————————————————— */
-/*  safeCalculate: 四則演算を正しい優先度で計算する                        */
-/* —————————————————————— */
-const safeCalculate = (expression) => {
-if (!expression) return ‘0’;
-// 使用可能な文字のみ許可
-if (/[^0-9+-*/.() ]/.test(expression)) return ‘0’;
-try {
-// トークナイズ
-const tokens = expression.match(/(\d+(.\d+)?|[+-*/])/g);
-if (!tokens || tokens.length === 0) return ‘0’;
-
-```
-// 数値と演算子を分離してパース
-const nums = [];
-const ops = [];
-
-const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
-const applyOp = () => {
-  const op = ops.pop();
-  const b = nums.pop();
-  const a = nums.pop();
-  if (a === undefined || b === undefined) return;
-  if (op === '+') nums.push(a + b);
-  else if (op === '-') nums.push(a - b);
-  else if (op === '*') nums.push(a * b);
-  else if (op === '/') nums.push(b !== 0 ? a / b : 0);
-};
-
-for (const token of tokens) {
-  if (!isNaN(token)) {
-    nums.push(parseFloat(token));
-  } else {
-    while (
-      ops.length > 0 &&
-      precedence[ops[ops.length - 1]] >= precedence[token]
-    ) {
-      applyOp();
-    }
-    ops.push(token);
-  }
-}
-while (ops.length > 0) applyOp();
-
-const result = nums[0];
-return isNaN(result) ? '0' : result;
-```
-
-} catch {
-return ‘0’;
-}
-};
-
-/* —————————————————————— */
-/*  CONFIRM DIALOG (window.confirm 代替)                               */
-/* —————————————————————— */
-const ConfirmDialog = ({ isOpen, title, message, confirmLabel = ‘実行する’, cancelLabel = ‘キャンセル’, danger = false, onConfirm, onCancel }) => {
-if (!isOpen) return null;
-return (
-<div
-className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
-onClick={onCancel}
->
-<div
-className=“w-full max-w-xs bg-[#1C1C1E] rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden”
-onClick={e => e.stopPropagation()}
->
-<div className="p-5 flex flex-col items-center gap-3 text-center">
-{danger && (
-<div className="w-12 h-12 rounded-full bg-[#FF453A]/10 flex items-center justify-center">
-<AlertTriangle size={22} className="text-[#FF453A]" />
-</div>
-)}
-<h3 className="text-[15px] font-semibold text-white leading-snug">{title}</h3>
-{message && <p className="text-[12px] text-[#8E8E93] font-medium leading-relaxed">{message}</p>}
-</div>
-<div className="border-t border-white/5 grid grid-cols-2">
-<button
-type="button"
-onClick={onCancel}
-className="h-12 text-[13px] font-medium text-zinc-300 border-r border-white/5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors"
->
-{cancelLabel}
-</button>
-<button
-type=“button”
-onClick={onConfirm}
-className={`h-12 text-[13px] font-semibold transition-colors ${danger ? 'text-[#FF453A] hover:bg-[#FF453A]/10' : 'text-[#0A84FF] hover:bg-[#0A84FF]/10'}`}
->
-{confirmLabel}
-</button>
-</div>
-</div>
-</div>
-);
-};
-
-/* —————————————————————— */
-/*  useConfirm: ConfirmDialog を命令的に呼び出すカスタムフック            */
-/* —————————————————————— */
-const useConfirm = () => {
-const [state, setState] = useState({ isOpen: false, title: ‘’, message: ‘’, confirmLabel: ‘実行する’, danger: false, resolve: null });
-
-const confirm = useCallback(({ title, message, confirmLabel, danger = false }) => {
-return new Promise((resolve) => {
-setState({ isOpen: true, title, message, confirmLabel: confirmLabel || ‘実行する’, danger, resolve });
-});
-}, []);
-
-const handleConfirm = useCallback(() => {
-state.resolve(true);
-setState(s => ({ …s, isOpen: false }));
-}, [state]);
-
-const handleCancel = useCallback(() => {
-state.resolve(false);
-setState(s => ({ …s, isOpen: false }));
-}, [state]);
-
-const dialog = (
-<ConfirmDialog
-isOpen={state.isOpen}
-title={state.title}
-message={state.message}
-confirmLabel={state.confirmLabel}
-danger={state.danger}
-onConfirm={handleConfirm}
-onCancel={handleCancel}
-/>
-);
-
-return { confirm, dialog };
-};
-
-/* —————————————————————— */
-/*  EDIT ITEM FORMS: editingItem の type ごとにフォームを分離             */
-/* —————————————————————— */
-const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
-const labelMap = {
-salary: ‘手取り給与’,
-totalBudget: ‘クレジットカード利用目安’,
-cashTarget: ‘現金利用目安’,
-cashBudget: ‘月初のスタート現金’,
-savings: ‘今月の積立額’,
-};
-return (
-<div className="space-y-2">
-<label className="text-[11px] font-medium text-[#8E8E93] ml-1">{labelMap[editingItem.type] || ‘金額’}</label>
-<div className="flex gap-3">
-<div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-<span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-<input
-type=“text” inputMode=“decimal”
-value={String(editingItem.data.value ?? ‘’)}
-onChange={e => setEditingItem({ …editingItem, data: { value: e.target.value } })}
-className=“flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums”
-autoFocus
-/>
-</div>
-<button type=“button” onClick={() => openCalculator(editingItem.data.value ?? 0, (val) => setEditingItem(prev => ({ …prev, data: { value: String(val) } })))} className=“w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors”>
-<Calculator size={18} />
-</button>
-</div>
-</div>
-);
-};
-
-const EditFormMemo = ({ editingItem, setEditingItem }) => (
-
-  <div className="space-y-2">
-    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">今月のメモ</label>
-    <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[16px] p-4">
-      <textarea
-        value={editingItem.data.memo || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
-        className="w-full h-36 bg-transparent text-white font-medium text-sm outline-none resize-none leading-relaxed"
-        autoFocus
-      />
-    </div>
-  </div>
-);
-
-const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) => (
-
-  <div className="space-y-4">
-    <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-2xl border border-white/5">
-      <CreditCard size={18} className="text-[#8E8E93]" />
-      <span className="text-base font-medium text-white">{editingItem.data.name}</span>
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">引落予定額</label>
-      <div className="flex gap-3">
-        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-          <input
-            type="text" inputMode="decimal"
-            value={String(editingItem.data.bill ?? '')}
-            onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, bill: e.target.value } })}
-            className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-            autoFocus
-          />
-        </div>
-        <button type="button" onClick={() => openCalculator(editingItem.data.bill ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, bill: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors">
-          <Calculator size={18} />
-        </button>
-      </div>
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">引落日</label>
-      <div className="flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors w-1/2">
-        <input
-          type="number"
-          value={String(editingItem.data.due ?? '')}
-          onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })}
-          className="w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-        />
-        <span className="text-[#8E8E93] font-medium text-sm ml-2">日</span>
-      </div>
-    </div>
-  </div>
-);
-
-const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalculator }) => (
-
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">項目名</label>
-      <input
-        value={editingItem.data.name || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
-        autoFocus
-      />
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">金額</label>
-      <div className="flex gap-3">
-        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-          <input
-            type="text" inputMode="decimal"
-            value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
-            onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
-            className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-          />
-        </div>
-        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors">
-          <Calculator size={18} />
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }) => (
-
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">カテゴリ名</label>
-      <input
-        value={editingItem.data.name || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
-        autoFocus
-      />
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">月の予算</label>
-      <div className="flex gap-3">
-        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-          <input
-            type="text" inputMode="decimal"
-            value={editingItem.data.budget ? Number(editingItem.data.budget).toLocaleString() : ''}
-            onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, budget: v } }); }}
-            className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-            placeholder="0"
-          />
-        </div>
-        <button type="button" onClick={() => openCalculator(editingItem.data.budget ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, budget: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors">
-          <Calculator size={18} />
-        </button>
-      </div>
-    </div>
-  </div>
-);
-
-const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, paymentMethods }) => (
-
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">内容</label>
-      <input
-        value={editingItem.data.name || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
-        autoFocus
-      />
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">金額</label>
-      <div className="flex gap-3">
-        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-          <input
-            type="text" inputMode="decimal"
-            value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
-            onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
-            className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-          />
-        </div>
-        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors">
-          <Calculator size={18} />
-        </button>
-      </div>
-    </div>
-    <div className="space-y-2 relative">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法</label>
-      <select
-        value={editingItem.data.method || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors"
-      >
-        {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
-      </select>
-      <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
-    </div>
-  </div>
-);
-
-const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, categoryNames, paymentMethods }) => (
-
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">テンプレート名</label>
-      <input
-        value={editingItem.data.title || ''}
-        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
-        autoFocus
-      />
-    </div>
-    <div className="space-y-2">
-      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">初期金額</label>
-      <div className="flex gap-3">
-        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
-          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
-          <input
-            type="text" inputMode="decimal"
-            value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
-            onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
-            className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums"
-          />
-        </div>
-        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors">
-          <Calculator size={18} />
-        </button>
-      </div>
-    </div>
-    <div className="grid grid-cols-1 gap-3">
-      <div className="space-y-2 relative">
-        <label className="text-[11px] font-medium text-[#8E8E93] ml-1">カテゴリ</label>
-        <select
-          value={editingItem.data.category || ''}
-          onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })}
-          className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors"
-        >
-          {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
-      </div>
-      <div className="space-y-2 relative">
-        <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法</label>
-        <select
-          value={editingItem.data.method || ''}
-          onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-          className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors"
-        >
-          {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
-      </div>
-    </div>
-  </div>
-);
-
-const EditFormPayment = ({ editingItem, setEditingItem }) => (
-
-  <div className="space-y-2">
-    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法名</label>
-    <input
-      value={editingItem.data.name || ''}
-      onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-      className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors"
-      autoFocus
-    />
-  </div>
-);
-
-/* — COMPONENTS — */
-class ErrorBoundary extends React.Component {
-constructor(props) { super(props); this.state = { hasError: false }; }
-static getDerivedStateFromError() { return { hasError: true }; }
-componentDidCatch(error, errorInfo) { console.error(“Uncaught error:”, error, errorInfo); }
-render() {
-if (this.state.hasError) {
-return (
-<div className="h-screen w-full bg-black text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
-<h1 className="text-lg font-semibold text-red-400">エラーが発生しました</h1>
-<p className="text-xs text-zinc-500 text-center">画面を再読み込みしてください。</p>
-<button onClick={() => window.location.reload()} className=“px-6 h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-sm”>再読み込み</button>
-</div>
-);
-}
-return this.props.children;
-}
-}
-
-const SimpleCard = ({ children, className = “”, onClick }) => (
-
-  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-[16px] border border-white/5 shadow-[0_1px_2px_rgba(0,0,0,0.18)] overflow-hidden w-full box-border ${className}`}>
-    {children}
-  </div>
-);
-
-const SectionTitle = ({ children, subText }) => (
-
-  <div className="flex items-end justify-between gap-3 px-1">
-    <h3 className="text-[10px] text-[#8E8E93] font-medium">{children}</h3>
-    {subText ? <span className="text-[10px] text-[#8E8E93] font-medium">{subText}</span> : null}
-  </div>
-);
-
-const Row = ({ label, value, strong = false, danger = false }) => (
-
-  <div className="px-4 py-3 flex items-center justify-between gap-4">
-    <span className="text-[13px] text-zinc-300">{label}</span>
-    <span className={`tabular-nums font-semibold ${strong ? 'text-[15px]' : 'text-[13px]'} ${danger ? 'text-[#FF453A]' : 'text-white'}`}>{value}</span>
-  </div>
-);
-
-const NavButton = ({ active, onClick, icon }) => (
-<button onClick={onClick} className={`flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-200 ${active ? 'text-[#0A84FF]' : 'text-[#8E8E93] hover:text-zinc-300'}`}>
-{icon}
-</button>
-);
-
-const Toast = ({ message, isVisible }) => (
-
-  <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 pointer-events-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-    <div className="bg-[#2C2C2E]/95 backdrop-blur-xl text-white px-4 py-2.5 rounded-full border border-white/10 flex items-center gap-2 shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
-      <CheckCircle2 size={14} className="text-[#30D158]" />
-      <span className="text-[11px] font-medium tracking-wide">{message}</span>
-    </div>
-  </div>
-);
-
-const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
-<button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-3 active:bg-white/[0.03] text-zinc-300 transition-colors">
-<div className="flex items-center gap-3 text-left min-w-0 flex-1 font-medium text-zinc-100">{left}</div>
-<div className="flex items-center gap-2 shrink-0 ml-3">
-{right ? <div className="text-[11px] text-[#8E8E93] font-medium">{right}</div> : null}
-{showChevron ? <ChevronRight size={17} className="text-[#636366]" /> : null}
-</div>
-</button>
-);
-
-const CalculatorPad = ({ initialValue, onConfirm }) => {
-const [display, setDisplay] = useState(String(initialValue || ‘0’));
-const [isResult, setIsResult] = useState(false);
-
-const handlePush = (val) => {
-if (isResult && ![’+’, ‘-’, ‘*’, ‘/’].includes(val)) {
-setDisplay(String(val)); setIsResult(false);
-} else {
-setDisplay(prev => (prev === ‘0’ && ![’+’, ‘-’, ’*’, ‘/’, ‘.’].includes(val)) ? String(val) : prev + val);
-setIsResult(false);
-}
-};
-
-const btns = [
-{ l: ‘C’, act: () => setDisplay(‘0’), style: ‘text-[#FF453A]’ },
-{ l: ‘/’, act: () => handlePush(’/’), style: ‘text-zinc-300’ },
-{ l: ‘*’, act: () => handlePush(’*’), style: ‘text-zinc-300’ },
-{ l: <Delete size={18} />, act: () => setDisplay(prev => prev.length > 1 ? prev.slice(0, -1) : ‘0’), style: ‘text-[#8E8E93]’ },
-{ l: ‘7’, act: () => handlePush(‘7’) }, { l: ‘8’, act: () => handlePush(‘8’) }, { l: ‘9’, act: () => handlePush(‘9’) },
-{ l: ‘-’, act: () => handlePush(’-’), style: ‘text-zinc-300’ },
-{ l: ‘4’, act: () => handlePush(‘4’) }, { l: ‘5’, act: () => handlePush(‘5’) }, { l: ‘6’, act: () => handlePush(‘6’) },
-{ l: ‘+’, act: () => handlePush(’+’), style: ‘text-zinc-300’ },
-{ l: ‘1’, act: () => handlePush(‘1’) }, { l: ‘2’, act: () => handlePush(‘2’) }, { l: ‘3’, act: () => handlePush(‘3’) },
-{ l: ‘=’, act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, style: ‘bg-[#0A84FF] text-white row-span-2’ },
-{ l: ‘0’, act: () => handlePush(‘0’), style: ‘col-span-2’ },
-{ l: ‘.’, act: () => handlePush(’.’) },
-];
-
-return (
-<div className="w-full flex flex-col gap-3">
-<div className="bg-[#1C1C1E] rounded-[16px] p-4 text-right border border-white/5 font-mono text-2xl text-white break-all tabular-nums">{display}</div>
-<div className="grid grid-cols-4 gap-2.5 h-64">
-{btns.map((b, i) => (
-<button key={i} type=“button” onClick={b.act} className={`rounded-2xl bg-[#1C1C1E] border border-white/5 text-lg font-medium active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>
-{b.l}
-</button>
-))}
-</div>
-<button type=“button” onClick={() => onConfirm(toNumber(display))} className=“w-full h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-sm active:scale-95”>決定</button>
-</div>
-);
-};
-
 /* — MAIN APP — */
 function AppMain() {
 const [user, setUser] = useState(null);
 const [authLoading, setAuthLoading] = useState(true);
+const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
 const [activeTab, setActiveTab] = useState(‘home’);
 const [logView, setLogView] = useState(‘list’);
@@ -685,25 +152,22 @@ const [inputIsSpecial, setInputIsSpecial] = useState(false);
 
 const [editingTx, setEditingTx] = useState(null);
 const [editingItem, setEditingItem] = useState(null);
-
 const [expandedFaq, setExpandedFaq] = useState(null);
 const [faqSearchText, setFaqSearchText] = useState(’’);
 
 const [transactions, setTransactions] = useState([]);
 const [lastMonthTransactions, setLastMonthTransactions] = useState([]);
+const lastMonthFetchRef = useRef(null);
+
 const [monthlyData, setMonthlyData] = useState(normalizeMonthlyData({}));
 const [config, setConfig] = useState(normalizeConfig({}));
-
-// 累計先取り: Firestoreの集計ドキュメントを使う（全件fetchを廃止）
 const [savingsTotalToMonth, setSavingsTotalToMonth] = useState(0);
 const [savingsBreakdownToMonth, setSavingsBreakdownToMonth] = useState({});
 
 const [searchText, setSearchText] = useState(’’);
 const [filter, setFilter] = useState({ category: ‘ALL’, method: ‘ALL’, special: false });
-
 const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
 const [copySourceMonth, setCopySourceMonth] = useState(’’);
-
 const [memoText, setMemoText] = useState(’’);
 const [isMemoExpanded, setIsMemoExpanded] = useState(false);
 const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
@@ -711,7 +175,10 @@ const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
 const currentMonthNum = month ? Number(month.split(’-’)[1]) : new Date().getMonth() + 1;
 const nextMonthNum = currentMonthNum === 12 ? 1 : currentMonthNum + 1;
 
-// FAQ_DATA を useMemo で生成し、deps に月番号を追加
+const categoryNames = useMemo(() => (config?.categories || []).map(c => c.name), [config?.categories]);
+const paymentMethodsSafe = useMemo(() => config?.paymentMethods?.length ? config.paymentMethods : [CASH], [config?.paymentMethods]);
+const savingsBucketsSafe = useMemo(() => getSavingsBucketsSafe(monthlyData), [monthlyData]);
+
 const FAQ_DATA = useMemo(() => [
 {
 category: ‘⚙️ 1. 設定タブで入力する金額の使い道’,
@@ -750,36 +217,27 @@ if (!faqSearchText) return FAQ_DATA;
 const lowerText = faqSearchText.toLowerCase();
 return FAQ_DATA.map(cat => ({
 …cat,
-items: cat.items.filter(item =>
-item.q.toLowerCase().includes(lowerText) || item.a.toLowerCase().includes(lowerText)
-)
+items: cat.items.filter(item => item.q.toLowerCase().includes(lowerText) || item.a.toLowerCase().includes(lowerText))
 })).filter(cat => cat.items.length > 0);
 }, [faqSearchText, FAQ_DATA]);
 
-const showToastMsg = (msg) => {
-setToast({ visible: true, message: msg });
-setTimeout(() => setToast({ visible: false, message: ‘’ }), 2500);
-};
-
-const openCalculator = (initial, onConfirm) => {
-setCalcInitialValue(initial);
-setCalcOnConfirm(() => onConfirm);
-setShowCalculator(true);
-};
-
-const getCategoryNames = () => (config?.categories || []).map(c => c.name);
-const paymentMethodsSafe = config?.paymentMethods?.length ? config.paymentMethods : [CASH];
+const showToastMsg = (msg) => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: ‘’ }), 2500); };
+const openCalculator = (initial, onConfirm) => { setCalcInitialValue(initial); setCalcOnConfirm(() => onConfirm); setShowCalculator(true); };
 const clearLogFilters = () => { setSearchText(’’); setFilter({ category: ‘ALL’, method: ‘ALL’, special: false }); };
 
-const savingsBucketsSafe = useMemo(() => getSavingsBucketsSafe(monthlyData), [monthlyData]);
-
-/* — AUTH — */
+/* — オフライン検知 — */
 useEffect(() => {
-const unsubscribe = onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); });
-return () => unsubscribe();
+const handleOnline = () => setIsOffline(false);
+const handleOffline = () => setIsOffline(true);
+window.addEventListener(‘online’, handleOnline);
+window.addEventListener(‘offline’, handleOffline);
+return () => { window.removeEventListener(‘online’, handleOnline); window.removeEventListener(‘offline’, handleOffline); };
 }, []);
 
-/* — DATA SUBSCRIPTIONS — */
+/* — AUTH — */
+useEffect(() => { return onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); }); }, []);
+
+/* — 当月トランザクション購読 — */
 useEffect(() => {
 if (!user) return;
 const start = new Date(`${month}-01T00:00:00Z`).toISOString();
@@ -787,90 +245,83 @@ const nextDate = new Date(`${month}-01T00:00:00Z`);
 nextDate.setUTCMonth(nextDate.getUTCMonth() + 1);
 const end = nextDate.toISOString();
 const q = query(collection(db, ‘users’, user.uid, ‘transactions’), where(‘date’, ‘>=’, start), where(‘date’, ‘<’, end));
-const unsub = onSnapshot(q, (s) => {
-const list = s.docs.map(d => ({ id: d.id, …d.data() }));
-list.sort((a, b) => new Date(b.date) - new Date(a.date));
-setTransactions(list);
-});
+const unsub = onSnapshot(q,
+(s) => { const list = s.docs.map(d => ({ id: d.id, …d.data() })); list.sort((a, b) => new Date(b.date) - new Date(a.date)); setTransactions(list); },
+(err) => { console.error(‘transactions snapshot error:’, err); showToastMsg(‘データ取得エラー。再読込してください。’); }
+);
 return () => unsub();
 }, [month, user]);
 
+/* — 先月トランザクション取得（非同期ズレ防止）— */
 useEffect(() => {
 if (!user) return;
+const fetchingMonth = month;
+lastMonthFetchRef.current = fetchingMonth;
+setLastMonthTransactions([]);
 const prevDate = new Date(`${month}-01T00:00:00Z`);
 prevDate.setUTCMonth(prevDate.getUTCMonth() - 1);
 const prevStart = new Date(`${getMonthString(prevDate)}-01T00:00:00Z`).toISOString();
 const currentStart = new Date(`${month}-01T00:00:00Z`).toISOString();
 const fetchLast = async () => {
+try {
 const q = query(collection(db, ‘users’, user.uid, ‘transactions’), where(‘date’, ‘>=’, prevStart), where(‘date’, ‘<’, currentStart));
 const s = await getDocs(q);
+if (lastMonthFetchRef.current === fetchingMonth) {
 setLastMonthTransactions(s.docs.map(d => ({ id: d.id, …d.data() })));
+}
+} catch (err) { console.error(‘lastMonth fetch error:’, err); }
 };
 fetchLast();
 }, [month, user]);
 
+/* — 月次データ購読 — */
 useEffect(() => {
 if (!user) return;
-return onSnapshot(doc(db, ‘users’, user.uid, ‘months’, month), (s) => setMonthlyData(normalizeMonthlyData(s.exists() ? s.data() : {})));
+return onSnapshot(
+doc(db, ‘users’, user.uid, ‘months’, month),
+(s) => setMonthlyData(normalizeMonthlyData(s.exists() ? s.data() : {})),
+(err) => console.error(‘monthlyData snapshot error:’, err)
+);
 }, [month, user]);
 
+/* — 設定購読 — */
 useEffect(() => {
 if (!user) return;
-return onSnapshot(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), (s) => setConfig(normalizeConfig(s.exists() ? s.data() : {})));
+return onSnapshot(
+doc(db, ‘users’, user.uid, ‘settings’, ‘config’),
+(s) => setConfig(normalizeConfig(s.exists() ? s.data() : {})),
+(err) => console.error(‘config snapshot error:’, err)
+);
 }, [user]);
 
-/**
-
-- 累計先取り取得の最適化:
-- 全monthsドキュメントを毎回フルスキャンする代わりに、
-- 対象月まで範囲を絞ったクエリを実行する。
-- さらに、現在表示月のmonthlyDataが変わったときだけ再取得する。
-  */
-  useEffect(() => {
-  if (!user) return;
-  let cancelled = false;
-
-```
-const fetchSavingsSummaryToMonth = async () => {
-  try {
-    const q = query(
-      collection(db, 'users', user.uid, 'months'),
-      where(documentId(), '<=', month),
-      orderBy(documentId(), 'asc')
-    );
-    const s = await getDocs(q);
-
-    if (cancelled) return;
-
-    let total = 0;
-    const breakdown = {};
-
-    s.forEach(d => {
-      const md = normalizeMonthlyData(d.data());
-      const buckets = getSavingsBucketsSafe(md);
-      total += getSavingsTotalFromMonthlyData(md);
-      buckets.forEach(bucket => {
-        const name = bucket.name || '未設定';
-        breakdown[name] = (breakdown[name] || 0) + (Number(bucket.amount) || 0);
-      });
-    });
-
-    setSavingsTotalToMonth(total);
-    setSavingsBreakdownToMonth(breakdown);
-  } catch (e) {
-    console.error(e);
-  }
+/* — 累計先取り取得 — */
+useEffect(() => {
+if (!user) return;
+let cancelled = false;
+const fetch = async () => {
+try {
+const q = query(collection(db, ‘users’, user.uid, ‘months’), where(documentId(), ‘<=’, month), orderBy(documentId(), ‘asc’));
+const s = await getDocs(q);
+if (cancelled) return;
+let total = 0;
+const breakdown = {};
+s.forEach(d => {
+const md = normalizeMonthlyData(d.data());
+total += getSavingsTotalFromMonthlyData(md);
+getSavingsBucketsSafe(md).forEach(bucket => {
+const name = bucket.name || ‘未設定’;
+breakdown[name] = (breakdown[name] || 0) + (Number(bucket.amount) || 0);
+});
+});
+setSavingsTotalToMonth(total);
+setSavingsBreakdownToMonth(breakdown);
+} catch (e) { console.error(e); }
 };
-
-fetchSavingsSummaryToMonth();
+fetch();
 return () => { cancelled = true; };
-```
-
 }, [user, month, monthlyData.savingsBuckets, monthlyData.savings]);
 
-useEffect(() => {
-setMemoText(monthlyData?.memo || ‘’);
-}, [monthlyData?.memo]);
+useEffect(() => { setMemoText(monthlyData?.memo || ‘’); }, [monthlyData?.memo]);
 
 /* — SUMMARY — */
 const summary = useMemo(() => {
@@ -878,76 +329,50 @@ const fixedCosts = monthlyData?.fixedCosts || [];
 const fixedCash = fixedCosts.filter(f => !f.method || f.method === CASH).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 const fixedCard = fixedCosts.filter(f => f.method && f.method !== CASH).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 const fixedTotal = fixedCash + fixedCard;
-
-```
 const salary = Number(monthlyData?.salary) || 0;
 const cashBudget = Number(monthlyData?.cashBudget) || 0;
 const billTotal = Object.values(monthlyData?.cardBills || {}).reduce((s, v) => s + (Number(v) || 0), 0);
-const withdrawalOnly = fixedCash + billTotal;
-
 const normalTx = transactions.filter(t => t.isSpecial !== true);
 const normalLastTx = (lastMonthTransactions || []).filter(t => t.isSpecial !== true);
-
 const spentCard = normalTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
 const spentCash = normalTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
 const totalSpent = normalTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-
 const cardTarget = Number(monthlyData?.budget) > 0 ? Number(monthlyData?.budget) : 100000;
 const cashTarget = Number(monthlyData?.cashTarget) || 0;
-const cardPacePercent = getPacePercent(spentCard, cardTarget);
-const cashPacePercent = getPacePercent(spentCash, cashTarget);
-
 const savingsTotal = getSavingsTotalFromMonthlyData(monthlyData);
 const lifeBudget = salary - savingsTotal;
 const variableBudget = lifeBudget - fixedTotal;
 const variableRemaining = variableBudget - totalSpent;
-
-const currentFreeCash = salary - withdrawalOnly - savingsTotal;
 const cashRemaining = cashBudget - spentCash;
 const projectedCash = salary - spentCard - fixedTotal - savingsTotal;
-
-const catTotals = normalTx.reduce((acc, t) => {
-  const cat = t.category || '未分類';
-  acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0);
-  return acc;
-}, {});
-
+const catTotals = normalTx.reduce((acc, t) => { const cat = t.category || ‘未分類’; acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0); return acc; }, {});
 const catBudgetSum = (config?.categories || []).reduce((sum, c) => sum + (monthlyData?.catBudgets?.[c.name] || 0), 0);
-
-const lastCatTotals = normalLastTx.reduce((acc, t) => {
-  const cat = t.category || '未分類';
-  acc[cat] = (acc[cat] || 0) + (Number(t.amount) || 0);
-  return acc;
-}, {});
-
 const specialTotalSpent = transactions.filter(t => t.isSpecial === true).reduce((s, t) => s + (Number(t.amount) || 0), 0);
 const lastSpecialTotalSpent = (lastMonthTransactions || []).filter(t => t.isSpecial === true).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-
 return {
-  cardTarget, cashTarget, cardPacePercent, cashPacePercent,
-  currentFreeCash, cashRemaining, projectedCash,
-  fixedTotal, fixedCash, fixedCard,
-  withdrawalOnly: withdrawalOnly || 0,
-  catBudgetSum, savingsAmount: savingsTotal, savingsTotal,
-  lifeBudget, variableBudget, variableRemaining,
-  catTotals, lastCatTotals, totalSpent,
-  lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
-  spentCard, spentCash,
-  dailyTotals: normalTx.reduce((acc, t) => {
-    if (!t.date) return acc;
-    const dObj = new Date(t.date);
-    if (isNaN(dObj.getTime())) return acc;
-    const d = dObj.getUTCDate();
-    acc[d] = (acc[d] || 0) + (Number(t.amount) || 0);
-    return acc;
-  }, {}),
-  specialTotalSpent, lastSpecialTotalSpent
+cardTarget, cashTarget,
+cardPacePercent: getPacePercent(spentCard, cardTarget),
+cashPacePercent: getPacePercent(spentCash, cashTarget),
+cashRemaining, projectedCash, fixedTotal, fixedCash, fixedCard,
+catBudgetSum, savingsTotal, lifeBudget, variableBudget, variableRemaining,
+catTotals, totalSpent,
+lastTotalSpent: normalLastTx.reduce((s, t) => s + (Number(t.amount) || 0), 0),
+spentCard, spentCash,
+dailyTotals: normalTx.reduce((acc, t) => {
+if (!t.date) return acc;
+const dObj = new Date(t.date);
+if (isNaN(dObj.getTime())) return acc;
+acc[dObj.getUTCDate()] = (acc[dObj.getUTCDate()] || 0) + (Number(t.amount) || 0);
+return acc;
+}, {}),
+specialTotalSpent, lastSpecialTotalSpent
 };
-```
-
 }, [monthlyData, transactions, lastMonthTransactions, config]);
 
-const activeCategories = getCategoryNames().filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0);
+const activeCategories = useMemo(
+() => categoryNames.filter(n => (monthlyData.catBudgets?.[n] || 0) > 0 || (summary.catTotals[n] || 0) > 0),
+[categoryNames, monthlyData.catBudgets, summary.catTotals]
+);
 
 const donutChartData = useMemo(() => {
 const total = summary.totalSpent;
@@ -963,8 +388,7 @@ items = arr.map((item, idx) => ({ …item, color: getCategoryColor(idx) }));
 if (explicitOtherAmount > 0) items.push({ name: ‘その他’, amount: explicitOtherAmount, color: getCategoryColor(items.length) });
 } else {
 const top5 = arr.slice(0, 5);
-const remainingAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0);
-const finalOtherAmount = remainingAmount + explicitOtherAmount;
+const finalOtherAmount = arr.slice(5).reduce((sum, item) => sum + item.amount, 0) + explicitOtherAmount;
 items = top5.map((item, idx) => ({ …item, color: getCategoryColor(idx) }));
 if (finalOtherAmount > 0) items.push({ name: ‘その他’, amount: finalOtherAmount, color: getCategoryColor(5) });
 }
@@ -973,22 +397,41 @@ return { items, total };
 
 const savingsBreakdownList = useMemo(() => Object.entries(savingsBreakdownToMonth).sort((a, b) => b[1] - a[1]), [savingsBreakdownToMonth]);
 
+const finalFilteredTx = useMemo(() => transactions.filter(t => {
+const matchSearch = searchText === ‘’ || String(t.title || ‘’).includes(searchText);
+const matchCat = filter.category === ‘ALL’ || t.category === filter.category;
+const matchMethod = filter.method === ‘ALL’ || t.paymentMethod === filter.method;
+const matchSpecial = !filter.special || t.isSpecial === true;
+return matchSearch && matchCat && matchMethod && matchSpecial;
+}), [transactions, searchText, filter]);
+
+const filteredCashTotal = useMemo(() => finalFilteredTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + toNumber(t.amount), 0), [finalFilteredTx]);
+const filteredCardTotal = useMemo(() => finalFilteredTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + toNumber(t.amount), 0), [finalFilteredTx]);
+
+const calendarDaysList = useMemo(() => {
+if (!month) return [];
+const d = new Date(month + “-01T00:00:00Z”);
+if (isNaN(d.getTime())) return [];
+const first = d.getUTCDay();
+const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+return […Array(first).fill(null), …Array.from({ length: last }, (_, i) => i + 1)];
+}, [month]);
+
 /* — TX OPERATIONS — */
-const resetTxInputs = (dateStr) => {
+const resetTxInputs = useCallback((dateStr) => {
 setInputDate(dateStr || getTodayString());
-setInputAmount(’’);
-setInputTitle(’’);
-setInputCategory(getCategoryNames()[0] || ‘食費’);
+setInputAmount(’’); setInputTitle(’’);
+setInputCategory(categoryNames[0] || ‘食費’);
 setInputMethod(paymentMethodsSafe[0] || CASH);
 setInputIsSpecial(false);
-};
+}, [categoryNames, paymentMethodsSafe]);
 
 const startEditingTx = (t) => {
 setEditingTx(t);
 setInputDate(isoToLocalYMD(t.date));
 setInputAmount(String(t.amount ?? ‘’));
 setInputTitle(t.title || ‘’);
-setInputCategory(t.category || ‘食費’);
+setInputCategory(t.category || categoryNames[0] || ‘食費’);
 setInputMethod(t.paymentMethod || CASH);
 setInputIsSpecial(t.isSpecial === true);
 setIsTxModalOpen(true);
@@ -996,6 +439,7 @@ setIsTxModalOpen(true);
 
 const openTxModalNew = () => { setEditingTx(null); resetTxInputs(); setIsTxModalOpen(true); };
 const openTxModalWithDate = (d) => { setEditingTx(null); resetTxInputs(d); setIsTxModalOpen(true); };
+const closeTxModal = useCallback(() => { setIsTxModalOpen(false); setEditingTx(null); }, []);
 const applyTemplate = (t) => { setInputAmount(String(t.amount)); setInputTitle(t.title); setInputCategory(t.category); setInputMethod(t.method); };
 
 const handleTxSubmit = async (e) => {
@@ -1003,21 +447,11 @@ e.preventDefault();
 if (!user) return;
 const amount = toNumber(inputAmount);
 if (!inputDate || !amount || !inputTitle) return showToastMsg(‘入力内容を確認してください’);
-const payload = {
-date: toISODateSafe(inputDate),
-amount, title: inputTitle, category: inputCategory,
-paymentMethod: inputMethod, isSpecial: inputIsSpecial,
-updatedAt: serverTimestamp()
-};
+const payload = { date: toISODateSafe(inputDate), amount, title: inputTitle, category: inputCategory, paymentMethod: inputMethod, isSpecial: inputIsSpecial, updatedAt: serverTimestamp() };
 try {
-if (editingTx?.id) {
-await updateDoc(doc(db, ‘users’, user.uid, ‘transactions’, editingTx.id), payload);
-showToastMsg(‘更新しました’);
-} else {
-await addDoc(collection(db, ‘users’, user.uid, ‘transactions’), { …payload, createdAt: serverTimestamp() });
-showToastMsg(‘追加しました’);
-}
-setIsTxModalOpen(false);
+if (editingTx?.id) { await updateDoc(doc(db, ‘users’, user.uid, ‘transactions’, editingTx.id), payload); showToastMsg(‘更新しました’); }
+else { await addDoc(collection(db, ‘users’, user.uid, ‘transactions’), { …payload, createdAt: serverTimestamp() }); showToastMsg(‘追加しました’); }
+closeTxModal();
 } catch (e) { console.error(e); showToastMsg(‘エラー’); }
 };
 
@@ -1025,8 +459,7 @@ const handleMemoSave = async () => {
 if (!user) return;
 try {
 await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { memo: memoText }, { merge: true });
-showToastMsg(‘メモを保存しました’);
-setIsMemoModalOpen(false);
+showToastMsg(‘メモを保存しました’); setIsMemoModalOpen(false);
 } catch (e) { console.error(e); showToastMsg(‘メモの保存に失敗しました’); }
 };
 
@@ -1050,7 +483,7 @@ await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { cardBills: n
 const list = […savingsBucketsSafe];
 const item = { id: data.id || `sb_${Date.now()}`, name: data.name || ‘’, amount: toNumber(data.amount) };
 if (index === -1) list.unshift(item); else list[index] = item;
-const total = list.reduce((sum, bucket) => sum + (Number(bucket.amount) || 0), 0);
+const total = list.reduce((sum, b) => sum + (Number(b.amount) || 0), 0);
 await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { savingsBuckets: list, savings: total }, { merge: true });
 } else if (type === ‘fixed’) {
 const list = […(monthlyData.fixedCosts || [])];
@@ -1059,8 +492,7 @@ if (index === -1) list.unshift({ …item, id: Date.now() }); else list[index] = 
 await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { fixedCosts: list }, { merge: true });
 } else if (type === ‘category’) {
 const list = […(config.categories || [])];
-const item = { name: data.name };
-if (index === -1) list.unshift(item); else list[index] = item;
+if (index === -1) list.unshift({ name: data.name }); else list[index] = { name: data.name };
 await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, categories: list }, { merge: true });
 if (data.budget !== undefined) {
 const newBudgets = { …(monthlyData.catBudgets || {}), [data.name]: toNumber(data.budget) };
@@ -1076,8 +508,7 @@ const list = […(config.paymentMethods || [CASH])];
 if (index === -1) list.unshift(data.name); else list[index] = data.name;
 await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, paymentMethods: list }, { merge: true });
 }
-setEditingItem(null);
-showToastMsg(‘保存しました’);
+setEditingItem(null); showToastMsg(‘保存しました’);
 } catch (e) { console.error(e); showToastMsg(‘エラー’); }
 };
 
@@ -1086,62 +517,34 @@ if (!editingItem) return;
 const ok = await confirm({ title: ‘削除しますか？’, message: ‘この操作は取り消せません。’, confirmLabel: ‘削除する’, danger: true });
 if (!ok) return;
 const { type, index, data } = editingItem;
+try {
 if (type === ‘fixed’) {
-const list = (monthlyData.fixedCosts || []).filter((*, i) => i !== index);
-await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { fixedCosts: list }, { merge: true });
+await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { fixedCosts: (monthlyData.fixedCosts || []).filter((*, i) => i !== index) }, { merge: true });
 } else if (type === ‘category’) {
-const list = (config.categories || []).filter((*, i) => i !== index);
-await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, categories: list }, { merge: true });
+await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, categories: (config.categories || []).filter((*, i) => i !== index) }, { merge: true });
 } else if (type === ‘template’) {
-const list = (config.templates || []).filter((*, i) => i !== index);
-await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, templates: list }, { merge: true });
+await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, templates: (config.templates || []).filter((*, i) => i !== index) }, { merge: true });
 } else if (type === ‘payment’) {
-const list = (config.paymentMethods || []).filter((*, i) => i !== index);
-await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, paymentMethods: list }, { merge: true });
+await setDoc(doc(db, ‘users’, user.uid, ‘settings’, ‘config’), { …config, paymentMethods: (config.paymentMethods || []).filter((*, i) => i !== index) }, { merge: true });
 } else if (type === ‘bill’) {
-const newBills = { …(monthlyData.cardBills || {}) };
-const newDues = { …(monthlyData.cardDueDates || {}) };
+const newBills = { …(monthlyData.cardBills || {}) }; const newDues = { …(monthlyData.cardDueDates || {}) };
 delete newBills[data.name]; delete newDues[data.name];
 await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { cardBills: newBills, cardDueDates: newDues }, { merge: true });
 } else if (type === ‘savingsBucket’) {
 const list = savingsBucketsSafe.filter((_, i) => i !== index);
-const total = list.reduce((sum, bucket) => sum + (Number(bucket.amount) || 0), 0);
-await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { savingsBuckets: list, savings: total }, { merge: true });
+await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), { savingsBuckets: list, savings: list.reduce((sum, b) => sum + (Number(b.amount) || 0), 0) }, { merge: true });
 }
-setEditingItem(null);
-showToastMsg(‘削除しました’);
+setEditingItem(null); showToastMsg(‘削除しました’);
+} catch (e) { console.error(e); showToastMsg(‘エラー’); }
 };
 
-/* — OTHERS — */
-const finalFilteredTx = transactions.filter(t => {
-const matchSearch = searchText === ‘’ || String(t.title || ‘’).includes(searchText);
-const matchCat = filter.category === ‘ALL’ || t.category === filter.category;
-const matchMethod = filter.method === ‘ALL’ || t.paymentMethod === filter.method;
-const matchSpecial = !filter.special || t.isSpecial === true;
-return matchSearch && matchCat && matchMethod && matchSpecial;
-});
-
-const filteredCashTotal = useMemo(() => finalFilteredTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + toNumber(t.amount), 0), [finalFilteredTx]);
-const filteredCardTotal = useMemo(() => finalFilteredTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + toNumber(t.amount), 0), [finalFilteredTx]);
-
-const calendarDaysList = useMemo(() => {
-if (!month) return [];
-const d = new Date(month + “-01T00:00:00Z”);
-if (isNaN(d.getTime())) return [];
-const first = d.getUTCDay();
-const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
-return […Array(first).fill(null), …Array.from({ length: last }, (_, i) => i + 1)];
-}, [month]);
-
 const openCopySettingsModal = () => {
-const d = new Date(month + “-01T00:00:00Z”);
-d.setUTCMonth(d.getUTCMonth() - 1);
-setCopySourceMonth(getMonthString(d));
-setIsCopyModalOpen(true);
+const d = new Date(month + “-01T00:00:00Z”); d.setUTCMonth(d.getUTCMonth() - 1);
+setCopySourceMonth(getMonthString(d)); setIsCopyModalOpen(true);
 };
 
 const copySettingsFromSelectedMonth = async () => {
-const ok = await confirm({ title: `設定をコピーしますか？`, message: `${formatMonthJP(copySourceMonth)} の設定を ${formatMonthJP(month)} にコピーします。`, confirmLabel: ‘実行する’ });
+const ok = await confirm({ title: ‘設定をコピーしますか？’, message: `${formatMonthJP(copySourceMonth)} → ${formatMonthJP(month)}`, confirmLabel: ‘実行する’ });
 if (!ok) return;
 try {
 const snap = await getDoc(doc(db, ‘users’, user.uid, ‘months’, copySourceMonth));
@@ -1151,14 +554,10 @@ await setDoc(doc(db, ‘users’, user.uid, ‘months’, month), {
 salary: d.salary || 0, budget: d.budget || 0, cashTarget: d.cashTarget || 0,
 cashBudget: d.cashBudget || 0, fixedCosts: d.fixedCosts || [],
 catBudgets: d.catBudgets || {}, cardBills: d.cardBills || {},
-cardDueDates: d.cardDueDates || {}, savings: d.savings || 0,
-savingsBuckets: d.savingsBuckets || []
+cardDueDates: d.cardDueDates || {}, savings: d.savings || 0, savingsBuckets: d.savingsBuckets || []
 }, { merge: true });
-showToastMsg(‘コピーしました’);
-setIsCopyModalOpen(false);
-} else {
-showToastMsg(‘データがありません’);
-}
+showToastMsg(‘コピーしました’); setIsCopyModalOpen(false);
+} else { showToastMsg(‘データがありません’); }
 } catch (e) { showToastMsg(‘エラー’); }
 };
 
@@ -1168,10 +567,7 @@ if (!ok) return;
 const q = query(collection(db, ‘users’, user.uid, ‘transactions’), orderBy(‘date’, ‘desc’));
 const s = await getDocs(q);
 let csv = “\uFEFF日付,タイトル,カテゴリ,金額,支払方法\n”;
-s.forEach(d => {
-const v = d.data();
-csv += `${isoToLocalYMD(v.date)},"${v.title}",${v.category},${v.amount},${v.paymentMethod}\n`;
-});
+s.forEach(d => { const v = d.data(); csv += `${isoToLocalYMD(v.date)},"${v.title}",${v.category},${v.amount},${v.paymentMethod}\n`; });
 const url = URL.createObjectURL(new Blob([csv], { type: ‘text/csv;charset=utf-8;’ }));
 const link = document.createElement(‘a’);
 link.href = url; link.download = `zaimu_${getTodayString()}.csv`;
@@ -1180,7 +576,6 @@ document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
 /* — RENDER — */
 if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-[#8E8E93] font-medium">読み込み中…</div>;
-
 if (!user) {
 return (
 <div className="h-screen w-full bg-black flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in">
@@ -1201,25 +596,25 @@ const SETTING_MENU_ITEMS = [
 { id: ‘faq’, label: ‘お金の設計図・FAQ’, icon: <HelpCircle size={18} /> },
 ];
 const currentSettingTitle = SETTING_MENU_ITEMS.find(item => item.id === settingTab)?.label || ‘設定’;
-
 const variableProgressPercent = summary.variableBudget > 0 ? Math.min(100, (summary.totalSpent / summary.variableBudget) * 100) : 0;
+const todayLocal = getTodayLocal();
 
 return (
 <div className="fixed inset-0 w-full bg-black text-zinc-200 font-sans flex flex-col justify-center overflow-hidden">
 {confirmDialog}
 <Toast message={toast.message} isVisible={toast.visible} />
+<OfflineBanner isOffline={isOffline} />
 
 ```
   <div className="w-full max-w-md h-full flex flex-col relative bg-black mx-auto">
+    {/* HEADER */}
     <header className="flex-none h-14 border-b border-white/5 px-4 flex items-center justify-between bg-black/85 backdrop-blur-xl z-50 relative">
       {activeTab === 'settings' && settingTab !== 'menu' ? (
         <>
           <button onClick={() => setSettingTab('menu')} className="text-[#8E8E93] p-2 rounded-xl hover:bg-white/[0.04] transition-colors"><ArrowLeft size={19} /></button>
           <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
             <span className="text-sm font-medium text-white">{currentSettingTitle}</span>
-            {(settingTab === 'fixed' || settingTab === 'category') && (
-              <span className="text-[10px] text-[#8E8E93]">計 ¥{(settingTab === 'fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}</span>
-            )}
+            {(settingTab === 'fixed' || settingTab === 'category') && <span className="text-[10px] text-[#8E8E93]">計 ¥{(settingTab === 'fixed' ? summary.fixedTotal : summary.catBudgetSum).toLocaleString()}</span>}
           </div>
           <div className="w-10" />
         </>
@@ -1237,6 +632,7 @@ return (
     </header>
 
     <main className="flex-1 relative flex flex-col overflow-hidden">
+
       {/* ===================== HOME ===================== */}
       {activeTab === 'home' && (
         <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col relative pb-28">
@@ -1253,26 +649,36 @@ return (
             <div className="space-y-2.5">
               <SectionTitle>今月</SectionTitle>
               <SimpleCard className="p-0 overflow-hidden">
+                {/* メイン数字 */}
                 <div className="p-4">
                   <p className="text-[10px] text-[#8E8E93] font-medium mb-1">今月あと使える可変費</p>
                   <h2 className={`text-[29px] leading-none font-semibold tracking-tight ${summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                     ¥{summary.variableRemaining.toLocaleString()}
                   </h2>
                 </div>
+
+                {/* ── 計算の流れ（中間値付き）── */}
                 <div className="divide-y divide-white/5">
                   <Row label="手取り給与" value={`¥${Number(monthlyData.salary || 0).toLocaleString()}`} />
                   <Row label="先取り合計" value={`- ¥${summary.savingsTotal.toLocaleString()}`} />
+                  {/* 中間値: 生活費原資 */}
+                  <Divider />
+                  <Row label="生活費原資" value={`¥${summary.lifeBudget.toLocaleString()}`} sub />
                   <Row label="固定費合計" value={`- ¥${summary.fixedTotal.toLocaleString()}`} />
-                  <Row label="通常支出" value={`- ¥${summary.totalSpent.toLocaleString()}`} />
+                  {/* 中間値: 可変費総額 */}
+                  <Divider />
                   <Row label="可変費総額" value={`¥${summary.variableBudget.toLocaleString()}`} strong />
+                  <Row label="通常支出" value={`- ¥${summary.totalSpent.toLocaleString()}`} />
                 </div>
-                {savingsBreakdownList.length > 0 && (
+
+                {/* 先取り内訳（今月分のみ）*/}
+                {savingsBucketsSafe.length > 0 && (
                   <div className="px-4 py-3 border-t border-white/5 space-y-2">
-                    <p className="text-[10px] text-[#8E8E93] font-medium">先取り内訳</p>
-                    {savingsBreakdownList.map(([name, amount]) => (
-                      <div key={name} className="flex items-center justify-between gap-3 text-[11px]">
-                        <span className="text-[#8E8E93]">{name}</span>
-                        <span className="text-white font-medium tabular-nums">¥{Number(amount || 0).toLocaleString()}</span>
+                    <p className="text-[10px] text-[#8E8E93] font-medium">先取り内訳（今月）</p>
+                    {savingsBucketsSafe.map(bucket => (
+                      <div key={bucket.id} className="flex items-center justify-between gap-3 text-[11px]">
+                        <span className="text-[#8E8E93]">{bucket.name}</span>
+                        <span className="text-white font-medium tabular-nums">¥{Number(bucket.amount || 0).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>
@@ -1280,6 +686,7 @@ return (
               </SimpleCard>
             </div>
 
+            {/* 進捗カード */}
             <div className="space-y-2.5">
               <SectionTitle>進捗</SectionTitle>
               <SimpleCard className="p-0 overflow-hidden">
@@ -1326,14 +733,14 @@ return (
               <div className="relative flex-[1] min-w-0">
                 <select value={filter.category} onChange={e => setFilter({ ...filter, category: e.target.value })} className="w-full h-10 bg-[#1C1C1E] border border-white/5 rounded-xl pl-3 pr-7 text-[11px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
                   <option value="ALL">すべて</option>
-                  {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
+                  {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-[14px] text-[#8E8E93] pointer-events-none" />
               </div>
               <div className="relative flex-[1] min-w-0">
                 <select value={filter.method} onChange={e => setFilter({ ...filter, method: e.target.value })} className="w-full h-10 bg-[#1C1C1E] border border-white/5 rounded-xl pl-3 pr-7 text-[11px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
                   <option value="ALL">すべて</option>
-                  {(config?.paymentMethods || []).map(m => <option key={m} value={m}>{m}</option>)}
+                  {paymentMethodsSafe.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-2.5 top-[14px] text-[#8E8E93] pointer-events-none" />
               </div>
@@ -1385,8 +792,9 @@ return (
                     {calendarDaysList.map((day, i) => {
                       if (!day) return <div key={i} className="min-h-[52px]" />;
                       const a = summary.dailyTotals[day] || 0;
-                      const todayUtc = new Date();
-                      const isT = day === todayUtc.getUTCDate() && month === getMonthString(todayUtc);
+                      const currentYear = Number(month.split('-')[0]);
+                      const currentMonth = Number(month.split('-')[1]);
+                      const isT = day === todayLocal.day && currentMonth === todayLocal.month && currentYear === todayLocal.year;
                       return (
                         <button key={i} type="button" onClick={() => openTxModalWithDate(`${month}-${String(day).padStart(2, '0')}`)} className="min-h-[52px] rounded-xl px-1 py-1 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors flex flex-col items-center justify-start">
                           <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-medium ${isT ? 'bg-[#0A84FF] text-white' : 'text-zinc-300'}`}>{day}</span>
@@ -1435,7 +843,6 @@ return (
               ) : (<div className="text-center py-8 text-sm text-[#8E8E93] font-medium">データがありません</div>)}
             </div>
           </SimpleCard>
-
           <SimpleCard className="p-0 overflow-hidden">
             <div className="divide-y divide-white/5">
               <div className="px-4 py-3 flex items-center justify-between"><span className="text-[13px] text-zinc-300">可変費総額</span><span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.variableBudget.toLocaleString()}</span></div>
@@ -1443,7 +850,6 @@ return (
               <div className="px-4 py-3 flex items-center justify-between"><span className="text-[13px] text-zinc-300">可変費残り</span><span className={`text-[13px] font-semibold tabular-nums ${summary.variableRemaining < 0 ? 'text-[#FF453A]' : 'text-white'}`}>¥{summary.variableRemaining.toLocaleString()}</span></div>
             </div>
           </SimpleCard>
-
           <SimpleCard className="p-0 overflow-hidden">
             <div className="divide-y divide-white/5">
               <div className="px-4 py-3 flex items-center justify-between"><span className="text-[13px] text-zinc-300">カード支出</span><span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.spentCard.toLocaleString()}</span></div>
@@ -1452,7 +858,6 @@ return (
               <div className="px-4 py-3 flex items-center justify-between"><span className="text-[13px] text-zinc-300">今月の先取り合計</span><span className="text-[13px] font-semibold text-white tabular-nums">¥{summary.savingsTotal.toLocaleString()}</span></div>
             </div>
           </SimpleCard>
-
           {activeCategories.length > 0 && (
             <div className="space-y-2.5">
               <SectionTitle>カテゴリ予算</SectionTitle>
@@ -1475,7 +880,6 @@ return (
               </SimpleCard>
             </div>
           )}
-
           {summary.specialTotalSpent > 0 && (
             <SimpleCard className="p-4">
               <p className="text-[10px] text-[#8E8E93] font-medium mb-2">特別費（別枠）</p>
@@ -1495,27 +899,14 @@ return (
             <div className="space-y-6 pb-8">
               <div className="flex items-center justify-between p-4 bg-[#1C1C1E] border border-white/5 rounded-[18px]">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  {user.photoURL ? (
-                    <img src={user.photoURL} referrerPolicy="no-referrer" alt="icon" className="w-11 h-11 rounded-2xl border border-white/5" />
-                  ) : (
-                    <div className="w-11 h-11 rounded-2xl bg-[#2C2C2E] border border-white/5 flex items-center justify-center"><User size={18} className="text-[#8E8E93]" /></div>
-                  )}
+                  {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="icon" className="w-11 h-11 rounded-2xl border border-white/5" /> : <div className="w-11 h-11 rounded-2xl bg-[#2C2C2E] border border-white/5 flex items-center justify-center"><User size={18} className="text-[#8E8E93]" /></div>}
                   <div className="min-w-0">
                     <div className="text-[13px] font-medium text-white truncate">{user.displayName || 'User'}</div>
                     <div className="text-[10px] font-medium text-[#8E8E93] truncate mt-0.5">{user.email}</div>
                   </div>
                 </div>
-                <button
-                  onClick={async () => {
-                    const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true });
-                    if (ok) signOut(auth);
-                  }}
-                  className="w-10 h-10 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center hover:bg-[#FF453A]/20 transition-colors shrink-0"
-                >
-                  <LogOut size={15} />
-                </button>
+                <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-10 h-10 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center hover:bg-[#FF453A]/20 transition-colors shrink-0"><LogOut size={15} /></button>
               </div>
-
               <div className="space-y-2.5">
                 <SectionTitle>設定メニュー</SectionTitle>
                 <SimpleCard className="divide-y divide-white/5 p-0">
@@ -1524,14 +915,9 @@ return (
                   ))}
                 </SimpleCard>
               </div>
-
               <div className="flex flex-col items-center gap-4 pt-2">
-                <button onClick={openCopySettingsModal} className="w-full h-11 bg-[#2C2C2E] border border-white/5 text-white rounded-2xl text-[13px] font-medium hover:bg-white/[0.07] transition-all flex items-center justify-center gap-2">
-                  <CopyCheck size={15} /> 先月の設定をコピー
-                </button>
-                <button onClick={handleExportCSV} className="text-[#0A84FF] hover:text-[#64D2FF] text-[10px] font-medium flex items-center gap-2 transition-colors">
-                  <FileText size={13} /> CSVを書き出す
-                </button>
+                <button onClick={openCopySettingsModal} className="w-full h-11 bg-[#2C2C2E] border border-white/5 text-white rounded-2xl text-[13px] font-medium hover:bg-white/[0.07] transition-all flex items-center justify-center gap-2"><CopyCheck size={15} /> 先月の設定をコピー</button>
+                <button onClick={handleExportCSV} className="text-[#0A84FF] hover:text-[#64D2FF] text-[10px] font-medium flex items-center gap-2 transition-colors"><FileText size={13} /> CSVを書き出す</button>
               </div>
             </div>
           ) : (
@@ -1563,7 +949,6 @@ return (
                   </div>
                 </div>
               )}
-
               {settingTab === 'budget' && (
                 <div className="space-y-5 animate-in slide-in-from-right-2">
                   <div className="space-y-2.5">
@@ -1576,38 +961,29 @@ return (
                       <SettingsRow onClick={() => openEdit('memo', { memo: monthlyData.memo }, 0)} left="今月のメモ" right={<span className="truncate max-w-[100px]">{monthlyData.memo ? '設定済み' : '未設定'}</span>} />
                     </SimpleCard>
                   </div>
-
                   <div className="space-y-3">
                     <SectionTitle subText={`合計 ¥${Number(summary.savingsTotal || 0).toLocaleString()}`}>先取り設定</SectionTitle>
-                    <button type="button" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                      <Plus size={15} /> 先取り項目を追加
-                    </button>
+                    <button type="button" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Plus size={15} /> 先取り項目を追加</button>
                     <SimpleCard className="divide-y divide-white/5 p-0">
                       {savingsBucketsSafe.length > 0 ? savingsBucketsSafe.map((bucket, idx) => (
                         <SettingsRow key={bucket.id || idx} onClick={() => openEdit('savingsBucket', bucket, idx)} left={<span className="text-[13px] font-medium text-white">{bucket.name}</span>} right={`¥${Number(bucket.amount || 0).toLocaleString()}`} />
-                      )) : (
-                        <div className="px-4 py-4 text-[12px] text-[#8E8E93]">先取り項目がありません</div>
-                      )}
+                      )) : <div className="px-4 py-4 text-[12px] text-[#8E8E93]">先取り項目がありません</div>}
                     </SimpleCard>
                   </div>
-
                   <div className="space-y-2.5">
                     <SectionTitle>引落予定のカード</SectionTitle>
                     <SimpleCard className="divide-y divide-white/5 p-0">
-                      {(config?.paymentMethods || []).filter(m => m !== CASH).map(m => (
+                      {paymentMethodsSafe.filter(m => m !== CASH).map(m => (
                         <SettingsRow key={m} onClick={() => openEdit('bill', { name: m, bill: monthlyData.cardBills?.[m] ?? 0, due: monthlyData.cardDueDates?.[m] ?? '' }, 0)} left={m} right={`¥${Number(monthlyData.cardBills?.[m] || 0).toLocaleString()} (${monthlyData.cardDueDates?.[m] || '-'}日)`} />
                       ))}
                     </SimpleCard>
                   </div>
                 </div>
               )}
-
               {settingTab === 'fixed' && (
                 <div className="space-y-3 animate-in slide-in-from-right-2">
                   <SectionTitle subText={`現金合計 ¥${summary.fixedCash.toLocaleString()} / カード合計 ¥${summary.fixedCard.toLocaleString()}`}>固定費</SectionTitle>
-                  <button type="button" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Plus size={15} /> 固定費を追加
-                  </button>
+                  <button type="button" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Plus size={15} /> 固定費を追加</button>
                   <SimpleCard className="divide-y divide-white/5 p-0">
                     {(monthlyData.fixedCosts || []).map((f, idx) => (
                       <SettingsRow key={f.id || idx} onClick={() => openEdit('fixed', f, idx)} left={<div className="flex items-center gap-3 min-w-0"><span className="text-[10px] px-2 py-1 rounded-lg bg-[#2C2C2E] text-white font-medium shrink-0">{f.method || '未設定'}</span><span className="text-[13px] font-medium text-white truncate">{f.name}</span></div>} right={`¥${Number(f.amount || 0).toLocaleString()}`} />
@@ -1615,12 +991,9 @@ return (
                   </SimpleCard>
                 </div>
               )}
-
               {settingTab === 'category' && (
                 <div className="space-y-3 animate-in slide-in-from-right-2">
-                  <button type="button" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Plus size={15} /> カテゴリを追加
-                  </button>
+                  <button type="button" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Plus size={15} /> カテゴリを追加</button>
                   <SimpleCard className="divide-y divide-white/5 p-0">
                     {(config?.categories || []).map((c, idx) => {
                       const b = monthlyData.catBudgets?.[c.name] || 0;
@@ -1629,12 +1002,9 @@ return (
                   </SimpleCard>
                 </div>
               )}
-
               {settingTab === 'template' && (
                 <div className="space-y-3 animate-in slide-in-from-right-2">
-                  <button type="button" onClick={() => openEdit('template', { title: '', amount: '', category: getCategoryNames()[0] || '食費', method: config?.paymentMethods?.[0] || '現金' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Plus size={15} /> テンプレートを追加
-                  </button>
+                  <button type="button" onClick={() => openEdit('template', { title: '', amount: '', category: categoryNames[0] || '食費', method: paymentMethodsSafe[0] || '現金' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Plus size={15} /> テンプレートを追加</button>
                   <SimpleCard className="divide-y divide-white/5 p-0">
                     {(config?.templates || []).map((t, idx) => (
                       <SettingsRow key={idx} onClick={() => openEdit('template', t, idx)} left={<div className="flex flex-col items-start gap-1 min-w-0"><span className="text-[13px] font-semibold text-white truncate">{t.title}</span><span className="text-[10px] font-medium text-[#8E8E93]">{t.category} • {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
@@ -1642,14 +1012,11 @@ return (
                   </SimpleCard>
                 </div>
               )}
-
               {settingTab === 'payment' && (
                 <div className="space-y-3 animate-in slide-in-from-right-2">
-                  <button type="button" onClick={() => openEdit('payment', { name: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Plus size={15} /> 支払方法を追加
-                  </button>
+                  <button type="button" onClick={() => openEdit('payment', { name: '' }, -1)} className="w-full h-11 bg-[#0A84FF] text-white rounded-2xl text-[13px] font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-all"><Plus size={15} /> 支払方法を追加</button>
                   <SimpleCard className="divide-y divide-white/5 p-0">
-                    {(config?.paymentMethods || []).map((m, idx) => (
+                    {paymentMethodsSafe.map((m, idx) => (
                       <SettingsRow key={m} onClick={() => openEdit('payment', { name: m }, idx)} left={<span className="text-[13px] font-medium text-white">{m}</span>} right={null} />
                     ))}
                   </SimpleCard>
@@ -1661,18 +1028,17 @@ return (
       )}
     </main>
 
+    {/* FOOTER */}
     <footer className="fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-2xl border-t border-white/5 h-20 flex items-center justify-around px-5 pb-4 pt-2">
       <NavButton active={activeTab === 'home'} onClick={() => setActiveTab('home')} icon={<Home size={20} />} />
       <NavButton active={activeTab === 'log'} onClick={() => setActiveTab('log')} icon={<History size={20} />} />
-      <button onClick={openTxModalNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-[15px] flex items-center justify-center active:scale-90 transition-transform shadow-[0_4px_12px_rgba(10,132,255,0.18)]">
-        <Plus size={22} />
-      </button>
+      <button onClick={openTxModalNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-[15px] flex items-center justify-center active:scale-90 transition-transform shadow-[0_4px_12px_rgba(10,132,255,0.18)]"><Plus size={22} /></button>
       <NavButton active={activeTab === 'analysis'} onClick={() => setActiveTab('analysis')} icon={<BarChart3 size={20} />} />
       <NavButton active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setSettingTab('menu'); }} icon={<Settings size={20} />} />
     </footer>
   </div>
 
-  {/* ========== 支出詳細モーダル ========== */}
+  {/* 支出詳細モーダル */}
   {viewingTx && (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setViewingTx(null)}>
       <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -1692,26 +1058,15 @@ return (
             {viewingTx.isSpecial && <div className="p-4 flex justify-between items-center gap-4"><span className="text-[11px] text-white font-medium">特別費</span><span className="text-[13px] font-medium text-white">該当する</span></div>}
           </div>
           <div className="flex gap-3 pt-1">
-            <button
-              type="button"
-              onClick={async () => {
-                const ok = await confirm({ title: 'この支出を削除しますか？', confirmLabel: '削除する', danger: true });
-                if (ok) { await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id)); setViewingTx(null); showToastMsg('削除しました'); }
-              }}
-              className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] font-medium rounded-2xl flex items-center justify-center active:scale-95 transition-transform"
-            >
-              <Trash2 size={19} />
-            </button>
-            <button type="button" onClick={() => { const tx = viewingTx; setViewingTx(null); startEditingTx(tx); }} className="flex-1 h-11 bg-[#0A84FF] text-white font-medium rounded-2xl text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              <Pencil size={15} /> 編集する
-            </button>
+            <button type="button" onClick={async () => { const ok = await confirm({ title: 'この支出を削除しますか？', confirmLabel: '削除する', danger: true }); if (ok) { await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id)); setViewingTx(null); showToastMsg('削除しました'); } }} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] font-medium rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><Trash2 size={19} /></button>
+            <button type="button" onClick={() => { const tx = viewingTx; setViewingTx(null); startEditingTx(tx); }} className="flex-1 h-11 bg-[#0A84FF] text-white font-medium rounded-2xl text-[13px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"><Pencil size={15} /> 編集する</button>
           </div>
         </div>
       </div>
     </div>
   )}
 
-  {/* ========== 計算機モーダル ========== */}
+  {/* 計算機モーダル */}
   {showCalculator && (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in zoom-in-95 duration-200" onClick={() => setShowCalculator(false)}>
       <div className="w-full max-w-xs" onClick={e => e.stopPropagation()}>
@@ -1720,7 +1075,7 @@ return (
     </div>
   )}
 
-  {/* ========== メモモーダル ========== */}
+  {/* メモモーダル */}
   {isMemoModalOpen && (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsMemoModalOpen(false)}>
       <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col p-5" onClick={e => e.stopPropagation()}>
@@ -1735,7 +1090,7 @@ return (
     </div>
   )}
 
-  {/* ========== 設定コピーモーダル ========== */}
+  {/* 設定コピーモーダル */}
   {isCopyModalOpen && (
     <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsCopyModalOpen(false)}>
       <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] overflow-hidden p-5" onClick={e => e.stopPropagation()}>
@@ -1754,13 +1109,13 @@ return (
     </div>
   )}
 
-  {/* ========== 支出入力モーダル ========== */}
+  {/* 支出入力モーダル */}
   {isTxModalOpen && (
-    <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setIsTxModalOpen(false)}>
+    <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={closeTxModal}>
       <div className="w-full max-h-[95vh] sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex-none p-4 border-b border-white/5 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-white tracking-tight">{editingTx ? '支出を編集' : '支出を入力'}</h2>
-          <button type="button" onClick={() => setIsTxModalOpen(false)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors"><X size={16} /></button>
+          <button type="button" onClick={closeTxModal} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors"><X size={16} /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-5 pb-24">
           <form onSubmit={handleTxSubmit} className="space-y-4">
@@ -1781,7 +1136,7 @@ return (
             <div className="space-y-2 relative min-w-0">
               <label className="text-[11px] font-medium text-[#8E8E93] ml-1">カテゴリ</label>
               <select value={inputCategory} onChange={e => setInputCategory(e.target.value)} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
-                {getCategoryNames().map(c => <option key={c} value={c}>{c}</option>)}
+                {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
             </div>
@@ -1830,7 +1185,7 @@ return (
     </div>
   )}
 
-  {/* ========== 設定編集モーダル ========== */}
+  {/* 設定編集モーダル */}
   {editingItem && (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setEditingItem(null)}>
       <div className="w-full max-h-[90vh] sm:h-auto sm:max-w-md bg-[#1C1C1E] rounded-t-[22px] sm:rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.4)] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1839,40 +1194,19 @@ return (
           <button type="button" onClick={() => setEditingItem(null)} className="w-8 h-8 rounded-full bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:text-white transition-colors"><X size={16} /></button>
         </div>
         <div className="p-5 pb-24 space-y-4 overflow-y-auto">
-          {['salary', 'totalBudget', 'cashTarget', 'cashBudget', 'savings'].includes(editingItem.type) && (
-            <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />
-          )}
-          {editingItem.type === 'memo' && (
-            <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />
-          )}
-          {editingItem.type === 'bill' && (
-            <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />
-          )}
-          {editingItem.type === 'savingsBucket' && (
-            <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />
-          )}
-          {editingItem.type === 'category' && (
-            <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />
-          )}
-          {editingItem.type === 'fixed' && (
-            <EditFormFixed editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} paymentMethods={config.paymentMethods} />
-          )}
-          {editingItem.type === 'template' && (
-            <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} categoryNames={getCategoryNames()} paymentMethods={config.paymentMethods} />
-          )}
-          {editingItem.type === 'payment' && (
-            <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />
-          )}
-
+          {['salary', 'totalBudget', 'cashTarget', 'cashBudget', 'savings'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />}
+          {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
+          {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />}
+          {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />}
+          {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} />}
+          {editingItem.type === 'fixed' && <EditFormFixed editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} paymentMethods={config.paymentMethods} />}
+          {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalculator} categoryNames={categoryNames} paymentMethods={config.paymentMethods} />}
+          {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
           <div className="flex gap-3 pt-4 border-t border-white/5 mt-1">
             {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashTarget', 'cashBudget', 'savings', 'bill', 'memo'].includes(editingItem.type) && (
-              <button onClick={handleDeleteItem} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-2xl flex items-center justify-center active:scale-95 transition-transform">
-                <Trash2 size={19} />
-              </button>
+              <button onClick={handleDeleteItem} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-2xl flex items-center justify-center active:scale-95 transition-transform"><Trash2 size={19} /></button>
             )}
-            <button onClick={handleSettingsSave} className="flex-1 h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-[13px] active:scale-[0.98] transition-transform">
-              変更を保存する
-            </button>
+            <button onClick={handleSettingsSave} className="flex-1 h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-[13px] active:scale-[0.98] transition-transform">変更を保存する</button>
           </div>
         </div>
       </div>
@@ -1885,9 +1219,5 @@ return (
 }
 
 export default function AppWrapper() {
-return (
-<ErrorBoundary>
-<AppMain />
-</ErrorBoundary>
-);
+return <ErrorBoundary><AppMain /></ErrorBoundary>;
 }
