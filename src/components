@@ -1,0 +1,367 @@
+import React, { useState, useCallback } from ‘react’;
+import {
+CreditCard, ChevronDown, Calculator, Delete,
+CheckCircle2, AlertTriangle, WifiOff, HelpCircle, X, Trash2
+} from ‘lucide-react’;
+
+/* —————————————————————— */
+/*  safeCalculate: 演算子優先度を正しく処理（シャントヤードアルゴリズム）  */
+/* —————————————————————— */
+export const safeCalculate = (expression) => {
+if (!expression) return ‘0’;
+if (/[^0-9+-*/.() ]/.test(expression)) return ‘0’;
+try {
+const tokens = expression.match(/(\d+(.\d+)?|[+-*/])/g);
+if (!tokens || tokens.length === 0) return ‘0’;
+const nums = [];
+const ops = [];
+const precedence = { ‘+’: 1, ‘-’: 1, ‘*’: 2, ‘/’: 2 };
+const applyOp = () => {
+const op = ops.pop(); const b = nums.pop(); const a = nums.pop();
+if (a === undefined || b === undefined) return;
+if (op === ‘+’) nums.push(a + b);
+else if (op === ‘-’) nums.push(a - b);
+else if (op === ’*’) nums.push(a * b);
+else if (op === ‘/’) nums.push(b !== 0 ? a / b : 0);
+};
+for (const token of tokens) {
+if (!isNaN(token)) { nums.push(parseFloat(token)); }
+else {
+while (ops.length > 0 && precedence[ops[ops.length - 1]] >= precedence[token]) applyOp();
+ops.push(token);
+}
+}
+while (ops.length > 0) applyOp();
+const result = nums[0];
+return isNaN(result) ? ‘0’ : result;
+} catch { return ‘0’; }
+};
+
+export const toNumber = (val) => {
+if (val === null || val === undefined || val === ‘’) return 0;
+const num = Number(String(val).replace(/,/g, ‘’));
+return Number.isFinite(num) ? num : 0;
+};
+
+/* —————————————————————— */
+/*  ConfirmDialog & useConfirm                                          */
+/* —————————————————————— */
+export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = ‘実行する’, danger = false, onConfirm, onCancel }) => {
+if (!isOpen) return null;
+return (
+<div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" onClick={onCancel}>
+<div className=“w-full max-w-xs bg-[#1C1C1E] rounded-[22px] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden” onClick={e => e.stopPropagation()}>
+<div className="p-5 flex flex-col items-center gap-3 text-center">
+{danger && <div className="w-12 h-12 rounded-full bg-[#FF453A]/10 flex items-center justify-center"><AlertTriangle size={22} className="text-[#FF453A]" /></div>}
+<h3 className="text-[15px] font-semibold text-white leading-snug">{title}</h3>
+{message && <p className="text-[12px] text-[#8E8E93] font-medium leading-relaxed">{message}</p>}
+</div>
+<div className="border-t border-white/5 grid grid-cols-2">
+<button type="button" onClick={onCancel} className="h-12 text-[13px] font-medium text-zinc-300 border-r border-white/5 hover:bg-white/[0.04] active:bg-white/[0.07] transition-colors">キャンセル</button>
+<button type=“button” onClick={onConfirm} className={`h-12 text-[13px] font-semibold transition-colors ${danger ? 'text-[#FF453A] hover:bg-[#FF453A]/10' : 'text-[#0A84FF] hover:bg-[#0A84FF]/10'}`}>{confirmLabel}</button>
+</div>
+</div>
+</div>
+);
+};
+
+export const useConfirm = () => {
+const [state, setState] = useState({ isOpen: false, title: ‘’, message: ‘’, confirmLabel: ‘実行する’, danger: false, resolve: null });
+const confirm = useCallback(({ title, message, confirmLabel, danger = false }) => {
+return new Promise((resolve) => { setState({ isOpen: true, title, message, confirmLabel: confirmLabel || ‘実行する’, danger, resolve }); });
+}, []);
+const handleConfirm = useCallback(() => { state.resolve(true); setState(s => ({ …s, isOpen: false })); }, [state]);
+const handleCancel = useCallback(() => { state.resolve(false); setState(s => ({ …s, isOpen: false })); }, [state]);
+const dialog = <ConfirmDialog isOpen={state.isOpen} title={state.title} message={state.message} confirmLabel={state.confirmLabel} danger={state.danger} onConfirm={handleConfirm} onCancel={handleCancel} />;
+return { confirm, dialog };
+};
+
+/* —————————————————————— */
+/*  共通UIコンポーネント                                                  */
+/* —————————————————————— */
+export const SimpleCard = ({ children, className = “”, onClick }) => (
+
+  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-[16px] border border-white/5 shadow-[0_1px_2px_rgba(0,0,0,0.18)] overflow-hidden w-full box-border ${className}`}>{children}</div>
+);
+
+export const SectionTitle = ({ children, subText }) => (
+
+  <div className="flex items-end justify-between gap-3 px-1">
+    <h3 className="text-[10px] text-[#8E8E93] font-medium">{children}</h3>
+    {subText ? <span className="text-[10px] text-[#8E8E93] font-medium">{subText}</span> : null}
+  </div>
+);
+
+export const Row = ({ label, value, strong = false, danger = false, sub = false }) => (
+
+  <div className={`px-4 py-3 flex items-center justify-between gap-4 ${sub ? 'bg-white/[0.02]' : ''}`}>
+    <span className={`${sub ? 'text-[11px] text-[#636366]' : 'text-[13px] text-zinc-300'}`}>{label}</span>
+    <span className={`tabular-nums font-semibold ${strong ? 'text-[15px]' : sub ? 'text-[11px]' : 'text-[13px]'} ${danger ? 'text-[#FF453A]' : sub ? 'text-[#8E8E93]' : 'text-white'}`}>{value}</span>
+  </div>
+);
+
+export const Divider = ({ label }) => (
+
+  <div className="px-4 py-1.5 flex items-center gap-3 bg-white/[0.015]">
+    <div className="flex-1 h-px bg-white/10" />
+    {label && <span className="text-[9px] font-semibold text-[#636366] tracking-wider uppercase">{label}</span>}
+    <div className="flex-1 h-px bg-white/10" />
+  </div>
+);
+
+export const NavButton = ({ active, onClick, icon }) => (
+<button onClick={onClick} className={`flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-200 ${active ? 'text-[#0A84FF]' : 'text-[#8E8E93] hover:text-zinc-300'}`}>{icon}</button>
+);
+
+export const Toast = ({ message, isVisible }) => (
+
+  <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 pointer-events-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+    <div className="bg-[#2C2C2E]/95 backdrop-blur-xl text-white px-4 py-2.5 rounded-full border border-white/10 flex items-center gap-2 shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
+      <CheckCircle2 size={14} className="text-[#30D158]" />
+      <span className="text-[11px] font-medium tracking-wide">{message}</span>
+    </div>
+  </div>
+);
+
+export const OfflineBanner = ({ isOffline }) => (
+
+  <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${isOffline ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'}`}>
+    <div className="bg-[#FF9F0A]/90 backdrop-blur-xl px-4 py-2 flex items-center justify-center gap-2">
+      <WifiOff size={13} className="text-black" />
+      <span className="text-[11px] font-semibold text-black">オフライン中 - データは自動同期されます</span>
+    </div>
+  </div>
+);
+
+export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
+<button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-3 active:bg-white/[0.03] text-zinc-300 transition-colors">
+<div className="flex items-center gap-3 text-left min-w-0 flex-1 font-medium text-zinc-100">{left}</div>
+<div className="flex items-center gap-2 shrink-0 ml-3">
+{right ? <div className="text-[11px] text-[#8E8E93] font-medium">{right}</div> : null}
+{showChevron ? <ChevronDown size={17} className="text-[#636366] -rotate-90" /> : null}
+</div>
+</button>
+);
+
+/* —————————————————————— */
+/*  CalculatorPad                                                        */
+/* —————————————————————— */
+export const CalculatorPad = ({ initialValue, onConfirm }) => {
+const [display, setDisplay] = useState(String(initialValue || ‘0’));
+const [isResult, setIsResult] = useState(false);
+const handlePush = (val) => {
+if (isResult && ![’+’, ‘-’, ’*’, ‘/’].includes(val)) { setDisplay(String(val)); setIsResult(false); }
+else { setDisplay(prev => (prev === ‘0’ && ![’+’, ‘-’, ‘*’, ‘/’, ‘.’].includes(val)) ? String(val) : prev + val); setIsResult(false); }
+};
+const btns = [
+{ l: ‘C’, act: () => setDisplay(‘0’), style: ‘text-[#FF453A]’ },
+{ l: ‘/’, act: () => handlePush(’/’), style: ‘text-zinc-300’ },
+{ l: ’*’, act: () => handlePush(’*’), style: ‘text-zinc-300’ },
+{ l: <Delete size={18} />, act: () => setDisplay(prev => prev.length > 1 ? prev.slice(0, -1) : ‘0’), style: ‘text-[#8E8E93]’ },
+{ l: ‘7’, act: () => handlePush(‘7’) }, { l: ‘8’, act: () => handlePush(‘8’) }, { l: ‘9’, act: () => handlePush(‘9’) },
+{ l: ‘-’, act: () => handlePush(’-’), style: ‘text-zinc-300’ },
+{ l: ‘4’, act: () => handlePush(‘4’) }, { l: ‘5’, act: () => handlePush(‘5’) }, { l: ‘6’, act: () => handlePush(‘6’) },
+{ l: ‘+’, act: () => handlePush(’+’), style: ‘text-zinc-300’ },
+{ l: ‘1’, act: () => handlePush(‘1’) }, { l: ‘2’, act: () => handlePush(‘2’) }, { l: ‘3’, act: () => handlePush(‘3’) },
+{ l: ‘=’, act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, style: ‘bg-[#0A84FF] text-white row-span-2’ },
+{ l: ‘0’, act: () => handlePush(‘0’), style: ‘col-span-2’ },
+{ l: ‘.’, act: () => handlePush(’.’) },
+];
+return (
+<div className="w-full flex flex-col gap-3">
+<div className="bg-[#1C1C1E] rounded-[16px] p-4 text-right border border-white/5 font-mono text-2xl text-white break-all tabular-nums">{display}</div>
+<div className="grid grid-cols-4 gap-2.5 h-64">
+{btns.map((b, i) => (
+<button key={i} type=“button” onClick={b.act} className={`rounded-2xl bg-[#1C1C1E] border border-white/5 text-lg font-medium active:scale-95 transition-all flex items-center justify-center ${b.style || 'text-white'}`}>{b.l}</button>
+))}
+</div>
+<button type=“button” onClick={() => onConfirm(toNumber(display))} className=“w-full h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-sm active:scale-95”>決定</button>
+</div>
+);
+};
+
+/* —————————————————————— */
+/*  EditItem フォームコンポーネント群                                     */
+/* —————————————————————— */
+export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
+const labelMap = { salary: ‘手取り給与’, totalBudget: ‘クレジットカード利用目安’, cashTarget: ‘現金利用目安’, cashBudget: ‘月初のスタート現金’, savings: ‘今月の積立額’ };
+return (
+<div className="space-y-2">
+<label className="text-[11px] font-medium text-[#8E8E93] ml-1">{labelMap[editingItem.type] || ‘金額’}</label>
+<div className="flex gap-3">
+<div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+<span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+<input type=“text” inputMode=“decimal” value={String(editingItem.data.value ?? ‘’)} onChange={e => setEditingItem({ …editingItem, data: { value: e.target.value } })} className=“flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums” autoFocus />
+</div>
+<button type=“button” onClick={() => openCalculator(editingItem.data.value ?? 0, (val) => setEditingItem(prev => ({ …prev, data: { value: String(val) } })))} className=“w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors”><Calculator size={18} /></button>
+</div>
+</div>
+);
+};
+
+export const EditFormMemo = ({ editingItem, setEditingItem }) => (
+
+  <div className="space-y-2">
+    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">今月のメモ</label>
+    <div className="w-full bg-[#2C2C2E] border border-white/5 rounded-[16px] p-4">
+      <textarea value={editingItem.data.memo || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })} className="w-full h-36 bg-transparent text-white font-medium text-sm outline-none resize-none leading-relaxed" autoFocus />
+    </div>
+  </div>
+);
+
+export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) => (
+
+  <div className="space-y-4">
+    <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-2xl border border-white/5">
+      <CreditCard size={18} className="text-[#8E8E93]" />
+      <span className="text-base font-medium text-white">{editingItem.data.name}</span>
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">引落予定額</label>
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+          <input type="text" inputMode="decimal" value={String(editingItem.data.bill ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, bill: e.target.value } })} className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" autoFocus />
+        </div>
+        <button type="button" onClick={() => openCalculator(editingItem.data.bill ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, bill: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"><Calculator size={18} /></button>
+      </div>
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">引落日</label>
+      <div className="flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 w-1/2">
+        <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })} className="w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" />
+        <span className="text-[#8E8E93] font-medium text-sm ml-2">日</span>
+      </div>
+    </div>
+  </div>
+);
+
+export const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalculator }) => (
+
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">項目名</label>
+      <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">金額</label>
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+          <input type="text" inputMode="decimal" value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''} onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }} className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" />
+        </div>
+        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"><Calculator size={18} /></button>
+      </div>
+    </div>
+  </div>
+);
+
+export const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }) => (
+
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">カテゴリ名</label>
+      <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">月の予算</label>
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+          <input type="text" inputMode="decimal" value={editingItem.data.budget ? Number(editingItem.data.budget).toLocaleString() : ''} onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, budget: v } }); }} className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" placeholder="0" />
+        </div>
+        <button type="button" onClick={() => openCalculator(editingItem.data.budget ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, budget: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"><Calculator size={18} /></button>
+      </div>
+    </div>
+  </div>
+);
+
+export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, paymentMethods }) => (
+
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">内容</label>
+      <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">金額</label>
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+          <input type="text" inputMode="decimal" value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''} onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }} className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" />
+        </div>
+        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"><Calculator size={18} /></button>
+      </div>
+    </div>
+    <div className="space-y-2 relative">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法</label>
+      <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
+        {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
+    </div>
+  </div>
+);
+
+export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, categoryNames, paymentMethods }) => (
+
+  <div className="space-y-4">
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">テンプレート名</label>
+      <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
+    </div>
+    <div className="space-y-2">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">初期金額</label>
+      <div className="flex gap-3">
+        <div className="flex-1 flex items-center bg-[#2C2C2E] border border-white/5 rounded-2xl h-11 px-4 focus-within:border-[#0A84FF]/40 transition-colors">
+          <span className="text-lg font-semibold text-[#8E8E93] mr-3">¥</span>
+          <input type="text" inputMode="decimal" value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''} onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }} className="flex-1 w-full bg-transparent text-lg font-semibold text-white outline-none tabular-nums" />
+        </div>
+        <button type="button" onClick={() => openCalculator(editingItem.data.amount ?? 0, (val) => setEditingItem(prev => ({ ...prev, data: { ...prev.data, amount: String(val) } })))} className="w-11 h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.08] transition-colors"><Calculator size={18} /></button>
+      </div>
+    </div>
+    <div className="space-y-2 relative">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">カテゴリ</label>
+      <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
+        {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
+    </div>
+    <div className="space-y-2 relative">
+      <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法</label>
+      <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none appearance-none focus:border-[#0A84FF]/40 transition-colors">
+        {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <ChevronDown size={14} className="absolute right-4 top-[38px] text-[#8E8E93] pointer-events-none" />
+    </div>
+  </div>
+);
+
+export const EditFormPayment = ({ editingItem, setEditingItem }) => (
+
+  <div className="space-y-2">
+    <label className="text-[11px] font-medium text-[#8E8E93] ml-1">支払方法名</label>
+    <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })} className="w-full h-11 bg-[#2C2C2E] border border-white/5 rounded-2xl px-4 text-[13px] font-medium text-white outline-none focus:border-[#0A84FF]/40 transition-colors" autoFocus />
+  </div>
+);
+
+/* —————————————————————— */
+/*  ErrorBoundary                                                        */
+/* —————————————————————— */
+export class ErrorBoundary extends React.Component {
+constructor(props) { super(props); this.state = { hasError: false }; }
+static getDerivedStateFromError() { return { hasError: true }; }
+componentDidCatch(error, errorInfo) { console.error(“Uncaught error:”, error, errorInfo); }
+render() {
+if (this.state.hasError) {
+return (
+<div className="h-screen w-full bg-black text-zinc-200 flex flex-col items-center justify-center p-6 gap-4">
+<h1 className="text-lg font-semibold text-red-400">エラーが発生しました</h1>
+<p className="text-xs text-zinc-500 text-center">画面を再読み込みしてください。</p>
+<button onClick={() => window.location.reload()} className=“px-6 h-11 bg-[#0A84FF] text-white rounded-2xl font-medium text-sm”>再読み込み</button>
+</div>
+);
+}
+return this.props.children;
+}
+}
