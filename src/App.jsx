@@ -92,12 +92,17 @@ function AppMain() {
   const [calcCb, setCalcCb] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '' });
   const { confirm, dialog: confirmDialog } = useConfirm();
+
+  // 支出入力フォーム state
   const [inDate, setInDate] = useState(getTodayString());
   const [inAmount, setInAmount] = useState('');
   const [inTitle, setInTitle] = useState('');
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
   const [inSpecial, setInSpecial] = useState(false);
+  // フォームの初期化が完了したかを追跡（autoFocusバグ防止）
+  const [txFormReady, setTxFormReady] = useState(false);
+
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [expandedFaq, setExpandedFaq] = useState(null);
@@ -123,24 +128,24 @@ function AppMain() {
   const buckets = useMemo(() => getSavingsBuckets(monthly), [monthly]);
 
   const FAQ = useMemo(() => [
-    { category: '⚙️ 設定タブの金額', items: [
-      { q: '手取り給与', a: `家計のベース収入です。${mn}月の自由な現金・${nextMn}月の着地予想の起点になります。` },
+    { category: '設定タブの金額', items: [
+      { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
       { q: 'クレジットカード利用目安', a: 'カードの使いすぎ防止の目安です。ホーム画面の進捗表示に使われます。' },
       { q: '現金利用目安', a: '現金で使う予定額の目安です。ホーム画面の進捗表示に使われます。' },
       { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。ホーム画面の現金残高の計算元になります。' },
-      { q: '先取り設定', a: '毎月最初に避けておくお金です。生活費原資・可変費の計算に使われます。' },
-      { q: '固定費管理', a: `現金払いの固定費は${mn}月の自由な現金から引かれ、全固定費合計は${nextMn}月の着地予想に反映されます。` },
+      { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
+      { q: '固定費管理', a: `固定費を引いた残りが今月の予算になります。` },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
     ]},
-    { category: '🏠 ホーム画面の見方', items: [
+    { category: 'ホーム画面の見方', items: [
       { q: '今月あと使える可変費', a: '先取りと固定費を除いて、今月あとどれだけ使えるかを表します。' },
-      { q: '生活費原資', a: '手取りから先取りを引いた金額です。' },
-      { q: '可変費総額', a: '生活費原資から固定費を引いた予算です。' },
+      { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。' },
+      { q: '今月の予算', a: '先取り後の残りから固定費を引いた、自由に使える予算の上限です。' },
       { q: '現金残高', a: '月初の現金から今月の現金支出を引いた残高です。' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額です。' },
       { q: `${nextMn}月の着地予想`, a: '今のペースを続けた場合の来月末残高シミュレーションです。' }
     ]},
-    { category: '💡 操作', items: [
+    { category: '操作', items: [
       { q: '来月の設定はどうすればいいですか？', a: '設定タブの「先月の設定をコピー」で引き継げます。' },
       { q: 'データのバックアップはできますか？', a: '設定タブのCSVを書き出すから全取引データをダウンロードできます。' }
     ]}
@@ -286,15 +291,36 @@ function AppMain() {
     return [...Array(first).fill(null), ...Array.from({ length: last }, (_, i) => i + 1)];
   }, [month]);
 
+  // フォームリセット — txFormReady を false にしてから state をセット
+  // 次のレンダーで true にすることで、初期化完了後のみ入力可能にする
   const resetInputs = useCallback((dateStr) => {
-    setInDate(dateStr || getTodayString()); setInAmount(''); setInTitle('');
-    setInCat(catNames[0] || '食費'); setInMethod(methods[0] || CASH); setInSpecial(false);
+    setTxFormReady(false);
+    setInDate(dateStr || getTodayString());
+    setInAmount('');
+    setInTitle('');
+    setInCat(catNames[0] || '食費');
+    setInMethod(methods[0] || CASH);
+    setInSpecial(false);
+    // 次の tick でフォーム準備完了
+    setTimeout(() => setTxFormReady(true), 50);
   }, [catNames, methods]);
 
-  const startEdit = t => { setEditingTx(t); setInDate(isoToLocalYMD(t.date)); setInAmount(String(t.amount ?? '')); setInTitle(t.title || ''); setInCat(t.category || catNames[0] || '食費'); setInMethod(t.paymentMethod || CASH); setInSpecial(t.isSpecial === true); setIsTxOpen(true); };
+  const startEdit = t => {
+    setTxFormReady(false);
+    setEditingTx(t);
+    setInDate(isoToLocalYMD(t.date));
+    setInAmount(String(t.amount ?? ''));
+    setInTitle(t.title || '');
+    setInCat(t.category || catNames[0] || '食費');
+    setInMethod(t.paymentMethod || CASH);
+    setInSpecial(t.isSpecial === true);
+    setIsTxOpen(true);
+    setTimeout(() => setTxFormReady(true), 50);
+  };
+
   const openNew = () => { setEditingTx(null); resetInputs(); setIsTxOpen(true); };
   const openWithDate = d => { setEditingTx(null); resetInputs(d); setIsTxOpen(true); };
-  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); }, []);
+  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); setTxFormReady(false); }, []);
   const applyTpl = t => { setInAmount(String(t.amount)); setInTitle(t.title); setInCat(t.category); setInMethod(t.method); };
 
   const submitTx = async e => {
@@ -425,7 +451,6 @@ function AppMain() {
   const varPct = S.varBudget > 0 ? Math.min(100, (S.spent / S.varBudget) * 100) : 0;
   const today = getTodayLocal();
 
-  // モーダルラッパー
   const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
     <div className={`fixed inset-0 ${zIndex} flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm`} onClick={onClose}>
       <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]" onClick={e => e.stopPropagation()}>
@@ -441,7 +466,6 @@ function AppMain() {
     </div>
   );
 
-  // 設定画面の追加ボタン共通
   const AddButton = ({ label, onClick }) => (
     <button onClick={onClick}
       className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors">
@@ -485,7 +509,7 @@ function AppMain() {
 
         <main className="flex-1 flex flex-col overflow-hidden">
 
-          {/* ====== HOME ====== */}
+          {/* HOME */}
           {activeTab === 'home' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide pb-32">
               {monthly.memo && (
@@ -496,8 +520,6 @@ function AppMain() {
                 </button>
               )}
               <div className="px-4 pt-5 space-y-6">
-
-                {/* 今月カード — divide-y を使わず各行の下にborderを引く */}
                 <div>
                   <Label>今月</Label>
                   <Card>
@@ -507,22 +529,17 @@ function AppMain() {
                         ¥{S.varRemain.toLocaleString()}
                       </p>
                     </div>
-                    {/* 手取り → 先取り */}
                     <Row label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
                     <div className="border-b border-white/[0.04]" />
                     <Row label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} muted />
-                    {/* セパレータ + 生活費原資（中間値） */}
                     <Separator />
-                    <Row label="生活費原資" value={`¥${S.lifeBudget.toLocaleString()}`} muted indent />
+                    <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted indent />
                     <div className="border-b border-white/[0.04]" />
                     <Row label="固定費合計" value={`−¥${S.fTotal.toLocaleString()}`} muted />
-                    {/* セパレータ + 可変費総額（中間値・強調） */}
                     <Separator />
-                    <Row label="可変費総額" value={`¥${S.varBudget.toLocaleString()}`} accent />
+                    <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} accent />
                     <div className="border-b border-white/[0.04]" />
-                    <Row label="通常支出" value={`−¥${S.spent.toLocaleString()}`} muted />
-
-                    {/* 先取り内訳 */}
+                    <Row label="今月使った分" value={`−¥${S.spent.toLocaleString()}`} muted />
                     {buckets.length > 0 && (
                       <div className="px-5 py-4 border-t border-white/[0.06] mt-1">
                         <p className="text-[11px] text-[#8E8E93] mb-3">先取り内訳（今月）</p>
@@ -539,7 +556,6 @@ function AppMain() {
                   </Card>
                 </div>
 
-                {/* 進捗カード */}
                 <div>
                   <Label>進捗</Label>
                   <Card>
@@ -571,10 +587,9 @@ function AppMain() {
             </div>
           )}
 
-          {/* ====== LOG ====== */}
+          {/* LOG */}
           {activeTab === 'log' && (
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* フィルタエリア */}
               <div className="flex-none px-4 pt-3 pb-2 space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
@@ -589,10 +604,7 @@ function AppMain() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {[
-                    { key: 'cat', val: filter.cat, opts: catNames },
-                    { key: 'method', val: filter.method, opts: methods }
-                  ].map(({ key, val, opts }) => (
+                  {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
                         className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
@@ -632,17 +644,13 @@ function AppMain() {
                           const [mo, da] = dateStr.split('/');
                           return (
                             <div key={t.id}>
-                              {/* 改善した履歴行: 日付・内容・金額を明確に分離 */}
                               <div onClick={() => setViewingTx(t)}
                                 className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
-                                {/* 日付ブロック */}
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
                                   <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
                                 </div>
-                                {/* 縦区切り */}
                                 <div className="w-px h-8 bg-white/[0.06] shrink-0" />
-                                {/* タイトル・メタ */}
                                 <div className="flex-1 min-w-0">
                                   <p className="text-[14px] font-medium text-white truncate leading-snug">{t.title}</p>
                                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -657,7 +665,6 @@ function AppMain() {
                                     )}
                                   </div>
                                 </div>
-                                {/* 金額 */}
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">
                                   ¥{Number(t.amount || 0).toLocaleString()}
                                 </span>
@@ -699,7 +706,7 @@ function AppMain() {
             </div>
           )}
 
-          {/* ====== ANALYSIS ====== */}
+          {/* ANALYSIS */}
           {activeTab === 'analysis' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-5 pb-32 space-y-5">
               <Card>
@@ -734,11 +741,11 @@ function AppMain() {
               </Card>
 
               <Card>
-                <Row label="可変費総額" value={`¥${S.varBudget.toLocaleString()}`} />
+                <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="通常支出" value={`¥${S.spent.toLocaleString()}`} />
+                <Row label="今月使った分" value={`¥${S.spent.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="可変費残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
+                <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
               </Card>
 
               <Card>
@@ -791,7 +798,7 @@ function AppMain() {
             </div>
           )}
 
-          {/* ====== SETTINGS ====== */}
+          {/* SETTINGS */}
           {activeTab === 'settings' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-5 pb-32 space-y-5">
               {settingTab === 'menu' && (
@@ -810,7 +817,6 @@ function AppMain() {
                       <LogOut size={15} />
                     </button>
                   </div>
-
                   <div>
                     <Label>メニュー</Label>
                     <Card>
@@ -826,7 +832,6 @@ function AppMain() {
                       </div>
                     </Card>
                   </div>
-
                   <div className="space-y-2 pt-1">
                     <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
                       className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
@@ -1006,7 +1011,7 @@ function AppMain() {
           )}
         </main>
 
-        {/* FOOTER — safe area対応でpb増量 */}
+        {/* FOOTER */}
         <footer className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-black/90 backdrop-blur-xl border-t border-white/[0.06] flex items-center justify-around px-4 pt-2 pb-6">
           {[[<Home size={22} />, 'home'], [<History size={22} />, 'log']].map(([icon, tab]) => (
             <NavButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} icon={icon} />
@@ -1020,7 +1025,7 @@ function AppMain() {
         </footer>
       </div>
 
-      {/* ===== 支出詳細モーダル ===== */}
+      {/* 支出詳細モーダル */}
       {viewingTx && (
         <Modal onClose={() => setViewingTx(null)} zIndex="z-[60]">
           <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
@@ -1064,7 +1069,7 @@ function AppMain() {
         </Modal>
       )}
 
-      {/* ===== 計算機モーダル ===== */}
+      {/* 計算機モーダル */}
       {showCalc && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center sm:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setShowCalc(false)}>
           <div className="w-full sm:max-w-xs bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] p-5 pb-8" onClick={e => e.stopPropagation()}>
@@ -1073,21 +1078,26 @@ function AppMain() {
         </div>
       )}
 
-      {/* ===== 支出入力モーダル ===== */}
+      {/* 支出入力モーダル */}
       {isTxOpen && (
         <Modal onClose={closeTx}>
           <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
           <div className="flex-1 overflow-y-auto p-5 pb-10">
             <form onSubmit={submitTx} className="space-y-4">
+              {/* 金額 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">金額</label>
                 <div className="flex gap-2">
                   <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
                     <span className="text-[16px] text-[#8E8E93]">¥</span>
-                    <input type="text" inputMode="decimal"
+                    <input
+                      type="text"
+                      inputMode="decimal"
                       value={inAmount ? Number(inAmount).toLocaleString() : ''}
                       onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
-                      className="flex-1 bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums" autoFocus required />
+                      className="flex-1 bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums"
+                      required
+                    />
                   </div>
                   <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
                     className="w-14 h-14 bg-[#2C2C2E] border border-white/[0.06] rounded-xl flex items-center justify-center text-[#8E8E93]">
@@ -1096,12 +1106,21 @@ function AppMain() {
                 </div>
               </div>
 
+              {/* 内容 — txFormReady が true になってから描画することで再フォーカスを防ぐ */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">内容</label>
-                <input value={inTitle} onChange={e => setInTitle(e.target.value)} placeholder="例: スーパーでお買い物"
-                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors" required />
+                <input
+                  key={isTxOpen ? 'open' : 'closed'}
+                  value={inTitle}
+                  onChange={e => setInTitle(e.target.value)}
+                  placeholder="例: スーパーでお買い物"
+                  disabled={!txFormReady}
+                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors disabled:opacity-60"
+                  required
+                />
               </div>
 
+              {/* カテゴリ */}
               <div className="relative">
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">カテゴリ</label>
                 <select value={inCat} onChange={e => setInCat(e.target.value)}
@@ -1111,6 +1130,7 @@ function AppMain() {
                 <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#48484A] pointer-events-none" />
               </div>
 
+              {/* 日付 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">日付</label>
                 <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
@@ -1121,6 +1141,7 @@ function AppMain() {
                 </div>
               </div>
 
+              {/* 支払方法 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">支払方法</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
@@ -1133,6 +1154,7 @@ function AppMain() {
                 </div>
               </div>
 
+              {/* 種別 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">種別</label>
                 <div className="flex gap-2">
@@ -1145,6 +1167,7 @@ function AppMain() {
                 </div>
               </div>
 
+              {/* テンプレート */}
               {!editingTx && config.templates.length > 0 && (
                 <div>
                   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">テンプレート</label>
@@ -1167,7 +1190,7 @@ function AppMain() {
         </Modal>
       )}
 
-      {/* ===== 設定コピーモーダル ===== */}
+      {/* 設定コピーモーダル */}
       {copyOpen && (
         <Modal onClose={() => setCopyOpen(false)}>
           <ModalHeader title="設定をコピー" onClose={() => setCopyOpen(false)} />
@@ -1185,7 +1208,7 @@ function AppMain() {
         </Modal>
       )}
 
-      {/* ===== 設定編集モーダル ===== */}
+      {/* 設定編集モーダル */}
       {editingItem && (
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title="編集する" onClose={() => setEditingItem(null)} />
