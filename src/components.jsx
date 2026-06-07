@@ -1,9 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { CreditCard, ChevronDown, Calculator, Delete, CheckCircle2, AlertTriangle, WifiOff, X } from 'lucide-react';
 
-/* ------------------------------------------------------------------ */
-/*  safeCalculate                                                        */
-/* ------------------------------------------------------------------ */
 export const safeCalculate = (expression) => {
   if (!expression) return '0';
   if (/[^0-9+\-*/.() ]/.test(expression)) return '0';
@@ -39,9 +36,6 @@ export const toNumber = (val) => {
   return Number.isFinite(num) ? num : 0;
 };
 
-/* ------------------------------------------------------------------ */
-/*  ConfirmDialog & useConfirm                                          */
-/* ------------------------------------------------------------------ */
 export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = '実行する', danger = false, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
@@ -81,15 +75,8 @@ export const useConfirm = () => {
   return { confirm, dialog };
 };
 
-/* ------------------------------------------------------------------ */
-/*  共通UIコンポーネント                                                  */
-/* ------------------------------------------------------------------ */
-
 export const Card = ({ children, className = '', onClick }) => (
-  <div
-    onClick={onClick}
-    className={`bg-[#1C1C1E] rounded-2xl border border-white/[0.06] overflow-hidden w-full ${className}`}
-  >
+  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-2xl border border-white/[0.06] overflow-hidden w-full ${className}`}>
     {children}
   </div>
 );
@@ -101,7 +88,6 @@ export const Label = ({ children, trailing }) => (
   </div>
 );
 
-// Row: divide-y は Card 側で管理。Row 自体はボーダーを持たない
 export const Row = ({ label, value, accent = false, muted = false, danger = false, indent = false }) => (
   <div className={`flex items-center justify-between px-4 py-3 gap-4 ${indent ? 'pl-8' : ''}`}>
     <span className={`text-[14px] leading-snug ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
@@ -116,16 +102,12 @@ export const Row = ({ label, value, accent = false, muted = false, danger = fals
   </div>
 );
 
-// 中間計算値用セパレータ — ボーダーなし、背景のみで区切りを表現
 export const Separator = () => (
   <div className="h-px bg-white/[0.04] mx-4" />
 );
 
 export const NavButton = ({ active, onClick, icon }) => (
-  <button
-    onClick={onClick}
-    className={`flex items-center justify-center w-12 h-10 rounded-xl transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}
-  >
+  <button onClick={onClick} className={`flex items-center justify-center w-12 h-10 rounded-xl transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
     {icon}
   </button>
 );
@@ -158,42 +140,27 @@ export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
   </button>
 );
 
-// プライマリボタン（青）
 export const PrimaryButton = ({ children, onClick, type = 'button', className = '' }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    className={`w-full h-12 bg-[#0A84FF] text-white rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all ${className}`}
-  >
+  <button type={type} onClick={onClick}
+    className={`w-full h-12 bg-[#0A84FF] text-white rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all ${className}`}>
     {children}
   </button>
 );
 
-// セカンダリボタン（グレー）
 export const SecondaryButton = ({ children, onClick, type = 'button', className = '' }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    className={`w-full h-12 bg-[#2C2C2E] text-[#8E8E93] rounded-xl font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}
-  >
+  <button type={type} onClick={onClick}
+    className={`w-full h-12 bg-[#2C2C2E] text-[#8E8E93] rounded-xl font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}>
     {children}
   </button>
 );
 
-// 危険ボタン（赤・アイコンのみ）
 export const DangerIconButton = ({ children, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="w-12 h-12 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0 active:bg-[#FF453A]/20 transition-colors"
-  >
+  <button type="button" onClick={onClick}
+    className="w-12 h-12 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0 active:bg-[#FF453A]/20 transition-colors">
     {children}
   </button>
 );
 
-/* ------------------------------------------------------------------ */
-/*  CalculatorPad                                                        */
-/* ------------------------------------------------------------------ */
 export const CalculatorPad = ({ initialValue, onConfirm }) => {
   const [display, setDisplay] = useState(String(initialValue || '0'));
   const [isResult, setIsResult] = useState(false);
@@ -231,26 +198,22 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
   );
 };
 
-/* ------------------------------------------------------------------ */
-/*  EditItem フォームコンポーネント群                                     */
-/* ------------------------------------------------------------------ */
-const AmountInput = ({ value, onChange, openCalculator, autoFocus }) => (
+const FieldLabel = ({ children }) => (
+  <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">{children}</label>
+);
+
+const AmountInput = ({ value, onChange, openCalculator }) => (
   <div className="flex gap-2">
     <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
       <span className="text-[15px] text-[#8E8E93]">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
-        className="flex-1 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums"
-        autoFocus={autoFocus} />
+        className="flex-1 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
     </div>
     <button type="button" onClick={openCalculator}
       className="w-12 h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.06] transition-colors">
       <Calculator size={17} />
     </button>
   </div>
-);
-
-const FieldLabel = ({ children }) => (
-  <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">{children}</label>
 );
 
 export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
@@ -262,7 +225,6 @@ export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator
         value={String(editingItem.data.value ?? '')}
         onChange={e => setEditingItem({ ...editingItem, data: { value: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { value: String(val) } })))}
-        autoFocus
       />
     </div>
   );
@@ -273,7 +235,7 @@ export const EditFormMemo = ({ editingItem, setEditingItem }) => (
     <FieldLabel>今月のメモ</FieldLabel>
     <div className="bg-[#2C2C2E] rounded-xl border border-white/[0.06] p-4">
       <textarea value={editingItem.data.memo || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
-        className="w-full h-32 bg-transparent text-[14px] text-white outline-none resize-none leading-relaxed" autoFocus />
+        className="w-full h-32 bg-transparent text-[14px] text-white outline-none resize-none leading-relaxed" />
     </div>
   </div>
 );
@@ -290,7 +252,6 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
         value={String(editingItem.data.bill ?? '')}
         onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, bill: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.bill ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, bill: String(val) } })))}
-        autoFocus
       />
     </div>
     <div>
@@ -309,7 +270,7 @@ export const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalcula
     <div>
       <FieldLabel>項目名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" autoFocus />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -327,7 +288,7 @@ export const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }
     <div>
       <FieldLabel>カテゴリ名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" autoFocus />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>月の予算</FieldLabel>
@@ -345,7 +306,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     <div>
       <FieldLabel>内容</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" autoFocus />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -371,7 +332,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div>
       <FieldLabel>テンプレート名</FieldLabel>
       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" autoFocus />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>初期金額</FieldLabel>
@@ -404,13 +365,10 @@ export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>
     <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-      className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" autoFocus />
+      className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
   </div>
 );
 
-/* ------------------------------------------------------------------ */
-/*  ErrorBoundary                                                        */
-/* ------------------------------------------------------------------ */
 export class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
