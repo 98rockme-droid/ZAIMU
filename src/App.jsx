@@ -1,3 +1,4 @@
+cat > /mnt/user-data/outputs/App.jsx << 'ENDOFFILE'
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -10,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil
+  HelpCircle, Pencil, ChevronUp
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
@@ -93,20 +94,22 @@ function AppMain() {
   const [toast, setToast] = useState({ visible: false, message: '' });
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  // 支出入力フォーム state
+  // 支出入力フォーム
   const [inDate, setInDate] = useState(getTodayString());
   const [inAmount, setInAmount] = useState('');
   const [inTitle, setInTitle] = useState('');
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
   const [inSpecial, setInSpecial] = useState(false);
-  // フォームの初期化が完了したかを追跡（autoFocusバグ防止）
-  const [txFormReady, setTxFormReady] = useState(false);
+  // フォームキー: モーダルを開くたびに変えてinputをリマウント→フォーカスリセット
+  const [txFormKey, setTxFormKey] = useState(0);
 
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [faqQ, setFaqQ] = useState('');
+  const [savingsExpanded, setSavingsExpanded] = useState(false);
+
   const [txList, setTxList] = useState([]);
   const [prevTxList, setPrevTxList] = useState([]);
   const prevFetchRef = useRef(null);
@@ -134,7 +137,7 @@ function AppMain() {
       { q: '現金利用目安', a: '現金で使う予定額の目安です。ホーム画面の進捗表示に使われます。' },
       { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。ホーム画面の現金残高の計算元になります。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
-      { q: '固定費管理', a: `固定費を引いた残りが今月の予算になります。` },
+      { q: '固定費管理', a: '固定費を引いた残りが今月の予算になります。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
     ]},
     { category: 'ホーム画面の見方', items: [
@@ -291,22 +294,18 @@ function AppMain() {
     return [...Array(first).fill(null), ...Array.from({ length: last }, (_, i) => i + 1)];
   }, [month]);
 
-  // フォームリセット — txFormReady を false にしてから state をセット
-  // 次のレンダーで true にすることで、初期化完了後のみ入力可能にする
+  // フォームリセット: keyを更新してinputをリマウント（フォーカスバグ根本修正）
   const resetInputs = useCallback((dateStr) => {
-    setTxFormReady(false);
     setInDate(dateStr || getTodayString());
     setInAmount('');
     setInTitle('');
     setInCat(catNames[0] || '食費');
     setInMethod(methods[0] || CASH);
     setInSpecial(false);
-    // 次の tick でフォーム準備完了
-    setTimeout(() => setTxFormReady(true), 50);
+    setTxFormKey(k => k + 1);
   }, [catNames, methods]);
 
   const startEdit = t => {
-    setTxFormReady(false);
     setEditingTx(t);
     setInDate(isoToLocalYMD(t.date));
     setInAmount(String(t.amount ?? ''));
@@ -314,13 +313,13 @@ function AppMain() {
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
     setInSpecial(t.isSpecial === true);
+    setTxFormKey(k => k + 1);
     setIsTxOpen(true);
-    setTimeout(() => setTxFormReady(true), 50);
   };
 
   const openNew = () => { setEditingTx(null); resetInputs(); setIsTxOpen(true); };
   const openWithDate = d => { setEditingTx(null); resetInputs(d); setIsTxOpen(true); };
-  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); setTxFormReady(false); }, []);
+  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); }, []);
   const applyTpl = t => { setInAmount(String(t.amount)); setInTitle(t.title); setInCat(t.category); setInMethod(t.method); };
 
   const submitTx = async e => {
@@ -523,52 +522,108 @@ function AppMain() {
                 <div>
                   <Label>今月</Label>
                   <Card>
+                    {/* ── メイン数字エリア ── */}
                     <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
-                      <p className="text-[11px] text-[#8E8E93] mb-1.5">今月あと使える可変費</p>
-                      <p className={`text-[34px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                        ¥{S.varRemain.toLocaleString()}
+                      <p className="text-[11px] text-[#8E8E93] mb-1">
+                        今月あと使える可変費
+                        <span className="ml-1.5 text-[#48484A]">（使用 ¥{S.spent.toLocaleString()}）</span>
                       </p>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <p className={`text-[34px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                          ¥{S.varRemain.toLocaleString()}
+                        </p>
+                        <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.varBudget.toLocaleString()}</p>
+                      </div>
                     </div>
+
+                    {/* ── 計算の流れ ── */}
                     <Row label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
                     <div className="border-b border-white/[0.04]" />
-                    <Row label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} muted />
+
+                    {/* 先取り合計 — タップで内訳展開 */}
+                    <button
+                      type="button"
+                      onClick={() => setSavingsExpanded(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3 gap-4 active:bg-white/[0.03] transition-colors"
+                    >
+                      <span className="text-[14px] text-[#636366]">先取り合計</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[#636366] text-[13px] tabular-nums">−¥{S.savTotal.toLocaleString()}</span>
+                        {buckets.length > 0 && (
+                          savingsExpanded
+                            ? <ChevronUp size={13} className="text-[#48484A]" />
+                            : <ChevronDown size={13} className="text-[#48484A]" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* 先取り内訳（展開時） */}
+                    {savingsExpanded && buckets.length > 0 && (
+                      <div className="px-4 pb-2 space-y-1.5">
+                        {buckets.map(b => (
+                          <div key={b.id} className="flex items-center justify-between pl-3">
+                            <span className="text-[12px] text-[#48484A]">{b.name}</span>
+                            <span className="text-[12px] text-[#636366] tabular-nums">¥{Number(b.amount || 0).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <Separator />
-                    <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted indent />
+                    <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted />
                     <div className="border-b border-white/[0.04]" />
                     <Row label="固定費合計" value={`−¥${S.fTotal.toLocaleString()}`} muted />
                     <Separator />
                     <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} accent />
-                    <div className="border-b border-white/[0.04]" />
-                    <Row label="今月使った分" value={`−¥${S.spent.toLocaleString()}`} muted />
-                    {buckets.length > 0 && (
-                      <div className="px-5 py-4 border-t border-white/[0.06] mt-1">
-                        <p className="text-[11px] text-[#8E8E93] mb-3">先取り内訳（今月）</p>
-                        <div className="space-y-2.5">
-                          {buckets.map(b => (
-                            <div key={b.id} className="flex items-center justify-between">
-                              <span className="text-[13px] text-[#8E8E93]">{b.name}</span>
-                              <span className="text-[13px] text-white tabular-nums">¥{Number(b.amount || 0).toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </Card>
                 </div>
 
+                {/* 進捗カード */}
                 <div>
                   <Label>進捗</Label>
                   <Card>
                     <div className="px-5 py-4 space-y-4 border-b border-white/[0.06]">
                       {[
-                        { label: '可変費', spent: S.spent, target: S.varBudget, pace: varPct, over: S.varRemain < 0 },
-                        { label: 'カード', spent: S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget },
-                        { label: '現金', spent: S.spCash, target: S.cashTarget, pace: S.cashPace, over: S.cashTarget > 0 && S.spCash > S.cashTarget, noTarget: S.cashTarget === 0 },
-                      ].map(({ label, spent, target, pace, over, noTarget }) => (
+                        {
+                          label: '可変費',
+                          spent: S.spent,
+                          remain: S.varRemain,
+                          target: S.varBudget,
+                          pace: varPct,
+                          over: S.varRemain < 0,
+                          noTarget: false
+                        },
+                        {
+                          label: 'カード',
+                          spent: S.spCard,
+                          remain: S.cardTarget - S.spCard,
+                          target: S.cardTarget,
+                          pace: S.cardPace,
+                          over: S.spCard > S.cardTarget,
+                          noTarget: false
+                        },
+                        {
+                          label: '現金',
+                          spent: S.spCash,
+                          remain: S.cashTarget > 0 ? S.cashTarget - S.spCash : null,
+                          target: S.cashTarget,
+                          pace: S.cashPace,
+                          over: S.cashTarget > 0 && S.spCash > S.cashTarget,
+                          noTarget: S.cashTarget === 0
+                        },
+                      ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
-                          <div className="flex justify-between text-[11px] text-[#8E8E93] mb-1.5">
-                            <span>{label}</span>
-                            <span className="tabular-nums">{noTarget ? `¥${spent.toLocaleString()} / 未設定` : `¥${spent.toLocaleString()} / ¥${target.toLocaleString()}`}</span>
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[11px] text-[#8E8E93]">
+                              {label}
+                              <span className="text-[#48484A] ml-1">（使用 ¥{spent.toLocaleString()}）</span>
+                            </span>
+                            <span className="text-[11px] text-[#8E8E93] tabular-nums">
+                              {noTarget
+                                ? '未設定'
+                                : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`
+                              }
+                            </span>
                           </div>
                           <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
                             <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-[#FF453A]' : 'bg-white/60'}`} style={{ width: `${pace}%` }} />
@@ -1084,13 +1139,15 @@ function AppMain() {
           <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
           <div className="flex-1 overflow-y-auto p-5 pb-10">
             <form onSubmit={submitTx} className="space-y-4">
+
               {/* 金額 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">金額</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
                     <span className="text-[16px] text-[#8E8E93]">¥</span>
                     <input
+                      key={`amount-${txFormKey}`}
                       type="text"
                       inputMode="decimal"
                       value={inAmount ? Number(inAmount).toLocaleString() : ''}
@@ -1099,23 +1156,23 @@ function AppMain() {
                       required
                     />
                   </div>
+                  {/* 計算機ボタン：ザブトンなし */}
                   <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
-                    className="w-14 h-14 bg-[#2C2C2E] border border-white/[0.06] rounded-xl flex items-center justify-center text-[#8E8E93]">
-                    <Calculator size={18} />
+                    className="w-10 h-10 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+                    <Calculator size={20} />
                   </button>
                 </div>
               </div>
 
-              {/* 内容 — txFormReady が true になってから描画することで再フォーカスを防ぐ */}
+              {/* 内容 — key でリマウントしてフォーカスバグを根本解決 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">内容</label>
                 <input
-                  key={isTxOpen ? 'open' : 'closed'}
+                  key={`title-${txFormKey}`}
                   value={inTitle}
                   onChange={e => setInTitle(e.target.value)}
                   placeholder="例: スーパーでお買い物"
-                  disabled={!txFormReady}
-                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors disabled:opacity-60"
+                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
                   required
                 />
               </div>
@@ -1197,8 +1254,18 @@ function AppMain() {
           <div className="p-5 pb-10 space-y-4">
             <div>
               <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">コピー元の月</label>
-              <input type="month" value={copyFrom} onChange={e => setCopyFrom(e.target.value)}
-                className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none" />
+              {/* はみ出し修正: input type=month をカスタム表示で包む */}
+              <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
+                <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
+                  <span className="text-[14px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
+                </div>
+                <input
+                  type="month"
+                  value={copyFrom}
+                  onChange={e => setCopyFrom(e.target.value)}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
             </div>
             <div className="flex gap-2 pt-1">
               <SecondaryButton onClick={() => setCopyOpen(false)}>キャンセル</SecondaryButton>
@@ -1239,3 +1306,4 @@ function AppMain() {
 export default function AppWrapper() {
   return <ErrorBoundary><AppMain /></ErrorBoundary>;
 }
+ENDOFFILE
