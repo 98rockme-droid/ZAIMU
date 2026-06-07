@@ -88,8 +88,8 @@ export const Label = ({ children, trailing }) => (
   </div>
 );
 
-export const Row = ({ label, value, accent = false, muted = false, danger = false, indent = false }) => (
-  <div className={`flex items-center justify-between px-4 py-3 gap-4 ${indent ? 'pl-8' : ''}`}>
+export const Row = ({ label, value, accent = false, muted = false, danger = false }) => (
+  <div className="flex items-center justify-between px-4 py-3 gap-4">
     <span className={`text-[14px] leading-snug ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
     <span className={`tabular-nums shrink-0 ${
       danger ? 'text-[#FF453A] text-[14px] font-semibold'
@@ -202,16 +202,18 @@ const FieldLabel = ({ children }) => (
   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">{children}</label>
 );
 
-const AmountInput = ({ value, onChange, openCalculator }) => (
+// 計算機ボタンなしの金額入力（ザブトンなし）
+const AmountInputSimple = ({ value, onChange, openCalculator }) => (
   <div className="flex gap-2">
     <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
       <span className="text-[15px] text-[#8E8E93]">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
         className="flex-1 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
     </div>
+    {/* 計算機ボタン：ザブトンなし */}
     <button type="button" onClick={openCalculator}
-      className="w-12 h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl flex items-center justify-center text-[#8E8E93] active:bg-white/[0.06] transition-colors">
-      <Calculator size={17} />
+      className="w-12 h-12 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+      <Calculator size={20} />
     </button>
   </div>
 );
@@ -221,7 +223,7 @@ export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator
   return (
     <div>
       <FieldLabel>{labelMap[editingItem.type] || '金額'}</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={String(editingItem.data.value ?? '')}
         onChange={e => setEditingItem({ ...editingItem, data: { value: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { value: String(val) } })))}
@@ -248,7 +250,7 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
     </div>
     <div>
       <FieldLabel>引落予定額</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={String(editingItem.data.bill ?? '')}
         onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, bill: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.bill ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, bill: String(val) } })))}
@@ -274,7 +276,7 @@ export const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalcula
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
         onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
         openCalculator={() => openCalculator(editingItem.data.amount ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, amount: String(val) } })))}
@@ -292,7 +294,7 @@ export const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }
     </div>
     <div>
       <FieldLabel>月の予算</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={editingItem.data.budget ? Number(editingItem.data.budget).toLocaleString() : ''}
         onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, budget: v } }); }}
         openCalculator={() => openCalculator(editingItem.data.budget ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, budget: String(val) } })))}
@@ -310,7 +312,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
         onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
         openCalculator={() => openCalculator(editingItem.data.amount ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, amount: String(val) } })))}
@@ -336,7 +338,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     </div>
     <div>
       <FieldLabel>初期金額</FieldLabel>
-      <AmountInput
+      <AmountInputSimple
         value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
         onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
         openCalculator={() => openCalculator(editingItem.data.amount ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, amount: String(val) } })))}
