@@ -77,6 +77,42 @@ const normalizeConfig = data => ({
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const catColor = i => GRAYS[i % GRAYS.length];
 
+/* ── AppMain の外に定義（これがバグ修正の核心） ── */
+const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
+  <div
+    className={`fixed inset-0 ${zIndex} flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm`}
+    onClick={onClose}
+  >
+    <div
+      className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+      onClick={e => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+const ModalHeader = ({ title, onClose }) => (
+  <div className="flex-none px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+    <span className="text-[16px] font-semibold text-white">{title}</span>
+    <button
+      onClick={onClose}
+      className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C2C2E] text-[#8E8E93]"
+    >
+      <X size={15} />
+    </button>
+  </div>
+);
+
+const AddButton = ({ label, onClick }) => (
+  <button
+    onClick={onClick}
+    className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors"
+  >
+    <Plus size={14} /> {label}
+  </button>
+);
+
 function AppMain() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -93,14 +129,12 @@ function AppMain() {
   const [toast, setToast] = useState({ visible: false, message: '' });
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  // 支出入力フォーム
   const [inDate, setInDate] = useState(getTodayString());
   const [inAmount, setInAmount] = useState('');
   const [inTitle, setInTitle] = useState('');
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
   const [inSpecial, setInSpecial] = useState(false);
-  // フォームキー: モーダルを開くたびに変えてinputをリマウント→フォーカスリセット
   const [txFormKey, setTxFormKey] = useState(0);
 
   const [editingTx, setEditingTx] = useState(null);
@@ -293,7 +327,6 @@ function AppMain() {
     return [...Array(first).fill(null), ...Array.from({ length: last }, (_, i) => i + 1)];
   }, [month]);
 
-  // フォームリセット: keyを更新してinputをリマウント（フォーカスバグ根本修正）
   const resetInputs = useCallback((dateStr) => {
     setInDate(dateStr || getTodayString());
     setInAmount('');
@@ -449,28 +482,6 @@ function AppMain() {
   const varPct = S.varBudget > 0 ? Math.min(100, (S.spent / S.varBudget) * 100) : 0;
   const today = getTodayLocal();
 
-  const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
-    <div className={`fixed inset-0 ${zIndex} flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm`} onClick={onClose}>
-      <div className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]" onClick={e => e.stopPropagation()}>
-        {children}
-      </div>
-    </div>
-  );
-
-  const ModalHeader = ({ title, onClose }) => (
-    <div className="flex-none px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
-      <span className="text-[16px] font-semibold text-white">{title}</span>
-      <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C2C2E] text-[#8E8E93]"><X size={15} /></button>
-    </div>
-  );
-
-  const AddButton = ({ label, onClick }) => (
-    <button onClick={onClick}
-      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors">
-      <Plus size={14} /> {label}
-    </button>
-  );
-
   return (
     <div className="fixed inset-0 w-full bg-black text-white font-sans flex flex-col overflow-hidden">
       {confirmDialog}
@@ -521,7 +532,6 @@ function AppMain() {
                 <div>
                   <Label>今月</Label>
                   <Card>
-                    {/* ── メイン数字エリア ── */}
                     <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
                       <p className="text-[11px] text-[#8E8E93] mb-1">
                         今月あと使える可変費
@@ -535,11 +545,9 @@ function AppMain() {
                       </div>
                     </div>
 
-                    {/* ── 計算の流れ ── */}
                     <Row label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
                     <div className="border-b border-white/[0.04]" />
 
-                    {/* 先取り合計 — タップで内訳展開 */}
                     <button
                       type="button"
                       onClick={() => setSavingsExpanded(v => !v)}
@@ -556,7 +564,6 @@ function AppMain() {
                       </div>
                     </button>
 
-                    {/* 先取り内訳（展開時） */}
                     {savingsExpanded && buckets.length > 0 && (
                       <div className="px-4 pb-2 space-y-1.5">
                         {buckets.map(b => (
@@ -577,39 +584,14 @@ function AppMain() {
                   </Card>
                 </div>
 
-                {/* 進捗カード */}
                 <div>
                   <Label>進捗</Label>
                   <Card>
                     <div className="px-5 py-4 space-y-4 border-b border-white/[0.06]">
                       {[
-                        {
-                          label: '可変費',
-                          spent: S.spent,
-                          remain: S.varRemain,
-                          target: S.varBudget,
-                          pace: varPct,
-                          over: S.varRemain < 0,
-                          noTarget: false
-                        },
-                        {
-                          label: 'カード',
-                          spent: S.spCard,
-                          remain: S.cardTarget - S.spCard,
-                          target: S.cardTarget,
-                          pace: S.cardPace,
-                          over: S.spCard > S.cardTarget,
-                          noTarget: false
-                        },
-                        {
-                          label: '現金',
-                          spent: S.spCash,
-                          remain: S.cashTarget > 0 ? S.cashTarget - S.spCash : null,
-                          target: S.cashTarget,
-                          pace: S.cashPace,
-                          over: S.cashTarget > 0 && S.spCash > S.cashTarget,
-                          noTarget: S.cashTarget === 0
-                        },
+                        { label: '可変費', spent: S.spent, remain: S.varRemain, target: S.varBudget, pace: varPct, over: S.varRemain < 0, noTarget: false },
+                        { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
+                        { label: '現金', spent: S.spCash, remain: S.cashTarget > 0 ? S.cashTarget - S.spCash : null, target: S.cashTarget, pace: S.cashPace, over: S.cashTarget > 0 && S.spCash > S.cashTarget, noTarget: S.cashTarget === 0 },
                       ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
                           <div className="flex justify-between items-center mb-1.5">
@@ -618,10 +600,7 @@ function AppMain() {
                               <span className="text-[#48484A] ml-1">（使用 ¥{spent.toLocaleString()}）</span>
                             </span>
                             <span className="text-[11px] text-[#8E8E93] tabular-nums">
-                              {noTarget
-                                ? '未設定'
-                                : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`
-                              }
+                              {noTarget ? '未設定' : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`}
                             </span>
                           </div>
                           <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
@@ -685,7 +664,6 @@ function AppMain() {
                   </div>
                 </div>
               </div>
-
               <div className="flex-1 px-4 pb-28 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <Card className="flex-1 flex flex-col overflow-hidden">
@@ -698,8 +676,7 @@ function AppMain() {
                           const [mo, da] = dateStr.split('/');
                           return (
                             <div key={t.id}>
-                              <div onClick={() => setViewingTx(t)}
-                                className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
+                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
                                   <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
@@ -711,17 +688,10 @@ function AppMain() {
                                     <span className="text-[11px] text-[#48484A]">{t.category}</span>
                                     <span className="text-[#3A3A3C]">·</span>
                                     <span className="text-[11px] text-[#48484A]">{t.paymentMethod}</span>
-                                    {t.isSpecial && (
-                                      <>
-                                        <span className="text-[#3A3A3C]">·</span>
-                                        <span className="text-[11px] text-[#636366] font-medium">特別費</span>
-                                      </>
-                                    )}
+                                    {t.isSpecial && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium">特別費</span></>)}
                                   </div>
                                 </div>
-                                <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">
-                                  ¥{Number(t.amount || 0).toLocaleString()}
-                                </span>
+                                <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
                               </div>
                               {idx < filteredTx.length - 1 && <div className="h-px bg-white/[0.04] mx-4" />}
                             </div>
@@ -733,9 +703,7 @@ function AppMain() {
                 ) : (
                   <Card className="flex-1 flex flex-col overflow-hidden p-4">
                     <div className="grid grid-cols-7 text-center mb-2">
-                      {['日','月','火','水','木','金','土'].map(d => (
-                        <span key={d} className="text-[10px] text-[#48484A]">{d}</span>
-                      ))}
+                      {['日','月','火','水','木','金','土'].map(d => <span key={d} className="text-[10px] text-[#48484A]">{d}</span>)}
                     </div>
                     <div className="flex-1 overflow-y-auto scrollbar-hide">
                       <div className="grid grid-cols-7 gap-y-1">
@@ -793,7 +761,6 @@ function AppMain() {
                   ) : <p className="text-[13px] text-[#48484A] text-center py-6">データがありません</p>}
                 </div>
               </Card>
-
               <Card>
                 <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
@@ -801,7 +768,6 @@ function AppMain() {
                 <div className="border-b border-white/[0.04] mx-4" />
                 <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
               </Card>
-
               <Card>
                 <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
@@ -811,7 +777,6 @@ function AppMain() {
                 <div className="border-b border-white/[0.04] mx-4" />
                 <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
               </Card>
-
               {activeCats.length > 0 && (
                 <div>
                   <Label>カテゴリ予算</Label>
@@ -824,9 +789,7 @@ function AppMain() {
                           <div className="px-4 py-3.5">
                             <div className="flex justify-between mb-2">
                               <span className="text-[14px] text-white">{n}</span>
-                              <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#8E8E93]'}`}>
-                                ¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}
-                              </span>
+                              <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#8E8E93]'}`}>¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
                               <div className={`h-full rounded-full ${over ? 'bg-[#FF453A]' : 'bg-white/50'}`} style={{ width: `${pct}%` }} />
@@ -839,7 +802,6 @@ function AppMain() {
                   </Card>
                 </div>
               )}
-
               {S.spSpecial > 0 && (
                 <Card className="p-5">
                   <p className="text-[11px] text-[#8E8E93] mb-2">特別費（別枠）</p>
@@ -858,18 +820,12 @@ function AppMain() {
               {settingTab === 'menu' && (
                 <>
                   <div className="flex items-center gap-3.5 p-4 bg-[#1C1C1E] rounded-2xl border border-white/[0.06]">
-                    {user.photoURL
-                      ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-xl" />
-                      : <div className="w-10 h-10 rounded-xl bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>
-                    }
+                    {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-xl" /> : <div className="w-10 h-10 rounded-xl bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>}
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
                       <p className="text-[12px] text-[#8E8E93] truncate">{user.email}</p>
                     </div>
-                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }}
-                      className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0">
-                      <LogOut size={15} />
-                    </button>
+                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
                   <div>
                     <Label>メニュー</Label>
@@ -877,9 +833,7 @@ function AppMain() {
                       <div>
                         {MENU.map((item, idx) => (
                           <div key={item.id}>
-                            <SettingsRow onClick={() => setSettingTab(item.id)}
-                              left={<div className="flex items-center gap-3"><span className="text-[#8E8E93]">{item.icon}</span><span>{item.label}</span></div>}
-                              showChevron />
+                            <SettingsRow onClick={() => setSettingTab(item.id)} left={<div className="flex items-center gap-3"><span className="text-[#8E8E93]">{item.icon}</span><span>{item.label}</span></div>} showChevron />
                             {idx < MENU.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
                           </div>
                         ))}
@@ -887,8 +841,7 @@ function AppMain() {
                     </Card>
                   </div>
                   <div className="space-y-2 pt-1">
-                    <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
-                      className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
+                    <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
                       <CopyCheck size={15} className="text-[#8E8E93]" /> 先月の設定をコピー
                     </button>
                     <button onClick={exportCSV} className="w-full flex items-center justify-center gap-2 text-[13px] text-[#8E8E93] py-2">
@@ -897,12 +850,10 @@ function AppMain() {
                   </div>
                 </>
               )}
-
               {settingTab === 'faq' && (
                 <div className="space-y-4">
                   <div className="relative">
-                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..."
-                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
                     {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-3 top-3 text-[#48484A]"><X size={14} /></button>}
                   </div>
@@ -915,10 +866,7 @@ function AppMain() {
                             <div key={ii}>
                               <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-3.5 cursor-pointer active:bg-white/[0.03] transition-colors">
                                 <div className="flex justify-between items-start gap-3">
-                                  <div className="flex items-start gap-2.5">
-                                    <HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" />
-                                    <span className="text-[13px] text-white leading-snug">{item.q}</span>
-                                  </div>
+                                  <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
                                   <ChevronDown size={14} className={`text-[#48484A] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
                                 </div>
                                 {expandedFaq === `${si}-${ii}` && <p className="mt-3 text-[12px] text-[#8E8E93] leading-relaxed pl-6">{item.a}</p>}
@@ -932,7 +880,6 @@ function AppMain() {
                   )) : <p className="text-center text-[13px] text-[#48484A] py-8">見つかりませんでした</p>}
                 </div>
               )}
-
               {settingTab === 'budget' && (
                 <div className="space-y-5">
                   <div>
@@ -946,9 +893,7 @@ function AppMain() {
                           { key: 'cashBudget', label: '月初のスタート現金', val: monthly.cashBudget },
                         ].map((item, idx) => (
                           <div key={item.key}>
-                            <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)}
-                              left={item.label}
-                              right={item.empty && !item.val ? item.empty : `¥${Number(item.val || 0).toLocaleString()}`} />
+                            <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)} left={item.label} right={item.empty && !item.val ? item.empty : `¥${Number(item.val || 0).toLocaleString()}`} />
                             {idx < 3 && <div className="border-b border-white/[0.04] mx-4" />}
                           </div>
                         ))}
@@ -961,104 +906,83 @@ function AppMain() {
                     <Label trailing={`合計 ¥${S.savTotal.toLocaleString()}`}>先取り設定</Label>
                     <AddButton label="先取り項目を追加" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} />
                     {buckets.length > 0 && (
-                      <Card>
-                        <div>
-                          {buckets.map((b, i) => (
-                            <div key={b.id || i}>
-                              <SettingsRow onClick={() => openEdit('savingsBucket', b, i)} left={b.name} right={`¥${Number(b.amount || 0).toLocaleString()}`} />
-                              {i < buckets.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
+                      <Card><div>
+                        {buckets.map((b, i) => (
+                          <div key={b.id || i}>
+                            <SettingsRow onClick={() => openEdit('savingsBucket', b, i)} left={b.name} right={`¥${Number(b.amount || 0).toLocaleString()}`} />
+                            {i < buckets.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                          </div>
+                        ))}
+                      </div></Card>
                     )}
                   </div>
                   <div>
                     <Label>引落予定のカード</Label>
-                    <Card>
-                      <div>
-                        {methods.filter(m => m !== CASH).map((m, i, arr) => (
-                          <div key={m}>
-                            <SettingsRow onClick={() => openEdit('bill', { name: m, bill: monthly.cardBills?.[m] ?? 0, due: monthly.cardDueDates?.[m] ?? '' }, 0)}
-                              left={m} right={`¥${Number(monthly.cardBills?.[m] || 0).toLocaleString()} (${monthly.cardDueDates?.[m] || '-'}日)`} />
-                            {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
+                    <Card><div>
+                      {methods.filter(m => m !== CASH).map((m, i, arr) => (
+                        <div key={m}>
+                          <SettingsRow onClick={() => openEdit('bill', { name: m, bill: monthly.cardBills?.[m] ?? 0, due: monthly.cardDueDates?.[m] ?? '' }, 0)} left={m} right={`¥${Number(monthly.cardBills?.[m] || 0).toLocaleString()} (${monthly.cardDueDates?.[m] || '-'}日)`} />
+                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                        </div>
+                      ))}
+                    </div></Card>
                   </div>
                 </div>
               )}
-
               {settingTab === 'fixed' && (
                 <div>
                   <Label trailing={`現金 ¥${S.fCash.toLocaleString()} / カード ¥${S.fCard.toLocaleString()}`}>固定費</Label>
                   <AddButton label="固定費を追加" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} />
-                  <Card>
-                    <div>
-                      {(monthly.fixedCosts || []).map((f, i, arr) => (
-                        <div key={f.id || i}>
-                          <SettingsRow onClick={() => openEdit('fixed', f, i)}
-                            left={<div className="flex items-center gap-2.5"><span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.06] text-[#8E8E93] shrink-0">{f.method || '未設定'}</span><span className="truncate">{f.name}</span></div>}
-                            right={`¥${Number(f.amount || 0).toLocaleString()}`} />
-                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  <Card><div>
+                    {(monthly.fixedCosts || []).map((f, i, arr) => (
+                      <div key={f.id || i}>
+                        <SettingsRow onClick={() => openEdit('fixed', f, i)} left={<div className="flex items-center gap-2.5"><span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.06] text-[#8E8E93] shrink-0">{f.method || '未設定'}</span><span className="truncate">{f.name}</span></div>} right={`¥${Number(f.amount || 0).toLocaleString()}`} />
+                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                      </div>
+                    ))}
+                  </div></Card>
                 </div>
               )}
-
               {settingTab === 'category' && (
                 <div>
                   <AddButton label="カテゴリを追加" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} />
-                  <Card>
-                    <div>
-                      {(config?.categories || []).map((c, i, arr) => {
-                        const b = monthly.catBudgets?.[c.name] || 0;
-                        return (
-                          <div key={c.name}>
-                            <SettingsRow onClick={() => openEdit('category', { name: c.name, budget: b }, i)} left={c.name} right={`¥${Number(b).toLocaleString()}`} />
-                            {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Card>
+                  <Card><div>
+                    {(config?.categories || []).map((c, i, arr) => {
+                      const b = monthly.catBudgets?.[c.name] || 0;
+                      return (
+                        <div key={c.name}>
+                          <SettingsRow onClick={() => openEdit('category', { name: c.name, budget: b }, i)} left={c.name} right={`¥${Number(b).toLocaleString()}`} />
+                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                        </div>
+                      );
+                    })}
+                  </div></Card>
                 </div>
               )}
-
               {settingTab === 'template' && (
                 <div>
                   <AddButton label="テンプレートを追加" onClick={() => openEdit('template', { title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH }, -1)} />
-                  <Card>
-                    <div>
-                      {(config?.templates || []).map((t, i, arr) => (
-                        <div key={i}>
-                          <SettingsRow onClick={() => openEdit('template', t, i)}
-                            left={<div className="flex flex-col"><span className="text-[14px] text-white">{t.title}</span><span className="text-[11px] text-[#48484A]">{t.category} · {t.method}</span></div>}
-                            right={`¥${Number(t.amount || 0).toLocaleString()}`} />
-                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  <Card><div>
+                    {(config?.templates || []).map((t, i, arr) => (
+                      <div key={i}>
+                        <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col"><span className="text-[14px] text-white">{t.title}</span><span className="text-[11px] text-[#48484A]">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
+                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                      </div>
+                    ))}
+                  </div></Card>
                 </div>
               )}
-
               {settingTab === 'payment' && (
                 <div>
                   <AddButton label="支払方法を追加" onClick={() => openEdit('payment', { name: '' }, -1)} />
-                  <Card>
-                    <div>
-                      {methods.map((m, i, arr) => (
-                        <div key={m}>
-                          <SettingsRow onClick={() => openEdit('payment', { name: m }, i)} left={m} />
-                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  <Card><div>
+                    {methods.map((m, i, arr) => (
+                      <div key={m}>
+                        <SettingsRow onClick={() => openEdit('payment', { name: m }, i)} left={m} />
+                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                      </div>
+                    ))}
+                  </div></Card>
                 </div>
               )}
             </div>
@@ -1099,25 +1023,15 @@ function AppMain() {
                 </div>
               ))}
               {viewingTx.isSpecial && (
-                <>
-                  <div className="border-b border-white/[0.04] mx-4" />
-                  <div className="px-4 py-3 flex justify-between gap-4">
-                    <span className="text-[12px] text-[#8E8E93]">種別</span>
-                    <span className="text-[13px] text-white">特別費</span>
-                  </div>
-                </>
+                <><div className="border-b border-white/[0.04] mx-4" /><div className="px-4 py-3 flex justify-between gap-4"><span className="text-[12px] text-[#8E8E93]">種別</span><span className="text-[13px] text-white">特別費</span></div></>
               )}
             </Card>
             <div className="flex gap-2">
               <DangerIconButton onClick={async () => {
                 const ok = await confirm({ title: 'この支出を削除しますか？', confirmLabel: '削除する', danger: true });
                 if (ok) { await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id)); setViewingTx(null); showToast('削除しました'); }
-              }}>
-                <Trash2 size={17} />
-              </DangerIconButton>
-              <PrimaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); startEdit(tx); }}>
-                <Pencil size={14} /> 編集する
-              </PrimaryButton>
+              }}><Trash2 size={17} /></DangerIconButton>
+              <PrimaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); startEdit(tx); }}><Pencil size={14} /> 編集する</PrimaryButton>
             </div>
           </div>
         </Modal>
@@ -1138,8 +1052,6 @@ function AppMain() {
           <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
           <div className="flex-1 overflow-y-auto p-5 pb-10">
             <form onSubmit={submitTx} className="space-y-4">
-
-              {/* 金額 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">金額</label>
                 <div className="flex gap-2 items-center">
@@ -1147,23 +1059,19 @@ function AppMain() {
                     <span className="text-[16px] text-[#8E8E93]">¥</span>
                     <input
                       key={`amount-${txFormKey}`}
-                      type="text"
-                      inputMode="decimal"
+                      type="text" inputMode="decimal"
                       value={inAmount ? Number(inAmount).toLocaleString() : ''}
                       onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
                       className="flex-1 bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums"
                       required
                     />
                   </div>
-                  {/* 計算機ボタン：ザブトンなし */}
                   <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
                     className="w-10 h-10 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
                     <Calculator size={20} />
                   </button>
                 </div>
               </div>
-
-              {/* 内容 — key でリマウントしてフォーカスバグを根本解決 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">内容</label>
                 <input
@@ -1175,18 +1083,13 @@ function AppMain() {
                   required
                 />
               </div>
-
-              {/* カテゴリ */}
               <div className="relative">
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">カテゴリ</label>
-                <select value={inCat} onChange={e => setInCat(e.target.value)}
-                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none">
+                <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none">
                   {catNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#48484A] pointer-events-none" />
               </div>
-
-              {/* 日付 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">日付</label>
                 <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
@@ -1196,8 +1099,6 @@ function AppMain() {
                   <input type="date" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
                 </div>
               </div>
-
-              {/* 支払方法 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">支払方法</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
@@ -1209,8 +1110,6 @@ function AppMain() {
                   ))}
                 </div>
               </div>
-
-              {/* 種別 */}
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">種別</label>
                 <div className="flex gap-2">
@@ -1222,22 +1121,18 @@ function AppMain() {
                   ))}
                 </div>
               </div>
-
-              {/* テンプレート */}
               {!editingTx && config.templates.length > 0 && (
                 <div>
                   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                     {config.templates.map((t, i) => (
-                      <button key={i} type="button" onClick={() => applyTpl(t)}
-                        className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-xl text-[12px] text-[#8E8E93] flex items-center gap-1.5">
+                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-xl text-[12px] text-[#8E8E93] flex items-center gap-1.5">
                         <Zap size={11} /> {t.title}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-
               <div className="pt-2">
                 <PrimaryButton type="submit">保存する</PrimaryButton>
               </div>
@@ -1253,17 +1148,11 @@ function AppMain() {
           <div className="p-5 pb-10 space-y-4">
             <div>
               <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">コピー元の月</label>
-              {/* はみ出し修正: input type=month をカスタム表示で包む */}
               <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
                 <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                   <span className="text-[14px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
                 </div>
-                <input
-                  type="month"
-                  value={copyFrom}
-                  onChange={e => setCopyFrom(e.target.value)}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
+                <input type="month" value={copyFrom} onChange={e => setCopyFrom(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
               </div>
             </div>
             <div className="flex gap-2 pt-1">
@@ -1279,9 +1168,7 @@ function AppMain() {
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title="編集する" onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto p-5 pb-10 space-y-4">
-            {['salary', 'totalBudget', 'cashTarget', 'cashBudget'].includes(editingItem.type) && (
-              <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />
-            )}
+            {['salary', 'totalBudget', 'cashTarget', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
