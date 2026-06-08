@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/App.jsx << 'ENDOFFILE'
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
@@ -1306,4 +1305,3 @@ function AppMain() {
 export default function AppWrapper() {
   return <ErrorBoundary><AppMain /></ErrorBoundary>;
 }
-ENDOFFILE
