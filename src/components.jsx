@@ -40,7 +40,7 @@ export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = '実行�
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="w-full max-w-[300px] bg-[#1C1C1E] rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-[300px] bg-[#1C1C1E] rounded-[20px] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 pt-6 pb-4 flex flex-col items-center gap-2 text-center">
           {danger && (
             <div className="w-10 h-10 rounded-full bg-[#FF453A]/10 flex items-center justify-center mb-1">
@@ -76,20 +76,20 @@ export const useConfirm = () => {
 };
 
 export const Card = ({ children, className = '', onClick }) => (
-  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-2xl border border-white/[0.06] overflow-hidden w-full ${className}`}>
+  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-[20px] border border-white/[0.06] overflow-hidden w-full ${className}`}>
     {children}
   </div>
 );
 
 export const Label = ({ children, trailing }) => (
-  <div className="flex items-center justify-between px-1 mb-2">
+  <div className="flex items-center justify-between px-1.5 mb-2.5">
     <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide">{children}</span>
     {trailing && <span className="text-[11px] text-[#8E8E93]">{trailing}</span>}
   </div>
 );
 
 export const Row = ({ label, value, accent = false, muted = false, danger = false }) => (
-  <div className="flex items-center justify-between px-4 py-3 gap-4">
+  <div className="flex items-center justify-between px-4 py-3.5 gap-4">
     <span className={`text-[14px] leading-snug ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
     <span className={`tabular-nums shrink-0 ${
       danger ? 'text-[#FF453A] text-[14px] font-semibold'
@@ -131,7 +131,7 @@ export const OfflineBanner = ({ isOffline }) => (
 );
 
 export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
-  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-3.5 active:bg-white/[0.04] transition-colors text-left">
+  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/[0.04] transition-colors text-left">
     <div className="flex items-center gap-3 min-w-0 flex-1 text-[14px] text-white">{left}</div>
     <div className="flex items-center gap-1.5 shrink-0 ml-3">
       {right && <span className="text-[13px] text-[#8E8E93]">{right}</span>}
@@ -142,21 +142,21 @@ export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
 
 export const PrimaryButton = ({ children, onClick, type = 'button', className = '' }) => (
   <button type={type} onClick={onClick}
-    className={`w-full h-12 bg-[#0A84FF] text-white rounded-xl font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all ${className}`}>
+    className={`w-full h-12 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all ${className}`}>
     {children}
   </button>
 );
 
 export const SecondaryButton = ({ children, onClick, type = 'button', className = '' }) => (
   <button type={type} onClick={onClick}
-    className={`w-full h-12 bg-[#2C2C2E] text-[#8E8E93] rounded-xl font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}>
+    className={`w-full h-12 bg-[#2C2C2E] text-[#8E8E93] rounded-[14px] font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}>
     {children}
   </button>
 );
 
 export const DangerIconButton = ({ children, onClick }) => (
   <button type="button" onClick={onClick}
-    className="w-12 h-12 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0 active:bg-[#FF453A]/20 transition-colors">
+    className="w-12 h-12 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0 active:bg-[#FF453A]/20 transition-colors">
     {children}
   </button>
 );
@@ -184,11 +184,11 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="bg-[#2C2C2E] rounded-2xl px-4 py-3.5 text-right font-mono text-[22px] text-white tabular-nums break-all border border-white/[0.06]">{display}</div>
+      <div className="bg-[#2C2C2E] rounded-[16px] px-4 py-3.5 text-right font-mono text-[22px] text-white tabular-nums break-all border border-white/[0.06]">{display}</div>
       <div className="grid grid-cols-4 gap-2 h-60">
         {btns.map((b, i) => (
           <button key={i} type="button" onClick={b.act}
-            className={`rounded-xl bg-[#2C2C2E] border border-white/[0.06] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
+            className={`rounded-[14px] bg-[#2C2C2E] border border-white/[0.06] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
             {b.l}
           </button>
         ))}
@@ -202,24 +202,23 @@ const FieldLabel = ({ children }) => (
   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">{children}</label>
 );
 
-// 計算機ボタンなしの金額入力（ザブトンなし）
+// 金額入力（計算機ボタンはザブトンなし・min-w-0ではみ出し防止）
 const AmountInputSimple = ({ value, onChange, openCalculator }) => (
-  <div className="flex gap-2">
-    <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-      <span className="text-[15px] text-[#8E8E93]">¥</span>
+  <div className="flex gap-1.5 items-center w-full min-w-0">
+    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+      <span className="text-[15px] text-[#8E8E93] shrink-0">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
-        className="flex-1 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+        className="flex-1 min-w-0 w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
     </div>
-    {/* 計算機ボタン：ザブトンなし */}
     <button type="button" onClick={openCalculator}
-      className="w-12 h-12 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+      className="w-10 h-10 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
       <Calculator size={20} />
     </button>
   </div>
 );
 
 export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
-  const labelMap = { salary: '手取り給与', totalBudget: 'クレジットカード利用目安', cashTarget: '現金利用目安', cashBudget: '月初のスタート現金', savings: '今月の積立額' };
+  const labelMap = { salary: '手取り給与', totalBudget: 'クレジットカード利用目安', cashBudget: '月初のスタート現金', savings: '今月の積立額' };
   return (
     <div>
       <FieldLabel>{labelMap[editingItem.type] || '金額'}</FieldLabel>
@@ -235,7 +234,7 @@ export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator
 export const EditFormMemo = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>今月のメモ</FieldLabel>
-    <div className="bg-[#2C2C2E] rounded-xl border border-white/[0.06] p-4">
+    <div className="bg-[#2C2C2E] rounded-[14px] border border-white/[0.06] p-4">
       <textarea value={editingItem.data.memo || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
         className="w-full h-32 bg-transparent text-[14px] text-white outline-none resize-none leading-relaxed" />
     </div>
@@ -244,7 +243,7 @@ export const EditFormMemo = ({ editingItem, setEditingItem }) => (
 
 export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) => (
   <div className="space-y-4">
-    <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-xl border border-white/[0.06]">
+    <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-[14px] border border-white/[0.06]">
       <CreditCard size={16} className="text-[#8E8E93]" />
       <span className="text-[14px] font-medium text-white">{editingItem.data.name}</span>
     </div>
@@ -258,10 +257,10 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
     </div>
     <div>
       <FieldLabel>引落日</FieldLabel>
-      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-xl h-12 px-4 w-1/2">
+      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-12 px-4 w-1/2">
         <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })}
-          className="w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
-        <span className="text-[13px] text-[#8E8E93] ml-2">日</span>
+          className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+        <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
       </div>
     </div>
   </div>
@@ -272,7 +271,7 @@ export const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalcula
     <div>
       <FieldLabel>項目名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -290,7 +289,7 @@ export const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }
     <div>
       <FieldLabel>カテゴリ名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>月の予算</FieldLabel>
@@ -308,7 +307,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     <div>
       <FieldLabel>内容</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -321,7 +320,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
       <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
@@ -334,7 +333,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div>
       <FieldLabel>テンプレート名</FieldLabel>
       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>初期金額</FieldLabel>
@@ -347,7 +346,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div className="relative">
       <FieldLabel>カテゴリ</FieldLabel>
       <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
       <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
@@ -355,7 +354,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
       <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
@@ -367,7 +366,7 @@ export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>
     <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-      className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+      className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
   </div>
 );
 
@@ -380,7 +379,7 @@ export class ErrorBoundary extends React.Component {
       <div className="h-screen w-full bg-black flex flex-col items-center justify-center p-8 gap-4">
         <p className="text-[15px] font-semibold text-white">エラーが発生しました</p>
         <p className="text-[13px] text-[#8E8E93] text-center">画面を再読み込みしてください。</p>
-        <button onClick={() => window.location.reload()} className="mt-2 px-6 h-11 bg-[#0A84FF] text-white rounded-xl font-semibold text-[14px]">再読み込み</button>
+        <button onClick={() => window.location.reload()} className="mt-2 px-6 h-11 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[14px]">再読み込み</button>
       </div>
     );
     return this.props.children;
