@@ -62,7 +62,7 @@ const normalizeMonthly = (data) => {
     if (k.startsWith('cardBills.')) bills[k.split('.')[1]] = d[k];
   });
   return {
-    salary: d.salary || 0, budget: d.budget || 0, cashTarget: d.cashTarget || 0,
+    salary: d.salary || 0, budget: d.budget || 0,
     cashBudget: d.cashBudget || 0, cardBills: bills, fixedCosts: d.fixedCosts || [],
     catBudgets: d.catBudgets || {}, cardDueDates: dues, savings: d.savings || 0,
     savingsBuckets: d.savingsBuckets || [], memo: d.memo || ''
@@ -77,14 +77,14 @@ const normalizeConfig = data => ({
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const catColor = i => GRAYS[i % GRAYS.length];
 
-/* ── AppMain の外に定義（これがバグ修正の核心） ── */
+/* ── Modal類はAppMainの外に定義（再マウント防止） ── */
 const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
   <div
     className={`fixed inset-0 ${zIndex} flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm`}
     onClick={onClose}
   >
     <div
-      className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden max-h-[92vh]"
+      className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden overflow-x-hidden max-h-[92vh]"
       onClick={e => e.stopPropagation()}
     >
       {children}
@@ -107,7 +107,7 @@ const ModalHeader = ({ title, onClose }) => (
 const AddButton = ({ label, onClick }) => (
   <button
     onClick={onClick}
-    className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-xl text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors"
+    className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-[14px] text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors"
   >
     <Plus size={14} /> {label}
   </button>
@@ -167,8 +167,7 @@ function AppMain() {
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
       { q: 'クレジットカード利用目安', a: 'カードの使いすぎ防止の目安です。ホーム画面の進捗表示に使われます。' },
-      { q: '現金利用目安', a: '現金で使う予定額の目安です。ホーム画面の進捗表示に使われます。' },
-      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。ホーム画面の現金残高の計算元になります。' },
+      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。ホーム画面の現金残高の計算元と、進捗の現金目安に使われます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '固定費管理', a: '固定費を引いた残りが今月の予算になります。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
@@ -177,9 +176,9 @@ function AppMain() {
       { q: '今月あと使える可変費', a: '先取りと固定費を除いて、今月あとどれだけ使えるかを表します。' },
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。' },
       { q: '今月の予算', a: '先取り後の残りから固定費を引いた、自由に使える予算の上限です。' },
-      { q: '現金残高', a: '月初の現金から今月の現金支出を引いた残高です。' },
+      { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額です。' },
-      { q: `${nextMn}月の着地予想`, a: '今のペースを続けた場合の来月末残高シミュレーションです。' }
+      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。計算式: 手取り給与 − カード支出 − 固定費合計 − 先取り合計` }
     ]},
     { category: '操作', items: [
       { q: '来月の設定はどうすればいいですか？', a: '設定タブの「先月の設定をコピー」で引き継げます。' },
@@ -269,7 +268,6 @@ function AppMain() {
     const spCash = norm.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spent = norm.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const cardTarget = Number(monthly?.budget) > 0 ? Number(monthly?.budget) : 100000;
-    const cashTarget = Number(monthly?.cashTarget) || 0;
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
     const varBudget = lifeBudget - fTotal;
@@ -279,8 +277,8 @@ function AppMain() {
     const spSpecial = txList.filter(t => t.isSpecial).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spSpecialPrev = prevTxList.filter(t => t.isSpecial).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     return {
-      cardTarget, cashTarget,
-      cardPace: getPace(spCard, cardTarget), cashPace: getPace(spCash, cashTarget),
+      cardTarget, cashBudget,
+      cardPace: getPace(spCard, cardTarget), cashPace: getPace(spCash, cashBudget),
       cashRemain: cashBudget - spCash, projCash: salary - spCard - fTotal - savTotal,
       fTotal, fCash, fCard, catBudSum, savTotal, lifeBudget, varBudget, varRemain,
       cats, spent, prevSpent: normPrev.reduce((s, t) => s + (Number(t.amount) || 0), 0),
@@ -315,9 +313,6 @@ function AppMain() {
     const msp = !filter.special || t.isSpecial === true;
     return ms && mc && mm && msp;
   }), [txList, searchText, filter]);
-
-  const filtCash = useMemo(() => filteredTx.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + toNumber(t.amount), 0), [filteredTx]);
-  const filtCard = useMemo(() => filteredTx.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + toNumber(t.amount), 0), [filteredTx]);
 
   const calDays = useMemo(() => {
     if (!month) return [];
@@ -374,8 +369,8 @@ function AppMain() {
     try {
       const mRef = doc(db, 'users', user.uid, 'months', month);
       const cRef = doc(db, 'users', user.uid, 'settings', 'config');
-      if (['salary', 'totalBudget', 'cashTarget', 'cashBudget'].includes(type)) {
-        const fm = { salary: 'salary', totalBudget: 'budget', cashTarget: 'cashTarget', cashBudget: 'cashBudget' };
+      if (['salary', 'totalBudget', 'cashBudget'].includes(type)) {
+        const fm = { salary: 'salary', totalBudget: 'budget', cashBudget: 'cashBudget' };
         await setDoc(mRef, { [fm[type]]: toNumber(data.value) }, { merge: true });
       } else if (type === 'memo') {
         await setDoc(mRef, { memo: data.memo || '' }, { merge: true });
@@ -439,7 +434,7 @@ function AppMain() {
       if (snap.exists()) {
         const d = snap.data();
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
-          salary: d.salary || 0, budget: d.budget || 0, cashTarget: d.cashTarget || 0, cashBudget: d.cashBudget || 0,
+          salary: d.salary || 0, budget: d.budget || 0, cashBudget: d.cashBudget || 0,
           fixedCosts: d.fixedCosts || [], catBudgets: d.catBudgets || {}, cardBills: d.cardBills || {},
           cardDueDates: d.cardDueDates || {}, savings: d.savings || 0, savingsBuckets: d.savingsBuckets || []
         }, { merge: true });
@@ -528,17 +523,17 @@ function AppMain() {
                   <ChevronDown size={13} className={`text-[#48484A] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
                 </button>
               )}
-              <div className="px-4 pt-5 space-y-6">
+              <div className="px-4 pt-6 space-y-7">
                 <div>
                   <Label>今月</Label>
                   <Card>
-                    <div className="px-5 pt-5 pb-4 border-b border-white/[0.06]">
+                    <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
                       <p className="text-[11px] text-[#8E8E93] mb-1">
                         今月あと使える可変費
                         <span className="ml-1.5 text-[#48484A]">（使用 ¥{S.spent.toLocaleString()}）</span>
                       </p>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <p className={`text-[34px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                      <div className="flex items-baseline gap-2 mt-1.5">
+                        <p className={`text-[36px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                           ¥{S.varRemain.toLocaleString()}
                         </p>
                         <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.varBudget.toLocaleString()}</p>
@@ -551,7 +546,7 @@ function AppMain() {
                     <button
                       type="button"
                       onClick={() => setSavingsExpanded(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3 gap-4 active:bg-white/[0.03] transition-colors"
+                      className="w-full flex items-center justify-between px-4 py-3.5 gap-4 active:bg-white/[0.03] transition-colors"
                     >
                       <span className="text-[14px] text-[#636366]">先取り合計</span>
                       <div className="flex items-center gap-2 shrink-0">
@@ -565,7 +560,7 @@ function AppMain() {
                     </button>
 
                     {savingsExpanded && buckets.length > 0 && (
-                      <div className="px-4 pb-2 space-y-1.5">
+                      <div className="px-4 pb-3 space-y-2">
                         {buckets.map(b => (
                           <div key={b.id} className="flex items-center justify-between pl-3">
                             <span className="text-[12px] text-[#48484A]">{b.name}</span>
@@ -587,11 +582,11 @@ function AppMain() {
                 <div>
                   <Label>進捗</Label>
                   <Card>
-                    <div className="px-5 py-4 space-y-4 border-b border-white/[0.06]">
+                    <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
                         { label: '可変費', spent: S.spent, remain: S.varRemain, target: S.varBudget, pace: varPct, over: S.varRemain < 0, noTarget: false },
                         { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
-                        { label: '現金', spent: S.spCash, remain: S.cashTarget > 0 ? S.cashTarget - S.spCash : null, target: S.cashTarget, pace: S.cashPace, over: S.cashTarget > 0 && S.spCash > S.cashTarget, noTarget: S.cashTarget === 0 },
+                        { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
                       ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
                           <div className="flex justify-between items-center mb-1.5">
@@ -627,12 +622,12 @@ function AppMain() {
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..."
-                      className="w-full h-10 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-9 pr-3 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                      className="w-full h-10 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[13px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3 text-[#48484A]" />
                   </div>
-                  <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-xl p-1 gap-0.5">
+                  <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-0.5">
                     {[['list', <AlignJustify size={14} />], ['calendar', <CalendarDays size={14} />]].map(([v, icon]) => (
-                      <button key={v} onClick={() => setLogView(v)} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>{icon}</button>
+                      <button key={v} onClick={() => setLogView(v)} className={`w-8 h-8 rounded-[10px] flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>{icon}</button>
                     ))}
                   </div>
                 </div>
@@ -640,7 +635,7 @@ function AppMain() {
                   {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                        className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[12px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
                         <option value="ALL">すべて</option>
                         {opts.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -648,23 +643,17 @@ function AppMain() {
                     </div>
                   ))}
                   <button onClick={() => setFilter(p => ({ ...p, special: !p.special }))}
-                    className={`h-9 px-3 rounded-xl text-[12px] font-medium transition-colors ${filter.special ? 'bg-[#0A84FF] text-white' : 'bg-[#1C1C1E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                    className={`h-9 px-3 rounded-[12px] text-[12px] font-medium transition-colors ${filter.special ? 'bg-[#0A84FF] text-white' : 'bg-[#1C1C1E] text-[#8E8E93] border border-white/[0.06]'}`}>
                     特別費
                   </button>
                   <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', special: false }); }}
-                    className="w-9 h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-xl flex items-center justify-center text-[#48484A]">
+                    className="w-9 h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[12px] flex items-center justify-center text-[#48484A]">
                     <X size={14} />
                   </button>
                 </div>
-                <div className="flex justify-between text-[11px] text-[#48484A] px-1">
-                  <span>{filteredTx.length}件</span>
-                  <div className="flex gap-3 tabular-nums">
-                    <span>現金 ¥{filtCash.toLocaleString()}</span>
-                    <span>カード ¥{filtCard.toLocaleString()}</span>
-                  </div>
-                </div>
               </div>
-              <div className="flex-1 px-4 pb-28 overflow-hidden flex flex-col">
+
+              <div className="flex-1 px-4 pt-1 pb-28 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
                   <Card className="flex-1 flex flex-col overflow-hidden">
                     {filteredTx.length === 0 ? (
@@ -730,7 +719,7 @@ function AppMain() {
 
           {/* ANALYSIS */}
           {activeTab === 'analysis' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-5 pb-32 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-32 space-y-5">
               <Card>
                 <div className="p-5 space-y-5">
                   <div className="flex items-start justify-between gap-3">
@@ -738,7 +727,7 @@ function AppMain() {
                       <p className="text-[11px] text-[#8E8E93] mb-1.5">通常支出</p>
                       <p className="text-[32px] font-semibold text-white tracking-tight leading-none">¥{S.spent.toLocaleString()}</p>
                     </div>
-                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium ${S.spent <= S.prevSpent ? 'bg-[#30D158]/10 text-[#30D158]' : 'bg-[#FF453A]/10 text-[#FF453A]'}`}>
+                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-[10px] text-[11px] font-medium ${S.spent <= S.prevSpent ? 'bg-[#30D158]/10 text-[#30D158]' : 'bg-[#FF453A]/10 text-[#FF453A]'}`}>
                       {S.spent <= S.prevSpent ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
                       {S.spent <= S.prevSpent ? '-' : '+'}¥{Math.abs(S.spent - S.prevSpent).toLocaleString()}
                     </div>
@@ -786,7 +775,7 @@ function AppMain() {
                       const over = bud > 0 && cur > bud, pct = bud > 0 ? Math.min(100, cur / bud * 100) : 0;
                       return (
                         <div key={n}>
-                          <div className="px-4 py-3.5">
+                          <div className="px-4 py-4">
                             <div className="flex justify-between mb-2">
                               <span className="text-[14px] text-white">{n}</span>
                               <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#8E8E93]'}`}>¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}</span>
@@ -816,16 +805,16 @@ function AppMain() {
 
           {/* SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-5 pb-32 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-32 space-y-5">
               {settingTab === 'menu' && (
                 <>
-                  <div className="flex items-center gap-3.5 p-4 bg-[#1C1C1E] rounded-2xl border border-white/[0.06]">
-                    {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-xl" /> : <div className="w-10 h-10 rounded-xl bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>}
+                  <div className="flex items-center gap-3.5 p-4 bg-[#1C1C1E] rounded-[20px] border border-white/[0.06]">
+                    {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-[14px]" /> : <div className="w-10 h-10 rounded-[14px] bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>}
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
                       <p className="text-[12px] text-[#8E8E93] truncate">{user.email}</p>
                     </div>
-                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-xl flex items-center justify-center shrink-0"><LogOut size={15} /></button>
+                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-[12px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
                   <div>
                     <Label>メニュー</Label>
@@ -841,7 +830,7 @@ function AppMain() {
                     </Card>
                   </div>
                   <div className="space-y-2 pt-1">
-                    <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
+                    <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
                       <CopyCheck size={15} className="text-[#8E8E93]" /> 先月の設定をコピー
                     </button>
                     <button onClick={exportCSV} className="w-full flex items-center justify-center gap-2 text-[13px] text-[#8E8E93] py-2">
@@ -853,7 +842,7 @@ function AppMain() {
               {settingTab === 'faq' && (
                 <div className="space-y-4">
                   <div className="relative">
-                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-xl pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
                     {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-3 top-3 text-[#48484A]"><X size={14} /></button>}
                   </div>
@@ -864,7 +853,7 @@ function AppMain() {
                         <div>
                           {sec.items.map((item, ii) => (
                             <div key={ii}>
-                              <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-3.5 cursor-pointer active:bg-white/[0.03] transition-colors">
+                              <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-4 cursor-pointer active:bg-white/[0.03] transition-colors">
                                 <div className="flex justify-between items-start gap-3">
                                   <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
                                   <ChevronDown size={14} className={`text-[#48484A] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
@@ -889,12 +878,11 @@ function AppMain() {
                         {[
                           { key: 'salary', label: '手取り給与', val: monthly.salary },
                           { key: 'totalBudget', label: 'カード利用目安', val: monthly.budget },
-                          { key: 'cashTarget', label: '現金利用目安', val: monthly.cashTarget, empty: '未設定' },
                           { key: 'cashBudget', label: '月初のスタート現金', val: monthly.cashBudget },
                         ].map((item, idx) => (
                           <div key={item.key}>
-                            <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)} left={item.label} right={item.empty && !item.val ? item.empty : `¥${Number(item.val || 0).toLocaleString()}`} />
-                            {idx < 3 && <div className="border-b border-white/[0.04] mx-4" />}
+                            <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)} left={item.label} right={`¥${Number(item.val || 0).toLocaleString()}`} />
+                            {idx < 2 && <div className="border-b border-white/[0.04] mx-4" />}
                           </div>
                         ))}
                         <div className="border-b border-white/[0.04] mx-4" />
@@ -936,7 +924,7 @@ function AppMain() {
                   <Card><div>
                     {(monthly.fixedCosts || []).map((f, i, arr) => (
                       <div key={f.id || i}>
-                        <SettingsRow onClick={() => openEdit('fixed', f, i)} left={<div className="flex items-center gap-2.5"><span className="text-[11px] px-2 py-0.5 rounded-lg bg-white/[0.06] text-[#8E8E93] shrink-0">{f.method || '未設定'}</span><span className="truncate">{f.name}</span></div>} right={`¥${Number(f.amount || 0).toLocaleString()}`} />
+                        <SettingsRow onClick={() => openEdit('fixed', f, i)} left={<div className="flex items-center gap-2.5"><span className="text-[11px] px-2 py-0.5 rounded-[8px] bg-white/[0.06] text-[#8E8E93] shrink-0">{f.method || '未設定'}</span><span className="truncate">{f.name}</span></div>} right={`¥${Number(f.amount || 0).toLocaleString()}`} />
                         {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
                       </div>
                     ))}
@@ -994,7 +982,7 @@ function AppMain() {
           {[[<Home size={22} />, 'home'], [<History size={22} />, 'log']].map(([icon, tab]) => (
             <NavButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} icon={icon} />
           ))}
-          <button onClick={openNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-2xl flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/20">
+          <button onClick={openNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-[16px] flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/20">
             <Plus size={20} />
           </button>
           {[[<BarChart3 size={22} />, 'analysis'], [<Settings size={22} />, 'settings']].map(([icon, tab]) => (
@@ -1007,9 +995,9 @@ function AppMain() {
       {viewingTx && (
         <Modal onClose={() => setViewingTx(null)} zIndex="z-[60]">
           <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
-          <div className="flex-1 overflow-y-auto p-5 pb-10 space-y-5">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-5">
             <div className="flex flex-col items-center gap-2 py-2">
-              <span className="text-[12px] text-[#8E8E93] px-3 py-1 rounded-lg bg-white/[0.06]">{viewingTx.category}</span>
+              <span className="text-[12px] text-[#8E8E93] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
               <p className="text-[40px] font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</p>
             </div>
             <Card>
@@ -1050,19 +1038,19 @@ function AppMain() {
       {isTxOpen && (
         <Modal onClose={closeTx}>
           <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
-          <div className="flex-1 overflow-y-auto p-5 pb-10">
-            <form onSubmit={submitTx} className="space-y-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10">
+            <form onSubmit={submitTx} className="space-y-4 w-full min-w-0">
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">金額</label>
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1 flex items-center bg-[#2C2C2E] rounded-xl h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-                    <span className="text-[16px] text-[#8E8E93]">¥</span>
+                <div className="flex gap-1.5 items-center w-full min-w-0">
+                  <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+                    <span className="text-[16px] text-[#8E8E93] shrink-0">¥</span>
                     <input
                       key={`amount-${txFormKey}`}
                       type="text" inputMode="decimal"
                       value={inAmount ? Number(inAmount).toLocaleString() : ''}
                       onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
-                      className="flex-1 bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums"
+                      className="flex-1 min-w-0 w-full bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums"
                       required
                     />
                   </div>
@@ -1079,20 +1067,20 @@ function AppMain() {
                   value={inTitle}
                   onChange={e => setInTitle(e.target.value)}
                   placeholder="例: スーパーでお買い物"
-                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
+                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
                   required
                 />
               </div>
               <div className="relative">
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">カテゴリ</label>
-                <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl px-4 text-[14px] text-white outline-none appearance-none">
+                <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none">
                   {catNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#48484A] pointer-events-none" />
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">日付</label>
-                <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
+                <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                   <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                     <span className="text-[14px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
                   </div>
@@ -1104,7 +1092,7 @@ function AppMain() {
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {methods.map(m => (
                     <button key={m} type="button" onClick={() => setInMethod(m)}
-                      className={`shrink-0 h-10 px-4 rounded-xl text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`shrink-0 h-10 px-4 rounded-[12px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {m}
                     </button>
                   ))}
@@ -1115,7 +1103,7 @@ function AppMain() {
                 <div className="flex gap-2">
                   {[[false, '通常'], [true, '特別費']].map(([val, label]) => (
                     <button key={label} type="button" onClick={() => setInSpecial(val)}
-                      className={`flex-1 h-10 rounded-xl text-[13px] font-medium transition-colors ${inSpecial === val ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`flex-1 h-10 rounded-[12px] text-[13px] font-medium transition-colors ${inSpecial === val ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {label}
                     </button>
                   ))}
@@ -1126,7 +1114,7 @@ function AppMain() {
                   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                     {config.templates.map((t, i) => (
-                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-xl text-[12px] text-[#8E8E93] flex items-center gap-1.5">
+                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[12px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
                         <Zap size={11} /> {t.title}
                       </button>
                     ))}
@@ -1148,7 +1136,7 @@ function AppMain() {
           <div className="p-5 pb-10 space-y-4">
             <div>
               <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">コピー元の月</label>
-              <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-xl overflow-hidden">
+              <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                 <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                   <span className="text-[14px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
                 </div>
@@ -1167,8 +1155,8 @@ function AppMain() {
       {editingItem && (
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title="編集する" onClose={() => setEditingItem(null)} />
-          <div className="flex-1 overflow-y-auto p-5 pb-10 space-y-4">
-            {['salary', 'totalBudget', 'cashTarget', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-4">
+            {['salary', 'totalBudget', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
@@ -1177,7 +1165,7 @@ function AppMain() {
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
-              {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashTarget', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
+              {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
               <PrimaryButton onClick={saveSettings}>変更を保存する</PrimaryButton>
