@@ -171,15 +171,15 @@ function AppMain() {
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
       { q: 'クレジットカード利用目安', a: 'カードの使いすぎ防止の目安です。ホーム画面の進捗表示に使われます。' },
-      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。ホーム画面の現金残高の計算元と、進捗の現金目安に使われます。' },
+      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元・進捗の現金目安になり、今月の予算（カード）からも差し引かれます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '固定費管理', a: '固定費を引いた残りが今月の予算になります。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
     ]},
     { category: 'ホーム画面の見方', items: [
-      { q: '今月あと使える可変費', a: '先取りと固定費を除いて、今月あとどれだけ使えるかを表します。' },
+      { q: '今月あと使える可変費（カード）', a: 'カードであとどれだけ使えるかを表します。現金支出はここには含まれず、現金残高で管理します。' },
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。' },
-      { q: '今月の予算', a: '先取り後の残りから固定費を引いた、自由に使える予算の上限です。' },
+      { q: '今月の予算（カード）', a: '先取り後の残りから固定費と月初のスタート現金を引いた、カードで自由に使える予算の上限です。' },
       { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。' },
       { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。計算式: 手取り給与 − カード支出 − 固定費合計 − 先取り合計` }
@@ -297,8 +297,8 @@ function AppMain() {
     const cardTarget = Number(monthly?.budget) > 0 ? Number(monthly?.budget) : 100000;
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
-    const varBudget = lifeBudget - fTotal;
-    const varRemain = varBudget - spent;
+    const varBudget = lifeBudget - fTotal - cashBudget;
+    const varRemain = varBudget - spCard;
     const cats = norm.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const catBudSum = (config?.categories || []).reduce((s, c) => s + (monthly?.catBudgets?.[c.name] || 0), 0);
     const spSpecial = txList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -511,7 +511,7 @@ function AppMain() {
     { id: 'faq', label: 'ヘルプ・FAQ', icon: <HelpCircle size={17} /> },
   ];
   const menuTitle = MENU.find(m => m.id === settingTab)?.label || '設定';
-  const varPct = S.varBudget > 0 ? Math.min(100, (S.spent / S.varBudget) * 100) : 0;
+  const varPct = S.varBudget > 0 ? Math.min(100, (S.spCard / S.varBudget) * 100) : 0;
   const today = getTodayLocal();
   const savingsBalance = savingsTotal - savingsWithdrawn;
 
@@ -573,8 +573,8 @@ function AppMain() {
                   <Card>
                     <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
                       <p className="text-[11px] text-[#8E8E93] mb-1">
-                        今月あと使える可変費
-                        <span className="ml-1.5 text-[#48484A]">（使用 ¥{S.spent.toLocaleString()}）</span>
+                        今月あと使える可変費（カード）
+                        <span className="ml-1.5 text-[#48484A]">（使用 ¥{S.spCard.toLocaleString()}）</span>
                       </p>
                       <div className="flex items-baseline gap-2 mt-1.5">
                         <p className={`text-[36px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
@@ -618,8 +618,10 @@ function AppMain() {
                     <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted />
                     <div className="border-b border-white/[0.04]" />
                     <Row label="固定費合計" value={`−¥${S.fTotal.toLocaleString()}`} muted />
+                    <div className="border-b border-white/[0.04]" />
+                    <Row label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} muted />
                     <Separator />
-                    <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} accent />
+                    <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} accent />
                   </Card>
                 </div>
 
@@ -628,7 +630,7 @@ function AppMain() {
                   <Card>
                     <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
-                        { label: '可変費', spent: S.spent, remain: S.varRemain, target: S.varBudget, pace: varPct, over: S.varRemain < 0, noTarget: false },
+                        { label: '可変費（カード）', spent: S.spCard, remain: S.varRemain, target: S.varBudget, pace: varPct, over: S.varRemain < 0, noTarget: false },
                         { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
                         { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
                       ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
@@ -732,7 +734,7 @@ function AppMain() {
                                     <span className="text-[#3A3A3C]">·</span>
                                     <span className="text-[11px] text-[#48484A]">{t.paymentMethod}</span>
                                     {st === 'special' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium">特別費</span></>)}
-                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#FF9F0A] font-medium">貯金から</span></>)}
+                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#B8791E] font-medium">貯金から</span></>)}
                                   </div>
                                 </div>
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
@@ -806,9 +808,9 @@ function AppMain() {
                 </div>
               </Card>
               <Card>
-                <Row label="今月の予算" value={`¥${S.varBudget.toLocaleString()}`} />
+                <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="今月使った分" value={`¥${S.spent.toLocaleString()}`} />
+                <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
                 <div className="border-b border-white/[0.04] mx-4" />
                 <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
               </Card>
@@ -858,7 +860,7 @@ function AppMain() {
               {S.spSavings > 0 && (
                 <Card className="p-5">
                   <div className="flex items-center gap-2 mb-2">
-                    <PiggyBank size={13} className="text-[#FF9F0A]" />
+                    <PiggyBank size={13} className="text-[#B8791E]" />
                     <p className="text-[11px] text-[#8E8E93]">貯金からの支払い（今月）</p>
                   </div>
                   <div className="flex items-baseline gap-2">
@@ -1173,7 +1175,7 @@ function AppMain() {
                   ))}
                 </div>
                 {inSpendType === 'savings' && (
-                  <p className="mt-2 ml-1 text-[11px] text-[#FF9F0A] flex items-center gap-1.5">
+                  <p className="mt-2 ml-1 text-[11px] text-[#B8791E] flex items-center gap-1.5">
                     <PiggyBank size={12} /> 可変費には含まれず、先取り累計から差し引かれます
                   </p>
                 )}
