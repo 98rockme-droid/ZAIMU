@@ -10,14 +10,14 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil, ChevronUp, PiggyBank
+  HelpCircle, Pencil, ChevronUp, PiggyBank, Repeat
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
   SettingsRow, CalculatorPad, useConfirm, toNumber,
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
-  EditFormCategory, EditFormFixed, EditFormTemplate, EditFormPayment
+  EditFormCategory, EditFormFixed, EditFormTemplate, EditFormPayment, EditFormRecurring
 } from './components.jsx';
 
 const firebaseConfig = {
@@ -74,7 +74,8 @@ const normalizeMonthly = (data) => {
 const normalizeConfig = data => ({
   categories: data?.categories || [{ name: '食費' }],
   paymentMethods: data?.paymentMethods || [CASH],
-  templates: data?.templates || []
+  templates: data?.templates || [],
+  recurring: data?.recurring || []
 });
 
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
@@ -121,6 +122,8 @@ function AppMain() {
   const [authLoading, setAuthLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [activeTab, setActiveTab] = useState('home');
+  const [analysisView, setAnalysisView] = useState('month');
+  const [yearData, setYearData] = useState(null);
   const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
@@ -138,6 +141,7 @@ function AppMain() {
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
   const [inSpendType, setInSpendType] = useState('normal');
+  const [inSavingsBucket, setInSavingsBucket] = useState('');
   const [txFormKey, setTxFormKey] = useState(0);
 
   const [editingTx, setEditingTx] = useState(null);
@@ -147,13 +151,17 @@ function AppMain() {
   const [savingsExpanded, setSavingsExpanded] = useState(false);
 
   const [txList, setTxList] = useState([]);
+  const [txLoaded, setTxLoaded] = useState(false);
+  const recProcessedRef = useRef(new Set());
   const [prevTxList, setPrevTxList] = useState([]);
   const prevFetchRef = useRef(null);
   const [monthly, setMonthly] = useState(normalizeMonthly({}));
   const [config, setConfig] = useState(normalizeConfig({}));
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [savingsWithdrawn, setSavingsWithdrawn] = useState(0);
+  const [withdrawnByBucket, setWithdrawnByBucket] = useState({});
   const [savingsBreakdown, setSavingsBreakdown] = useState({});
+  const [cumSavingsExpanded, setCumSavingsExpanded] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', spendType: 'ALL' });
   const [copyOpen, setCopyOpen] = useState(false);
@@ -166,6 +174,11 @@ function AppMain() {
   const catNames = useMemo(() => (config?.categories || []).map(c => c.name), [config?.categories]);
   const methods = useMemo(() => config?.paymentMethods?.length ? config.paymentMethods : [CASH], [config?.paymentMethods]);
   const buckets = useMemo(() => getSavingsBuckets(monthly), [monthly]);
+  // 貯金取り崩し時に選べるバケット候補（積立実績のある名前 + 今月の設定名）
+  const bucketOptions = useMemo(() => {
+    const set = new Set([...Object.keys(savingsBreakdown), ...buckets.map(b => b.name)]);
+    return [...set].filter(Boolean);
+  }, [savingsBreakdown, buckets]);
 
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
@@ -187,9 +200,10 @@ function AppMain() {
     ]},
     { category: '支出の種別', items: [
       { q: '通常と特別費の違いは？', a: '通常は今月の可変費に含まれる支出です。特別費は冠婚葬祭など臨時の支出で、可変費とは別枠で集計されます。' },
-      { q: '「貯金から」とは？', a: '積み立てた貯金を取り崩して支払う支出です。今月の可変費や進捗には影響せず、先取り累計から差し引かれます。' }
+      { q: '「貯金から」とは？', a: '積み立てた貯金を取り崩して支払う支出です。今月の可変費や進捗には影響せず、先取り累計から差し引かれます。どの先取り項目から出すか指定でき、ホームの先取り累計をタップすると項目別の残高を確認できます。' }
     ]},
     { category: '操作', items: [
+      { q: '定期支出とは？', a: 'サブスクや家賃など毎月決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
       { q: '来月の設定はどうすればいいですか？', a: '設定タブの「先月の設定をコピー」で引き継げます。' },
       { q: 'データのバックアップはできますか？', a: '設定タブのCSVを書き出すから全取引データをダウンロードできます。' }
     ]}
@@ -214,11 +228,12 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
+    setTxLoaded(false);
     const start = new Date(`${month}-01T00:00:00Z`).toISOString();
     const nd = new Date(`${month}-01T00:00:00Z`); nd.setUTCMonth(nd.getUTCMonth() + 1);
     const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', nd.toISOString()));
     return onSnapshot(q,
-      s => { const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); setTxList(l); },
+      s => { const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); setTxList(l); setTxLoaded(true); },
       err => { console.error(err); showToast('データ取得エラー'); }
     );
   }, [month, user]);
@@ -272,16 +287,73 @@ function AppMain() {
     getDocs(query(collection(db, 'users', user.uid, 'transactions'), where('fromSavings', '==', true)))
       .then(s => {
         if (cancelled) return;
-        const total = s.docs
-          .map(d => d.data())
-          .filter(t => t.date && t.date < endIso)
-          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        let total = 0; const byBucket = {};
+        s.docs.map(d => d.data()).filter(t => t.date && t.date < endIso).forEach(t => {
+          const amt = Number(t.amount) || 0;
+          total += amt;
+          const b = t.savingsBucket || '指定なし';
+          byBucket[b] = (byBucket[b] || 0) + amt;
+        });
         setSavingsWithdrawn(total);
+        setWithdrawnByBucket(byBucket);
       }).catch(console.error);
     return () => { cancelled = true; };
   }, [user, month, txList]);
 
   useEffect(() => setMemoText(monthly?.memo || ''), [monthly?.memo]);
+
+  /* 定期支出の自動記録（現在月・記録日到来・未記録のものだけ追加） */
+  useEffect(() => {
+    if (!user || !txLoaded) return;
+    const now = new Date();
+    if (month !== getMonthString(now)) return;
+    const todayD = now.getDate();
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    (config.recurring || []).forEach(r => {
+      if (!r.id || !r.title) return;
+      const recDay = Math.min(Number(r.day) || 1, lastDay);
+      if (recDay > todayD) return;
+      const key = `${month}_${r.id}`;
+      if (recProcessedRef.current.has(key)) return;
+      if (txList.some(t => t.recurringId === r.id)) return;
+      recProcessedRef.current.add(key);
+      const dateStr = `${month}-${String(recDay).padStart(2, '0')}`;
+      addDoc(collection(db, 'users', user.uid, 'transactions'), {
+        date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
+        category: r.category || catNames[0] || '食費', paymentMethod: r.method || CASH,
+        isSpecial: false, fromSavings: false, recurringId: r.id,
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      }).then(() => showToast(`定期支出「${r.title}」を記録しました`)).catch(console.error);
+    });
+  }, [user, txLoaded, txList, config.recurring, month]);
+
+  /* 年間ビューのデータ取得（直近12ヶ月） */
+  useEffect(() => {
+    if (!user || activeTab !== 'analysis' || analysisView !== 'year' || yearData) return;
+    (async () => {
+      try {
+        const now = new Date();
+        const monthsArr = [];
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          monthsArr.push(getMonthString(d));
+        }
+        const startIso = new Date(`${monthsArr[0]}-01T00:00:00Z`).toISOString();
+        const txSnap = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', startIso)));
+        const spend = {}; monthsArr.forEach(m => { spend[m] = 0; });
+        txSnap.forEach(d => {
+          const t = d.data();
+          if (getSpendType(t) !== 'normal') return;
+          const mk = (t.date || '').slice(0, 7);
+          if (mk in spend) spend[mk] += Number(t.amount) || 0;
+        });
+        const mSnap = await getDocs(query(collection(db, 'users', user.uid, 'months'), where(documentId(), '>=', monthsArr[0]), where(documentId(), '<=', monthsArr[11])));
+        const save = {}; monthsArr.forEach(m => { save[m] = 0; });
+        mSnap.forEach(d => { if (d.id in save) save[d.id] = getSavingsTotal(normalizeMonthly(d.data())); });
+        setYearData({ months: monthsArr, spend, save });
+      } catch (e) { console.error(e); showToast('年間データの取得エラー'); }
+    })();
+  }, [user, activeTab, analysisView, yearData]);
 
   const S = useMemo(() => {
     const fc = monthly?.fixedCosts || [];
@@ -358,6 +430,7 @@ function AppMain() {
     setInCat(catNames[0] || '食費');
     setInMethod(methods[0] || CASH);
     setInSpendType('normal');
+    setInSavingsBucket('');
     setTxFormKey(k => k + 1);
   }, [catNames, methods]);
 
@@ -369,6 +442,7 @@ function AppMain() {
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
     setInSpendType(getSpendType(t));
+    setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
@@ -386,6 +460,7 @@ function AppMain() {
       date: toISODateSafe(inDate), amount, title: inTitle, category: inCat, paymentMethod: inMethod,
       isSpecial: inSpendType === 'special',
       fromSavings: inSpendType === 'savings',
+      savingsBucket: inSpendType === 'savings' ? (inSavingsBucket || null) : null,
       updatedAt: serverTimestamp()
     };
     try {
@@ -427,6 +502,11 @@ function AppMain() {
         const list = [...(config.templates || [])], item = { ...data, amount: toNumber(data.amount) };
         if (index === -1) list.unshift(item); else list[index] = item;
         await setDoc(cRef, { ...config, templates: list }, { merge: true });
+      } else if (type === 'recurring') {
+        const list = [...(config.recurring || [])];
+        const item = { ...data, amount: toNumber(data.amount), day: Math.min(31, Math.max(1, toNumber(data.day) || 1)), id: data.id || `rec_${Date.now()}` };
+        if (index === -1) list.unshift(item); else list[index] = item;
+        await setDoc(cRef, { ...config, recurring: list }, { merge: true });
       } else if (type === 'payment') {
         const list = [...(config.paymentMethods || [CASH])];
         if (index === -1) list.unshift(data.name); else list[index] = data.name;
@@ -447,6 +527,7 @@ function AppMain() {
       if (type === 'fixed') await setDoc(mRef, { fixedCosts: (monthly.fixedCosts || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'template') await setDoc(cRef, { ...config, templates: (config.templates || []).filter((_, i) => i !== index) }, { merge: true });
+      else if (type === 'recurring') await setDoc(cRef, { ...config, recurring: (config.recurring || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'payment') await setDoc(cRef, { ...config, paymentMethods: (config.paymentMethods || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'bill') {
         const nb = { ...(monthly.cardBills || {}) }, nd = { ...(monthly.cardDueDates || {}) };
@@ -508,6 +589,7 @@ function AppMain() {
     { id: 'fixed', label: '固定費管理', icon: <CreditCard size={17} /> },
     { id: 'category', label: 'カテゴリ予算', icon: <Tags size={17} /> },
     { id: 'template', label: 'テンプレート', icon: <Zap size={17} /> },
+    { id: 'recurring', label: '定期支出', icon: <Repeat size={17} /> },
     { id: 'payment', label: '支払方法', icon: <Wallet size={17} /> },
     { id: 'faq', label: 'ヘルプ・FAQ', icon: <HelpCircle size={17} /> },
   ];
@@ -677,10 +759,39 @@ function AppMain() {
                     <div className="border-b border-white/[0.04]" />
                     <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
                     <div className="border-b border-white/[0.04]" />
-                    <Row label="先取り累計" value={`¥${Number(savingsBalance || 0).toLocaleString()}`} />
-                    {savingsWithdrawn > 0 && (
-                      <div className="px-4 pb-3 -mt-1">
-                        <p className="text-[11px] text-[#48484A]">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCumSavingsExpanded(v => !v)}
+                      className="w-full flex items-center justify-between px-4 py-3.5 gap-4 active:bg-white/[0.03] transition-colors"
+                    >
+                      <span className="text-[14px] text-[#EBEBF5]/80">先取り累計</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-white text-[14px] font-medium tabular-nums">¥{Number(savingsBalance || 0).toLocaleString()}</span>
+                        {cumSavingsExpanded
+                          ? <ChevronUp size={13} className="text-[#48484A]" />
+                          : <ChevronDown size={13} className="text-[#48484A]" />}
+                      </div>
+                    </button>
+                    {cumSavingsExpanded && (
+                      <div className="px-4 pb-3 space-y-2">
+                        {Object.keys(savingsBreakdown).map(name => {
+                          const balance = (savingsBreakdown[name] || 0) - (withdrawnByBucket[name] || 0);
+                          return (
+                            <div key={name} className="flex items-center justify-between pl-3">
+                              <span className="text-[12px] text-[#48484A]">{name}</span>
+                              <span className={`text-[12px] tabular-nums ${balance < 0 ? 'text-[#FF453A]' : 'text-[#636366]'}`}>¥{balance.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                        {(withdrawnByBucket['指定なし'] || 0) > 0 && (
+                          <div className="flex items-center justify-between pl-3">
+                            <span className="text-[12px] text-[#48484A]">取り崩し（指定なし）</span>
+                            <span className="text-[12px] text-[#B8791E] tabular-nums">−¥{withdrawnByBucket['指定なし'].toLocaleString()}</span>
+                          </div>
+                        )}
+                        {savingsWithdrawn > 0 && (
+                          <p className="pl-3 pt-1 text-[11px] text-[#48484A]">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -757,7 +868,8 @@ function AppMain() {
                                     <span className="text-[#3A3A3C]">·</span>
                                     <span className="text-[11px] text-[#48484A]">{t.paymentMethod}</span>
                                     {st === 'special' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium">特別費</span></>)}
-                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#B8791E] font-medium">貯金から</span></>)}
+                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#B8791E] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
+                                    {t.recurringId && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium flex items-center gap-0.5"><Repeat size={9} />定期</span></>)}
                                   </div>
                                 </div>
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
@@ -800,6 +912,77 @@ function AppMain() {
           {/* ANALYSIS */}
           {activeTab === 'analysis' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-32 space-y-5">
+              {/* 月間/年間 切替 */}
+              <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-1">
+                {[['month', '月間'], ['year', '年間']].map(([v, l]) => (
+                  <button key={v} onClick={() => setAnalysisView(v)}
+                    className={`flex-1 h-9 rounded-[10px] text-[13px] font-medium transition-colors ${analysisView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* 年間ビュー */}
+              {analysisView === 'year' && (
+                !yearData ? (
+                  <p className="text-[13px] text-[#48484A] text-center py-10">読み込み中...</p>
+                ) : (() => {
+                  const maxSpend = Math.max(...yearData.months.map(m => yearData.spend[m]), 1);
+                  const totalSpend = yearData.months.reduce((s, m) => s + yearData.spend[m], 0);
+                  const totalSave = yearData.months.reduce((s, m) => s + yearData.save[m], 0);
+                  const activeMonths = yearData.months.filter(m => yearData.spend[m] > 0).length || 1;
+                  return (
+                    <>
+                      <div>
+                        <Label>月別支出（直近12ヶ月）</Label>
+                        <Card className="p-5">
+                          <div className="flex items-end gap-1.5 h-32">
+                            {yearData.months.map(m => {
+                              const h = Math.max(2, (yearData.spend[m] / maxSpend) * 100);
+                              const isCur = m === getMonthString(new Date());
+                              return (
+                                <div key={m} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                                  <div className={`w-full rounded-t-[4px] ${isCur ? 'bg-[#0A84FF]' : 'bg-white/25'}`} style={{ height: `${h}%` }} />
+                                  <span className="text-[9px] text-[#48484A] tabular-nums">{Number(m.split('-')[1])}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </Card>
+                      </div>
+                      <div>
+                        <Label>年間サマリー</Label>
+                        <Card>
+                          <Row label="年間支出合計" value={`¥${totalSpend.toLocaleString()}`} />
+                          <div className="border-b border-white/[0.04] mx-4" />
+                          <Row label="月平均支出" value={`¥${Math.round(totalSpend / activeMonths).toLocaleString()}`} />
+                          <div className="border-b border-white/[0.04] mx-4" />
+                          <Row label="年間先取り合計" value={`¥${totalSave.toLocaleString()}`} accent />
+                        </Card>
+                      </div>
+                      <div>
+                        <Label>月別の内訳</Label>
+                        <Card>
+                          {yearData.months.slice().reverse().map((m, i, arr) => (
+                            <div key={m}>
+                              <div className="px-4 py-3 flex items-center justify-between gap-3">
+                                <span className="text-[13px] text-[#8E8E93] shrink-0">{formatMonthJP(m)}</span>
+                                <div className="flex gap-4 tabular-nums">
+                                  <span className="text-[13px] text-white">¥{yearData.spend[m].toLocaleString()}</span>
+                                  <span className="text-[12px] text-[#636366] w-20 text-right">積立 ¥{yearData.save[m].toLocaleString()}</span>
+                                </div>
+                              </div>
+                              {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                            </div>
+                          ))}
+                        </Card>
+                      </div>
+                    </>
+                  );
+                })()
+              )}
+
+              {analysisView === 'month' && (<>
               <Card>
                 <div className="p-5 space-y-5">
                   <div className="flex items-start justify-between gap-3">
@@ -898,6 +1081,7 @@ function AppMain() {
                   </div>
                 </Card>
               )}
+              </>)}
             </div>
           )}
 
@@ -1068,6 +1252,24 @@ function AppMain() {
                   </div></Card>
                 </div>
               )}
+              {settingTab === 'recurring' && (
+                <div>
+                  <AddButton label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1 }, -1)} />
+                  <Card><div>
+                    {(config?.recurring || []).map((r, i, arr) => (
+                      <div key={r.id || i}>
+                        <SettingsRow onClick={() => openEdit('recurring', r, i)}
+                          left={<div className="flex flex-col"><span className="text-[14px] text-white">{r.title}</span><span className="text-[11px] text-[#48484A]">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
+                          right={`¥${Number(r.amount || 0).toLocaleString()}`} />
+                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                      </div>
+                    ))}
+                    {(config?.recurring || []).length === 0 && (
+                      <p className="text-[12px] text-[#48484A] text-center py-6 px-4">サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</p>
+                    )}
+                  </div></Card>
+                </div>
+              )}
               {settingTab === 'payment' && (
                 <div>
                   <AddButton label="支払方法を追加" onClick={() => openEdit('payment', { name: '' }, -1)} />
@@ -1109,7 +1311,7 @@ function AppMain() {
               <p className="text-[40px] font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</p>
             </div>
             <Card>
-              {[['内容', viewingTx.title], ['日付', formatFullDateJP(viewingTx.date)], ['支払方法', viewingTx.paymentMethod], ['種別', getSpendType(viewingTx) === 'savings' ? '貯金から' : getSpendType(viewingTx) === 'special' ? '特別費' : '通常']].map(([l, v], idx, arr) => (
+              {[['内容', viewingTx.title], ['日付', formatFullDateJP(viewingTx.date)], ['支払方法', viewingTx.paymentMethod], ['種別', getSpendType(viewingTx) === 'savings' ? `貯金から${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : ''}` : getSpendType(viewingTx) === 'special' ? '特別費' : '通常']].map(([l, v], idx, arr) => (
                 <div key={l}>
                   <div className="px-4 py-3 flex justify-between gap-4">
                     <span className="text-[12px] text-[#8E8E93]">{l}</span>
@@ -1214,9 +1416,25 @@ function AppMain() {
                   ))}
                 </div>
                 {inSpendType === 'savings' && (
-                  <p className="mt-2 ml-1 text-[11px] text-[#B8791E] flex items-center gap-1.5">
-                    <PiggyBank size={12} /> 可変費には含まれず、先取り累計から差し引かれます
-                  </p>
+                  <div className="mt-2 space-y-2">
+                    <p className="ml-1 text-[11px] text-[#B8791E] flex items-center gap-1.5">
+                      <PiggyBank size={12} /> 可変費には含まれず、先取り累計から差し引かれます
+                    </p>
+                    {bucketOptions.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                        <button type="button" onClick={() => setInSavingsBucket('')}
+                          className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === '' ? 'bg-[#B8791E] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                          指定なし
+                        </button>
+                        {bucketOptions.map(name => (
+                          <button key={name} type="button" onClick={() => setInSavingsBucket(name)}
+                            className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#B8791E] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
               {!editingTx && config.templates.length > 0 && (
@@ -1273,6 +1491,7 @@ function AppMain() {
             {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'fixed' && <EditFormFixed editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
+            {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
               {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
