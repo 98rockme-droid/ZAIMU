@@ -710,7 +710,7 @@ function AppMain() {
 
               <div className="flex-1 px-4 pt-1 pb-28 overflow-hidden flex flex-col">
                 {logView === 'list' ? (
-                  <Card className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 flex flex-col overflow-hidden">
                     {filteredTx.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center text-[13px] text-[#48484A]">履歴がありません</div>
                     ) : (
@@ -721,7 +721,7 @@ function AppMain() {
                           const st = getSpendType(t);
                           return (
                             <div key={t.id}>
-                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
+                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-1 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer rounded-xl">
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
                                   <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
@@ -739,13 +739,13 @@ function AppMain() {
                                 </div>
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
                               </div>
-                              {idx < filteredTx.length - 1 && <div className="h-px bg-white/[0.04] mx-4" />}
+                              {idx < filteredTx.length - 1 && <div className="h-px bg-white/[0.04]" />}
                             </div>
                           );
                         })}
                       </div>
                     )}
-                  </Card>
+                  </div>
                 ) : (
                   <Card className="flex-1 flex flex-col overflow-hidden p-4">
                     <div className="grid grid-cols-7 text-center mb-2">
@@ -807,22 +807,28 @@ function AppMain() {
                   ) : <p className="text-[13px] text-[#48484A] text-center py-6">データがありません</p>}
                 </div>
               </Card>
-              <Card>
-                <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
-                <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
-                <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
-              </Card>
-              <Card>
-                <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
-                <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
-                <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="固定費合計" value={`¥${S.fTotal.toLocaleString()}`} />
-                <div className="border-b border-white/[0.04] mx-4" />
-                <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
-              </Card>
+              <div>
+                <Label>予算の進捗</Label>
+                <Card>
+                  <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
+                </Card>
+              </div>
+              <div>
+                <Label>支出の内訳</Label>
+                <Card>
+                  <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="固定費合計" value={`¥${S.fTotal.toLocaleString()}`} />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
+                </Card>
+              </div>
               {activeCats.length > 0 && (
                 <div>
                   <Label>カテゴリ予算</Label>
