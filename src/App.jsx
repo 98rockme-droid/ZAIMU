@@ -177,12 +177,12 @@ function AppMain() {
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
     ]},
     { category: 'ホーム画面の見方', items: [
-      { q: '今月あと使える可変費（カード）', a: 'カードであとどれだけ使えるかを表します。現金支出はここには含まれず、現金残高で管理します。' },
-      { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。' },
-      { q: '今月の予算（カード）', a: '先取り後の残りから固定費と月初のスタート現金を引いた、カードで自由に使える予算の上限です。' },
-      { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。' },
-      { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。' },
-      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。計算式: 手取り給与 − カード支出 − 固定費合計 − 先取り合計` }
+      { q: '今月あと使える可変費（カード）', a: 'カードであとどれだけ使えるかを表します。現金支出はここには含まれず、現金残高で管理します。', formula: '今月の予算（カード） − カード支出' },
+      { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。', formula: '手取り給与 − 先取り合計' },
+      { q: '今月の予算（カード）', a: '先取り後の残りから固定費と月初のスタート現金を引いた、カードで自由に使える予算の上限です。', formula: '先取り後の残り − 固定費合計 − 月初のスタート現金' },
+      { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。', formula: '月初のスタート現金 − 現金支出' },
+      { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。', formula: '先取りの積立合計 − 貯金からの支払い合計' },
+      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。`, formula: '手取り給与 − カード支出 − 固定費合計 − 先取り合計' }
     ]},
     { category: '支出の種別', items: [
       { q: '通常と特別費の違いは？', a: '通常は今月の可変費に含まれる支出です。特別費は冠婚葬祭など臨時の支出で、可変費とは別枠で集計されます。' },
@@ -197,7 +197,7 @@ function AppMain() {
   const filteredFaq = useMemo(() => {
     if (!faqQ) return FAQ;
     const q = faqQ.toLowerCase();
-    return FAQ.map(s => ({ ...s, items: s.items.filter(i => i.q.toLowerCase().includes(q) || i.a.toLowerCase().includes(q)) })).filter(s => s.items.length);
+    return FAQ.map(s => ({ ...s, items: s.items.filter(i => i.q.toLowerCase().includes(q) || i.a.toLowerCase().includes(q) || (i.formula || '').toLowerCase().includes(q)) })).filter(s => s.items.length);
   }, [faqQ, FAQ]);
 
   const showToast = msg => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 2500); };
@@ -933,7 +933,17 @@ function AppMain() {
                                   <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
                                   <ChevronDown size={14} className={`text-[#48484A] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
                                 </div>
-                                {expandedFaq === `${si}-${ii}` && <p className="mt-3 text-[12px] text-[#8E8E93] leading-relaxed pl-6">{item.a}</p>}
+                                {expandedFaq === `${si}-${ii}` && (
+                                  <div className="mt-3 pl-6 space-y-2">
+                                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">{item.a}</p>
+                                    {item.formula && (
+                                      <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px] border border-white/[0.06]">
+                                        <p className="text-[10px] text-[#48484A] mb-1">計算式</p>
+                                        <p className="text-[12px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               {ii < sec.items.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
                             </div>
