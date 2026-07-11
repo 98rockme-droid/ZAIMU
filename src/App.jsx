@@ -87,7 +87,7 @@ const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
     onClick={onClose}
   >
     <div
-      className="w-full sm:max-w-md bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] shadow-2xl flex flex-col overflow-hidden overflow-x-hidden max-h-[92vh]"
+      className="w-full sm:max-w-md bg-[#1C1C1E]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-t-3xl sm:rounded-3xl border border-white/[0.12] shadow-2xl flex flex-col overflow-hidden overflow-x-hidden max-h-[92vh]"
       onClick={e => e.stopPropagation()}
     >
       {children}
@@ -530,7 +530,7 @@ function AppMain() {
       <div className="w-full max-w-md h-full flex flex-col bg-black mx-auto relative">
 
         {/* HEADER */}
-        <header className="flex-none h-14 px-4 flex items-center justify-between bg-black/90 backdrop-blur-xl border-b border-white/[0.06] z-50">
+        <header className="flex-none h-14 px-4 flex items-center justify-between bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50">
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <>
               <button onClick={() => setSettingTab('menu')} className="p-2 text-[#8E8E93]"><ArrowLeft size={18} /></button>
@@ -1052,12 +1052,12 @@ function AppMain() {
           )}
         </main>
 
-        {/* FOOTER */}
-        <footer className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto bg-black/90 backdrop-blur-xl border-t border-white/[0.06] flex items-center justify-around px-4 pt-2 pb-6">
+        {/* FOOTER — Liquid Glass風フローティングバー */}
+        <footer className="fixed bottom-5 left-5 right-5 z-50 max-w-[400px] mx-auto rounded-[30px] bg-white/[0.08] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.12] shadow-2xl shadow-black/40 flex items-center justify-around px-3 py-2">
           {[[<Home size={22} />, 'home'], [<History size={22} />, 'log']].map(([icon, tab]) => (
             <NavButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} icon={icon} />
           ))}
-          <button onClick={openNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-[16px] flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/20">
+          <button onClick={openNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/30">
             <Plus size={20} />
           </button>
           {[[<BarChart3 size={22} />, 'analysis'], [<Settings size={22} />, 'settings']].map(([icon, tab]) => (
@@ -1100,7 +1100,7 @@ function AppMain() {
       {/* 計算機モーダル */}
       {showCalc && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center sm:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setShowCalc(false)}>
-          <div className="w-full sm:max-w-xs bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl border border-white/[0.08] p-5 pb-8" onClick={e => e.stopPropagation()}>
+          <div className="w-full sm:max-w-xs bg-[#1C1C1E]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-t-3xl sm:rounded-3xl border border-white/[0.12] p-5 pb-8" onClick={e => e.stopPropagation()}>
             <CalculatorPad initialValue={calcInit} onConfirm={val => { if (calcCb) calcCb(val); setShowCalc(false); }} />
           </div>
         </div>
