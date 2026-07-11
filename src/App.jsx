@@ -182,7 +182,8 @@ function AppMain() {
       { q: '今月の予算（カード）', a: '先取り後の残りから固定費と月初のスタート現金を引いた、カードで自由に使える予算の上限です。', formula: '先取り後の残り − 固定費合計 − 月初のスタート現金' },
       { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。', formula: '月初のスタート現金 − 現金支出' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。', formula: '先取りの積立合計 − 貯金からの支払い合計' },
-      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。`, formula: '手取り給与 − カード支出 − 固定費合計 − 先取り合計' }
+      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。`, formula: '手取り給与 − カード支出 − 固定費合計 − 先取り合計' },
+      { q: '今日までの目安とは？', a: '予算を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。実際の使用がこれ以下なら良いペースです。', formula: '今月の予算（カード） × 経過日数 ÷ 月の日数' }
     ]},
     { category: '支出の種別', items: [
       { q: '通常と特別費の違いは？', a: '通常は今月の可変費に含まれる支出です。特別費は冠婚葬祭など臨時の支出で、可変費とは別枠で集計されます。' },
@@ -515,6 +516,15 @@ function AppMain() {
   const today = getTodayLocal();
   const savingsBalance = savingsTotal - savingsWithdrawn;
 
+  // 理想ペース（今日までの経過日数ベース）
+  const curMonthStr = getMonthString(new Date());
+  const isCurrentMonth = month === curMonthStr;
+  const daysInViewMonth = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).getDate(); })();
+  const idealPct = isCurrentMonth ? Math.min(100, (today.d / daysInViewMonth) * 100) : (month < curMonthStr ? 100 : 0);
+  const idealSpend = Math.round(S.varBudget * idealPct / 100);
+  const paceDiff = S.spCard - idealSpend;
+  const showPaceMarker = isCurrentMonth && idealPct > 2 && idealPct < 98;
+
   const SPEND_TYPES = [
     { value: 'normal', label: '通常' },
     { value: 'special', label: '特別費' },
@@ -582,6 +592,14 @@ function AppMain() {
                         </p>
                         <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.varBudget.toLocaleString()}</p>
                       </div>
+                      {isCurrentMonth && S.varBudget > 0 && (
+                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
+                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
+                          <span className={`text-[11px] font-medium tabular-nums ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
+                            {paceDiff <= 0 ? `ペース内 −¥${Math.abs(paceDiff).toLocaleString()}` : `超過 +¥${paceDiff.toLocaleString()}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <Row label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
@@ -644,8 +662,13 @@ function AppMain() {
                               {noTarget ? '未設定' : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`}
                             </span>
                           </div>
-                          <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-[#FF453A]' : 'bg-white/60'}`} style={{ width: `${pace}%` }} />
+                          <div className="relative">
+                            <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-[#FF453A]' : 'bg-white/60'}`} style={{ width: `${pace}%` }} />
+                            </div>
+                            {showPaceMarker && !noTarget && (
+                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
+                            )}
                           </div>
                         </div>
                       ))}
