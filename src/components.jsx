@@ -362,6 +362,48 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
   </div>
 );
 
+export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator, categoryNames, paymentMethods }) => (
+  <div className="space-y-4">
+    <div>
+      <FieldLabel>内容</FieldLabel>
+      <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
+        placeholder="例: Netflix" className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors" />
+    </div>
+    <div>
+      <FieldLabel>金額</FieldLabel>
+      <AmountInputSimple
+        value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
+        onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, amount: v } }); }}
+        openCalculator={() => openCalculator(editingItem.data.amount ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, amount: String(val) } })))}
+      />
+    </div>
+    <div>
+      <FieldLabel>毎月の記録日</FieldLabel>
+      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-12 px-4 w-1/2">
+        <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
+          className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+        <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
+      </div>
+    </div>
+    <div className="relative">
+      <FieldLabel>カテゴリ</FieldLabel>
+      <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })}
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+    </div>
+    <div className="relative">
+      <FieldLabel>支払方法</FieldLabel>
+      <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
+        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+    </div>
+  </div>
+);
+
 export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>
