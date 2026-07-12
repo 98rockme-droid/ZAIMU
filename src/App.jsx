@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc,
-  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId
+  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -1350,8 +1350,7 @@ function AppMain() {
                 try {
                   await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id));
                   if (isRec) {
-                    const skipped = [...new Set([...(monthly.skippedRecurring || []), viewingTx.recurringId])];
-                    await setDoc(doc(db, 'users', user.uid, 'months', month), { skippedRecurring: skipped }, { merge: true });
+                    await setDoc(doc(db, 'users', user.uid, 'months', month), { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
                   }
                   setViewingTx(null); showToast('削除しました');
                 } catch (e) { console.error(e); showToast('エラー'); }
