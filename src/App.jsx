@@ -370,11 +370,11 @@ function AppMain() {
     // 今月の予算 = 手取り − 先取り − スタート現金（固定費は実支出として計上）
     const varBudget = lifeBudget - cashBudget;
     const varRemain = varBudget - spCard;
-    // 定期支出（固定費）: 未記録分 = 今後の固定費予定、記録済み分 = 実績
-    const recurringList = config?.recurring || [];
-    const recTotalAll = recurringList.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    // 定期支出（固定費）: カード払いのみ予算計算の対象（現金払いは現金残高の軸で管理）
+    const recCard = (config?.recurring || []).filter(r => (r.method || CASH) !== CASH);
+    const recTotalAll = recCard.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const recordedIds = new Set(norm.filter(t => t.recurringId).map(t => t.recurringId));
-    const pendingFixed = recurringList.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const pendingFixed = recCard.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const recRecorded = norm.filter(t => t.recurringId && t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     // 実質自由 = 残り全体 − 固定費予定
     const freeBudget = varBudget - recTotalAll;
@@ -621,7 +621,6 @@ function AppMain() {
     { id: 'faq', label: 'ヘルプ・FAQ', icon: <HelpCircle size={17} /> },
   ];
   const menuTitle = MENU.find(m => m.id === settingTab)?.label || '設定';
-  const freePct = S.freeBudget > 0 ? Math.min(100, (S.freeSpent / S.freeBudget) * 100) : 0;
   const today = getTodayLocal();
   const savingsBalance = savingsTotal - savingsWithdrawn;
 
@@ -691,24 +690,18 @@ function AppMain() {
                   <Label>今月</Label>
                   <Card>
                     <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
-                      <p className="text-[11px] text-[#8E8E93] mb-1">
-                        実質あと使える（カード）
-                        <span className="ml-1.5 text-[#48484A]">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span>
+                      <p className="text-[11px] text-[#8E8E93] mb-1">実質あと使える（カード）</p>
+                      <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                        ¥{S.freeRemain.toLocaleString()}
                       </p>
-                      <div className="flex items-baseline gap-2 mt-1.5">
-                        <p className={`text-[36px] font-semibold tracking-tight leading-none ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                          ¥{S.freeRemain.toLocaleString()}
-                        </p>
-                        <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.freeBudget.toLocaleString()}</p>
-                      </div>
-                      <p className="mt-2 text-[11px] text-[#48484A] tabular-nums">
-                        残り全体 ¥{S.varRemain.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
+                      <p className="mt-2.5 text-[11px] text-[#48484A] tabular-nums">
+                        予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
                       </p>
                       {isCurrentMonth && S.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
-                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
-                          <span className={`text-[11px] font-medium tabular-nums ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
-                            {paceDiff <= 0 ? `ペース内 −¥${Math.abs(paceDiff).toLocaleString()}` : `超過 +¥${paceDiff.toLocaleString()}`}
+                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}<span className="text-[#48484A] ml-1">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span></span>
+                          <span className={`text-[11px] font-medium tabular-nums shrink-0 ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
+                            {paceDiff <= 0 ? `−¥${Math.abs(paceDiff).toLocaleString()}` : `+¥${paceDiff.toLocaleString()}`}
                           </span>
                         </div>
                       )}
@@ -758,15 +751,15 @@ function AppMain() {
                   <Card>
                     <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
-                        { label: '実質自由（カード）', spent: S.freeSpent, remain: S.freeRemain, target: S.freeBudget, pace: freePct, over: S.freeRemain < 0, noTarget: false },
+                        { label: '実質自由（カード）', subText: `（使用+予定 ¥${(S.spCard + S.pendingFixed).toLocaleString()}）`, spent: S.spCard + S.pendingFixed, remain: S.freeRemain, target: S.varBudget, pace: S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0, over: S.freeRemain < 0, noTarget: false },
                         { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
                         { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
-                      ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
+                      ].map(({ label, subText, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
                           <div className="flex justify-between items-center mb-1.5">
                             <span className="text-[11px] text-[#8E8E93]">
                               {label}
-                              <span className="text-[#48484A] ml-1">（使用 ¥{spent.toLocaleString()}）</span>
+                              <span className="text-[#48484A] ml-1">{subText || `（使用 ¥${spent.toLocaleString()}）`}</span>
                             </span>
                             <span className="text-[11px] text-[#8E8E93] tabular-nums">
                               {noTarget ? '未設定' : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`}
