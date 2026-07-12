@@ -68,7 +68,8 @@ const normalizeMonthly = (data) => {
     salary: d.salary || 0, budget: d.budget || 0,
     cashBudget: d.cashBudget || 0, cardBills: bills, fixedCosts: d.fixedCosts || [],
     catBudgets: d.catBudgets || {}, cardDueDates: dues, savings: d.savings || 0,
-    savingsBuckets: d.savingsBuckets || [], memo: d.memo || ''
+    savingsBuckets: d.savingsBuckets || [], memo: d.memo || '',
+    skippedRecurring: d.skippedRecurring || []
   };
 };
 const normalizeConfig = data => ({
@@ -156,6 +157,7 @@ function AppMain() {
   const [prevTxList, setPrevTxList] = useState([]);
   const prevFetchRef = useRef(null);
   const [monthly, setMonthly] = useState(normalizeMonthly({}));
+  const [mLoaded, setMLoaded] = useState(false);
   const [config, setConfig] = useState(normalizeConfig({}));
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [savingsWithdrawn, setSavingsWithdrawn] = useState(0);
@@ -204,6 +206,7 @@ function AppMain() {
     ]},
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など毎月決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
+      { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
       { q: '来月の設定はどうすればいいですか？', a: '設定タブの「先月の設定をコピー」で引き継げます。' },
       { q: 'データのバックアップはできますか？', a: '設定タブのCSVを書き出すから全取引データをダウンロードできます。' }
     ]}
@@ -256,8 +259,9 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
+    setMLoaded(false);
     return onSnapshot(doc(db, 'users', user.uid, 'months', month),
-      s => setMonthly(normalizeMonthly(s.exists() ? s.data() : {})), console.error);
+      s => { setMonthly(normalizeMonthly(s.exists() ? s.data() : {})); if (!s.metadata.fromCache) setMLoaded(true); }, console.error);
   }, [month, user]);
 
   useEffect(() => {
@@ -307,15 +311,17 @@ function AppMain() {
 
   useEffect(() => setMemoText(monthly?.memo || ''), [monthly?.memo]);
 
-  /* 定期支出の自動記録（現在月・記録日到来・未記録のものだけ追加） */
+  /* 定期支出の自動記録（現在月・記録日到来・未記録・未スキップのものだけ追加） */
   useEffect(() => {
-    if (!user || !txLoaded) return;
+    if (!user || !txLoaded || !mLoaded) return;
     const now = new Date();
     if (month !== getMonthString(now)) return;
     const todayD = now.getDate();
     const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const skipped = monthly.skippedRecurring || [];
     (config.recurring || []).forEach(r => {
       if (!r.id || !r.title) return;
+      if (skipped.includes(r.id)) return;
       const recDay = Math.min(Number(r.day) || 1, lastDay);
       if (recDay > todayD) return;
       const key = `${month}_${r.id}`;
@@ -330,7 +336,7 @@ function AppMain() {
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       }).then(() => showToast(`定期支出「${r.title}」を記録しました`)).catch(console.error);
     });
-  }, [user, txLoaded, txList, config.recurring, month]);
+  }, [user, txLoaded, mLoaded, txList, config.recurring, month, monthly.skippedRecurring]);
 
   /* 年間ビューのデータ取得（直近12ヶ月） */
   useEffect(() => {
@@ -1334,8 +1340,21 @@ function AppMain() {
             </Card>
             <div className="flex gap-2">
               <DangerIconButton onClick={async () => {
-                const ok = await confirm({ title: 'この支出を削除しますか？', confirmLabel: '削除する', danger: true });
-                if (ok) { await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id)); setViewingTx(null); showToast('削除しました'); }
+                const isRec = !!viewingTx.recurringId;
+                const ok = await confirm({
+                  title: 'この支出を削除しますか？',
+                  message: isRec ? '定期支出の今月分はスキップされます（来月から自動記録が再開されます）。' : undefined,
+                  confirmLabel: '削除する', danger: true
+                });
+                if (!ok) return;
+                try {
+                  await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id));
+                  if (isRec) {
+                    const skipped = [...new Set([...(monthly.skippedRecurring || []), viewingTx.recurringId])];
+                    await setDoc(doc(db, 'users', user.uid, 'months', month), { skippedRecurring: skipped }, { merge: true });
+                  }
+                  setViewingTx(null); showToast('削除しました');
+                } catch (e) { console.error(e); showToast('エラー'); }
               }}><Trash2 size={17} /></DangerIconButton>
               <PrimaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); startEdit(tx); }}><Pencil size={14} /> 編集する</PrimaryButton>
             </div>
