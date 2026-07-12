@@ -17,7 +17,7 @@ import {
   SettingsRow, CalculatorPad, useConfirm, toNumber,
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
-  EditFormCategory, EditFormFixed, EditFormTemplate, EditFormPayment, EditFormRecurring
+  EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring
 } from './components.jsx';
 
 const firebaseConfig = {
@@ -186,17 +186,18 @@ function AppMain() {
       { q: 'クレジットカード利用目安', a: 'カードの使いすぎ防止の目安です。ホーム画面の進捗表示に使われます。' },
       { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元・進捗の現金目安になり、今月の予算（カード）からも差し引かれます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
-      { q: '固定費管理', a: '固定費を引いた残りが今月の予算になります。' },
+      { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
     ]},
     { category: 'ホーム画面の見方', items: [
-      { q: '今月あと使える可変費（カード）', a: 'カードであとどれだけ使えるかを表します。現金支出はここには含まれず、現金残高で管理します。', formula: '今月の予算（カード） − カード支出' },
+      { q: '実質あと使える（カード）', a: '残り全体から、まだ記録されていない固定費（定期支出）の予定額を差し引いた、本当に自由に使える金額です。', formula: '今月の予算（カード） − カード支出 − 固定費予定' },
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。', formula: '手取り給与 − 先取り合計' },
-      { q: '今月の予算（カード）', a: '先取り後の残りから固定費と月初のスタート現金を引いた、カードで自由に使える予算の上限です。', formula: '先取り後の残り − 固定費合計 − 月初のスタート現金' },
+      { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金を引いた、カードで使える予算の上限です。固定費もこの中から実支出として記録されます。', formula: '先取り後の残り − 月初のスタート現金' },
+      { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
       { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。', formula: '月初のスタート現金 − 現金支出' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。', formula: '先取りの積立合計 − 貯金からの支払い合計' },
-      { q: `${nextMn}月の着地予想`, a: `今のペースを続けた場合の${nextMn}月時点の残高シミュレーションです。`, formula: '手取り給与 − カード支出 − 固定費合計 − 先取り合計' },
-      { q: '今日までの目安とは？', a: '予算を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。実際の使用がこれ以下なら良いペースです。', formula: '今月の予算（カード） × 経過日数 ÷ 月の日数' }
+      { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る金額のシミュレーションです。実質あと使える額と現金残高の合計です。`, formula: '実質あと使える（カード） + 現金残高' },
+      { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
     ]},
     { category: '支出の種別', items: [
       { q: '通常と特別費の違いは？', a: '通常は今月の可変費に含まれる支出です。特別費は冠婚葬祭など臨時の支出で、可変費とは別枠で集計されます。' },
@@ -356,10 +357,6 @@ function AppMain() {
   }, [user, activeTab, analysisView, yearData]);
 
   const S = useMemo(() => {
-    const fc = monthly?.fixedCosts || [];
-    const fCash = fc.filter(f => !f.method || f.method === CASH).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const fCard = fc.filter(f => f.method && f.method !== CASH).reduce((s, i) => s + (Number(i.amount) || 0), 0);
-    const fTotal = fCash + fCard;
     const salary = Number(monthly?.salary) || 0;
     const cashBudget = Number(monthly?.cashBudget) || 0;
     const norm = txList.filter(t => getSpendType(t) === 'normal');
@@ -370,8 +367,20 @@ function AppMain() {
     const cardTarget = Number(monthly?.budget) > 0 ? Number(monthly?.budget) : 100000;
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
-    const varBudget = lifeBudget - fTotal - cashBudget;
+    // 今月の予算 = 手取り − 先取り − スタート現金（固定費は実支出として計上）
+    const varBudget = lifeBudget - cashBudget;
     const varRemain = varBudget - spCard;
+    // 定期支出（固定費）: 未記録分 = 今後の固定費予定、記録済み分 = 実績
+    const recurringList = config?.recurring || [];
+    const recTotalAll = recurringList.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const recordedIds = new Set(norm.filter(t => t.recurringId).map(t => t.recurringId));
+    const pendingFixed = recurringList.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const recRecorded = norm.filter(t => t.recurringId && t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    // 実質自由 = 残り全体 − 固定費予定
+    const freeBudget = varBudget - recTotalAll;
+    const freeSpent = spCard - recRecorded;
+    const freeRemain = varRemain - pendingFixed;
+    const cashRemain = cashBudget - spCash;
     const cats = norm.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const catBudSum = (config?.categories || []).reduce((s, c) => s + (monthly?.catBudgets?.[c.name] || 0), 0);
     const spSpecial = txList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -380,8 +389,9 @@ function AppMain() {
     return {
       cardTarget, cashBudget,
       cardPace: getPace(spCard, cardTarget), cashPace: getPace(spCash, cashBudget),
-      cashRemain: cashBudget - spCash, projCash: salary - spCard - fTotal - savTotal,
-      fTotal, fCash, fCard, catBudSum, savTotal, lifeBudget, varBudget, varRemain,
+      cashRemain, projCash: freeRemain + cashRemain,
+      catBudSum, savTotal, lifeBudget, varBudget, varRemain,
+      pendingFixed, recTotalAll, recRecorded, freeBudget, freeSpent, freeRemain,
       cats, spent, prevSpent: normPrev.reduce((s, t) => s + (Number(t.amount) || 0), 0),
       spCard, spCash,
       daily: norm.reduce((a, t) => { if (!t.date) return a; const d = new Date(t.date); if (isNaN(d)) return a; a[d.getUTCDate()] = (a[d.getUTCDate()] || 0) + (Number(t.amount) || 0); return a; }, {}),
@@ -489,10 +499,6 @@ function AppMain() {
         const list = [...buckets]; const item = { id: data.id || `sb_${Date.now()}`, name: data.name || '', amount: toNumber(data.amount) };
         if (index === -1) list.unshift(item); else list[index] = item;
         await setDoc(mRef, { savingsBuckets: list, savings: list.reduce((s, b) => s + (Number(b.amount) || 0), 0) }, { merge: true });
-      } else if (type === 'fixed') {
-        const list = [...(monthly.fixedCosts || [])], item = { ...data, amount: toNumber(data.amount) };
-        if (index === -1) list.unshift({ ...item, id: Date.now() }); else list[index] = { ...list[index], ...item };
-        await setDoc(mRef, { fixedCosts: list }, { merge: true });
       } else if (type === 'category') {
         const list = [...(config.categories || [])];
         if (index === -1) list.unshift({ name: data.name }); else list[index] = { name: data.name };
@@ -524,8 +530,7 @@ function AppMain() {
     const mRef = doc(db, 'users', user.uid, 'months', month);
     const cRef = doc(db, 'users', user.uid, 'settings', 'config');
     try {
-      if (type === 'fixed') await setDoc(mRef, { fixedCosts: (monthly.fixedCosts || []).filter((_, i) => i !== index) }, { merge: true });
-      else if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
+      if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'template') await setDoc(cRef, { ...config, templates: (config.templates || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'recurring') await setDoc(cRef, { ...config, recurring: (config.recurring || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'payment') await setDoc(cRef, { ...config, paymentMethods: (config.paymentMethods || []).filter((_, i) => i !== index) }, { merge: true });
@@ -558,6 +563,29 @@ function AppMain() {
     } catch { showToast('エラー'); }
   };
 
+  /* 旧・固定費リストを定期支出へ一括移行 */
+  const migrateFixed = async () => {
+    const list = monthly.fixedCosts || [];
+    if (!list.length) return;
+    const ok = await confirm({ title: '固定費を定期支出へ移行しますか？', message: `${list.length}件をコピーします。記録日（初期値: 1日）はあとから編集できます。`, confirmLabel: '移行する' });
+    if (!ok) return;
+    try {
+      const cRef = doc(db, 'users', user.uid, 'settings', 'config');
+      const newRecs = list.map((f, i) => ({
+        id: `rec_${Date.now()}_${i}`,
+        title: f.name || '固定費',
+        amount: Number(f.amount) || 0,
+        category: '固定費',
+        method: f.method || CASH,
+        day: 1
+      }));
+      const cats = [...(config.categories || [])];
+      if (!cats.some(c => c.name === '固定費')) cats.push({ name: '固定費' });
+      await setDoc(cRef, { ...config, categories: cats, recurring: [...(config.recurring || []), ...newRecs] }, { merge: true });
+      showToast(`${list.length}件を移行しました`);
+    } catch (e) { console.error(e); showToast('エラー'); }
+  };
+
   const exportCSV = async () => {
     const ok = await confirm({ title: 'CSV出力しますか？', confirmLabel: 'ダウンロード' });
     if (!ok) return;
@@ -586,7 +614,6 @@ function AppMain() {
 
   const MENU = [
     { id: 'budget', label: '資金計画', icon: <Landmark size={17} /> },
-    { id: 'fixed', label: '固定費管理', icon: <CreditCard size={17} /> },
     { id: 'category', label: 'カテゴリ予算', icon: <Tags size={17} /> },
     { id: 'template', label: 'テンプレート', icon: <Zap size={17} /> },
     { id: 'recurring', label: '定期支出', icon: <Repeat size={17} /> },
@@ -594,17 +621,17 @@ function AppMain() {
     { id: 'faq', label: 'ヘルプ・FAQ', icon: <HelpCircle size={17} /> },
   ];
   const menuTitle = MENU.find(m => m.id === settingTab)?.label || '設定';
-  const varPct = S.varBudget > 0 ? Math.min(100, (S.spCard / S.varBudget) * 100) : 0;
+  const freePct = S.freeBudget > 0 ? Math.min(100, (S.freeSpent / S.freeBudget) * 100) : 0;
   const today = getTodayLocal();
   const savingsBalance = savingsTotal - savingsWithdrawn;
 
-  // 理想ペース（今日までの経過日数ベース）
+  // 理想ペース（自由に使える枠を日割り）
   const curMonthStr = getMonthString(new Date());
   const isCurrentMonth = month === curMonthStr;
   const daysInViewMonth = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).getDate(); })();
   const idealPct = isCurrentMonth ? Math.min(100, (today.d / daysInViewMonth) * 100) : (month < curMonthStr ? 100 : 0);
-  const idealSpend = Math.round(S.varBudget * idealPct / 100);
-  const paceDiff = S.spCard - idealSpend;
+  const idealSpend = Math.round(S.freeBudget * idealPct / 100);
+  const paceDiff = S.freeSpent - idealSpend;
   const showPaceMarker = isCurrentMonth && idealPct > 2 && idealPct < 98;
 
   const SPEND_TYPES = [
@@ -628,8 +655,8 @@ function AppMain() {
               <button onClick={() => setSettingTab('menu')} className="p-2 text-[#8E8E93]"><ArrowLeft size={18} /></button>
               <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
                 <span className="text-[14px] font-semibold text-white">{menuTitle}</span>
-                {(settingTab === 'fixed' || settingTab === 'category') && (
-                  <span className="text-[11px] text-[#8E8E93]">¥{(settingTab === 'fixed' ? S.fTotal : S.catBudSum).toLocaleString()}</span>
+                {settingTab === 'category' && (
+                  <span className="text-[11px] text-[#8E8E93]">¥{S.catBudSum.toLocaleString()}</span>
                 )}
               </div>
               <div className="w-10" />
@@ -665,16 +692,19 @@ function AppMain() {
                   <Card>
                     <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
                       <p className="text-[11px] text-[#8E8E93] mb-1">
-                        今月あと使える可変費（カード）
-                        <span className="ml-1.5 text-[#48484A]">（使用 ¥{S.spCard.toLocaleString()}）</span>
+                        実質あと使える（カード）
+                        <span className="ml-1.5 text-[#48484A]">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span>
                       </p>
                       <div className="flex items-baseline gap-2 mt-1.5">
-                        <p className={`text-[36px] font-semibold tracking-tight leading-none ${S.varRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                          ¥{S.varRemain.toLocaleString()}
+                        <p className={`text-[36px] font-semibold tracking-tight leading-none ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                          ¥{S.freeRemain.toLocaleString()}
                         </p>
-                        <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.varBudget.toLocaleString()}</p>
+                        <p className="text-[13px] text-[#48484A] tabular-nums">/ ¥{S.freeBudget.toLocaleString()}</p>
                       </div>
-                      {isCurrentMonth && S.varBudget > 0 && (
+                      <p className="mt-2 text-[11px] text-[#48484A] tabular-nums">
+                        残り全体 ¥{S.varRemain.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
+                      </p>
+                      {isCurrentMonth && S.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
                           <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
                           <span className={`text-[11px] font-medium tabular-nums ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
@@ -717,8 +747,6 @@ function AppMain() {
                     <Separator />
                     <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted />
                     <div className="border-b border-white/[0.04]" />
-                    <Row label="固定費合計" value={`−¥${S.fTotal.toLocaleString()}`} muted />
-                    <div className="border-b border-white/[0.04]" />
                     <Row label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} muted />
                     <Separator />
                     <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} accent />
@@ -730,7 +758,7 @@ function AppMain() {
                   <Card>
                     <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
-                        { label: '可変費（カード）', spent: S.spCard, remain: S.varRemain, target: S.varBudget, pace: varPct, over: S.varRemain < 0, noTarget: false },
+                        { label: '実質自由（カード）', spent: S.freeSpent, remain: S.freeRemain, target: S.freeBudget, pace: freePct, over: S.freeRemain < 0, noTarget: false },
                         { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
                         { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
                       ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
@@ -1020,7 +1048,9 @@ function AppMain() {
                   <div className="border-b border-white/[0.04] mx-4" />
                   <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
                   <div className="border-b border-white/[0.04] mx-4" />
-                  <Row label="今月の残り" value={`¥${S.varRemain.toLocaleString()}`} danger={S.varRemain < 0} />
+                  <Row label="固定費予定（未記録）" value={`−¥${S.pendingFixed.toLocaleString()}`} muted />
+                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Row label="実質あと使える" value={`¥${S.freeRemain.toLocaleString()}`} danger={S.freeRemain < 0} accent={S.freeRemain >= 0} />
                 </Card>
               </div>
               <div>
@@ -1028,9 +1058,9 @@ function AppMain() {
                 <Card>
                   <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
                   <div className="border-b border-white/[0.04] mx-4" />
-                  <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
+                  <Row label="うち定期支出（記録済み）" value={`¥${S.recRecorded.toLocaleString()}`} muted />
                   <div className="border-b border-white/[0.04] mx-4" />
-                  <Row label="固定費合計" value={`¥${S.fTotal.toLocaleString()}`} />
+                  <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
                   <div className="border-b border-white/[0.04] mx-4" />
                   <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
                 </Card>
@@ -1209,20 +1239,6 @@ function AppMain() {
                   </div>
                 </div>
               )}
-              {settingTab === 'fixed' && (
-                <div>
-                  <Label trailing={`現金 ¥${S.fCash.toLocaleString()} / カード ¥${S.fCard.toLocaleString()}`}>固定費</Label>
-                  <AddButton label="固定費を追加" onClick={() => openEdit('fixed', { name: '', amount: '', method: CASH }, -1)} />
-                  <Card><div>
-                    {(monthly.fixedCosts || []).map((f, i, arr) => (
-                      <div key={f.id || i}>
-                        <SettingsRow onClick={() => openEdit('fixed', f, i)} left={<div className="flex items-center gap-2.5"><span className="text-[11px] px-2 py-0.5 rounded-[8px] bg-white/[0.06] text-[#8E8E93] shrink-0">{f.method || '未設定'}</span><span className="truncate">{f.name}</span></div>} right={`¥${Number(f.amount || 0).toLocaleString()}`} />
-                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
-                      </div>
-                    ))}
-                  </div></Card>
-                </div>
-              )}
               {settingTab === 'category' && (
                 <div>
                   <AddButton label="カテゴリを追加" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} />
@@ -1255,6 +1271,12 @@ function AppMain() {
               {settingTab === 'recurring' && (
                 <div>
                   <AddButton label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1 }, -1)} />
+                  {(monthly.fixedCosts || []).length > 0 && (
+                    <button onClick={migrateFixed}
+                      className="w-full h-11 mb-3 bg-[#0A84FF]/10 border border-[#0A84FF]/30 text-[#0A84FF] rounded-[14px] text-[13px] font-medium flex items-center justify-center gap-2 active:bg-[#0A84FF]/20 transition-colors">
+                      <CopyCheck size={14} /> 旧・固定費リストから一括移行（{(monthly.fixedCosts || []).length}件）
+                    </button>
+                  )}
                   <Card><div>
                     {(config?.recurring || []).map((r, i, arr) => (
                       <div key={r.id || i}>
@@ -1489,7 +1511,6 @@ function AppMain() {
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
-            {editingItem.type === 'fixed' && <EditFormFixed editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
