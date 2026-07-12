@@ -183,7 +183,6 @@ function AppMain() {
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
-      { q: 'クレジットカード利用目安', a: 'カードの使いすぎ防止の目安です。ホーム画面の進捗表示に使われます。' },
       { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元・進捗の現金目安になり、今月の予算（カード）からも差し引かれます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
@@ -364,7 +363,6 @@ function AppMain() {
     const spCard = norm.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spCash = norm.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spent = norm.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const cardTarget = Number(monthly?.budget) > 0 ? Number(monthly?.budget) : 100000;
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
     // 今月の予算 = 手取り − 先取り − スタート現金（固定費は実支出として計上）
@@ -387,8 +385,8 @@ function AppMain() {
     const spSpecialPrev = prevTxList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spSavings = txList.filter(t => getSpendType(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     return {
-      cardTarget, cashBudget,
-      cardPace: getPace(spCard, cardTarget), cashPace: getPace(spCash, cashBudget),
+      cashBudget,
+      cashPace: getPace(spCash, cashBudget),
       cashRemain, projCash: freeRemain + cashRemain,
       catBudSum, savTotal, lifeBudget, varBudget, varRemain,
       pendingFixed, recTotalAll, recRecorded, freeBudget, freeSpent, freeRemain,
@@ -488,8 +486,8 @@ function AppMain() {
     try {
       const mRef = doc(db, 'users', user.uid, 'months', month);
       const cRef = doc(db, 'users', user.uid, 'settings', 'config');
-      if (['salary', 'totalBudget', 'cashBudget'].includes(type)) {
-        const fm = { salary: 'salary', totalBudget: 'budget', cashBudget: 'cashBudget' };
+      if (['salary', 'cashBudget'].includes(type)) {
+        const fm = { salary: 'salary', cashBudget: 'cashBudget' };
         await setDoc(mRef, { [fm[type]]: toNumber(data.value) }, { merge: true });
       } else if (type === 'memo') {
         await setDoc(mRef, { memo: data.memo || '' }, { merge: true });
@@ -752,7 +750,6 @@ function AppMain() {
                     <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
                         { label: '実質自由（カード）', subText: `（使用+予定 ¥${(S.spCard + S.pendingFixed).toLocaleString()}）`, spent: S.spCard + S.pendingFixed, remain: S.freeRemain, target: S.varBudget, pace: S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0, over: S.freeRemain < 0, noTarget: false },
-                        { label: 'カード', spent: S.spCard, remain: S.cardTarget - S.spCard, target: S.cardTarget, pace: S.cardPace, over: S.spCard > S.cardTarget, noTarget: false },
                         { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
                       ].map(({ label, subText, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
@@ -1192,12 +1189,11 @@ function AppMain() {
                       <div>
                         {[
                           { key: 'salary', label: '手取り給与', val: monthly.salary },
-                          { key: 'totalBudget', label: 'カード利用目安', val: monthly.budget },
                           { key: 'cashBudget', label: '月初のスタート現金', val: monthly.cashBudget },
                         ].map((item, idx) => (
                           <div key={item.key}>
                             <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)} left={item.label} right={`¥${Number(item.val || 0).toLocaleString()}`} />
-                            {idx < 2 && <div className="border-b border-white/[0.04] mx-4" />}
+                            {idx < 1 && <div className="border-b border-white/[0.04] mx-4" />}
                           </div>
                         ))}
                         <div className="border-b border-white/[0.04] mx-4" />
@@ -1499,7 +1495,7 @@ function AppMain() {
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title="編集する" onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-4">
-            {['salary', 'totalBudget', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+            {['salary', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
@@ -1508,7 +1504,7 @@ function AppMain() {
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
-              {editingItem.index !== -1 && !['salary', 'totalBudget', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
+              {editingItem.index !== -1 && !['salary', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
               <PrimaryButton onClick={saveSettings}>変更を保存する</PrimaryButton>
