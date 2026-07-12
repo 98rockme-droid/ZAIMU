@@ -152,12 +152,12 @@ function AppMain() {
   const [savingsExpanded, setSavingsExpanded] = useState(false);
 
   const [txList, setTxList] = useState([]);
-  const [txLoaded, setTxLoaded] = useState(false);
+  const [txLoadedMonth, setTxLoadedMonth] = useState(null);
   const recProcessedRef = useRef(new Set());
   const [prevTxList, setPrevTxList] = useState([]);
   const prevFetchRef = useRef(null);
   const [monthly, setMonthly] = useState(normalizeMonthly({}));
-  const [mLoaded, setMLoaded] = useState(false);
+  const [mLoadedMonth, setMLoadedMonth] = useState(null);
   const [config, setConfig] = useState(normalizeConfig({}));
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [savingsWithdrawn, setSavingsWithdrawn] = useState(0);
@@ -231,7 +231,8 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
-    setTxLoaded(false);
+    const fm = month;
+    setTxLoadedMonth(null);
     const start = new Date(`${month}-01T00:00:00Z`).toISOString();
     const nd = new Date(`${month}-01T00:00:00Z`); nd.setUTCMonth(nd.getUTCMonth() + 1);
     const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', nd.toISOString()));
@@ -239,8 +240,8 @@ function AppMain() {
       s => {
         const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date));
         setTxList(l);
-        // キャッシュからの応答では自動記録を発火させない（重複登録防止）
-        if (!s.metadata.fromCache) setTxLoaded(true);
+        // サーバー確定データが届いたときだけ「この月のロード完了」を記録
+        if (!s.metadata.fromCache) setTxLoadedMonth(fm);
       },
       err => { console.error(err); showToast('データ取得エラー'); }
     );
@@ -259,9 +260,10 @@ function AppMain() {
 
   useEffect(() => {
     if (!user) return;
-    setMLoaded(false);
+    const fm = month;
+    setMLoadedMonth(null);
     return onSnapshot(doc(db, 'users', user.uid, 'months', month),
-      s => { setMonthly(normalizeMonthly(s.exists() ? s.data() : {})); if (!s.metadata.fromCache) setMLoaded(true); }, console.error);
+      s => { setMonthly(normalizeMonthly(s.exists() ? s.data() : {})); if (!s.metadata.fromCache) setMLoadedMonth(fm); }, console.error);
   }, [month, user]);
 
   useEffect(() => {
@@ -311,9 +313,11 @@ function AppMain() {
 
   useEffect(() => setMemoText(monthly?.memo || ''), [monthly?.memo]);
 
-  /* 定期支出の自動記録（現在月・記録日到来・未記録・未スキップのものだけ追加） */
+  /* 定期支出の自動記録（表示月とロード済みデータの月が完全一致するときだけ動く） */
   useEffect(() => {
-    if (!user || !txLoaded || !mLoaded) return;
+    if (!user) return;
+    // 表示中の月のデータが（取引・月設定とも）サーバー確定で揃っているときのみ実行
+    if (txLoadedMonth !== month || mLoadedMonth !== month) return;
     const now = new Date();
     if (month !== getMonthString(now)) return;
     const todayD = now.getDate();
@@ -336,7 +340,7 @@ function AppMain() {
         createdAt: serverTimestamp(), updatedAt: serverTimestamp()
       }).then(() => showToast(`定期支出「${r.title}」を記録しました`)).catch(console.error);
     });
-  }, [user, txLoaded, mLoaded, txList, config.recurring, month, monthly.skippedRecurring]);
+  }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring]);
 
   /* 年間ビューのデータ取得（直近12ヶ月） */
   useEffect(() => {
