@@ -183,7 +183,7 @@ function AppMain() {
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
-      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元・進捗の現金目安になり、今月の予算（カード）からも差し引かれます。' },
+      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元になり、今月の予算（カード）からも差し引かれます。ATMで追加でおろした場合はこの金額に足して更新してください。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
@@ -233,7 +233,12 @@ function AppMain() {
     const nd = new Date(`${month}-01T00:00:00Z`); nd.setUTCMonth(nd.getUTCMonth() + 1);
     const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', nd.toISOString()));
     return onSnapshot(q,
-      s => { const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date)); setTxList(l); setTxLoaded(true); },
+      s => {
+        const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date));
+        setTxList(l);
+        // キャッシュからの応答では自動記録を発火させない（重複登録防止）
+        if (!s.metadata.fromCache) setTxLoaded(true);
+      },
       err => { console.error(err); showToast('データ取得エラー'); }
     );
   }, [month, user]);
@@ -386,7 +391,6 @@ function AppMain() {
     const spSavings = txList.filter(t => getSpendType(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     return {
       cashBudget,
-      cashPace: getPace(spCash, cashBudget),
       cashRemain, projCash: freeRemain + cashRemain,
       catBudSum, savTotal, lifeBudget, varBudget, varRemain,
       pendingFixed, recTotalAll, recRecorded, freeBudget, freeSpent, freeRemain,
@@ -749,16 +753,12 @@ function AppMain() {
                   <Card>
                     <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
                       {[
-                        { label: '実質自由（カード）', subText: `（使用+予定 ¥${(S.spCard + S.pendingFixed).toLocaleString()}）`, spent: S.spCard + S.pendingFixed, remain: S.freeRemain, target: S.varBudget, pace: S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0, over: S.freeRemain < 0, noTarget: false },
-                        { label: '現金', spent: S.spCash, remain: S.cashBudget > 0 ? S.cashRemain : null, target: S.cashBudget, pace: S.cashPace, over: S.cashBudget > 0 && S.spCash > S.cashBudget, noTarget: S.cashBudget === 0 },
-                      ].map(({ label, subText, spent, remain, target, pace, over, noTarget }) => (
+                        { label: '実質自由（カード）', spent: S.spCard + S.pendingFixed, remain: S.freeRemain, target: S.varBudget, pace: S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0, over: S.freeRemain < 0, noTarget: false },
+                      ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
                         <div key={label}>
-                          <div className="flex justify-between items-center mb-1.5">
-                            <span className="text-[11px] text-[#8E8E93]">
-                              {label}
-                              <span className="text-[#48484A] ml-1">{subText || `（使用 ¥${spent.toLocaleString()}）`}</span>
-                            </span>
-                            <span className="text-[11px] text-[#8E8E93] tabular-nums">
+                          <div className="flex justify-between items-center mb-1.5 gap-3">
+                            <span className="text-[11px] text-[#8E8E93] truncate">{label}</span>
+                            <span className="text-[11px] text-[#8E8E93] tabular-nums shrink-0 whitespace-nowrap">
                               {noTarget ? '未設定' : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`}
                             </span>
                           </div>
