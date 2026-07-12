@@ -814,7 +814,7 @@ function AppMain() {
                         {(withdrawnByBucket['指定なし'] || 0) > 0 && (
                           <div className="flex items-center justify-between pl-3">
                             <span className="text-[12px] text-[#48484A]">取り崩し（指定なし）</span>
-                            <span className="text-[12px] text-[#B8791E] tabular-nums">−¥{withdrawnByBucket['指定なし'].toLocaleString()}</span>
+                            <span className="text-[12px] text-[#4A7BA6] tabular-nums">−¥{withdrawnByBucket['指定なし'].toLocaleString()}</span>
                           </div>
                         )}
                         {savingsWithdrawn > 0 && (
@@ -870,13 +870,12 @@ function AppMain() {
                 </div>
               </div>
 
-              <div className="flex-1 px-4 pt-1 pb-28 overflow-hidden flex flex-col">
+              <div className="flex-1 px-4 pt-1 pb-32 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
-                  <div className="flex-1 flex flex-col overflow-hidden">
-                    {filteredTx.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-[13px] text-[#48484A]">履歴がありません</div>
-                    ) : (
-                      <div className="flex-1 overflow-y-auto scrollbar-hide">
+                  filteredTx.length === 0 ? (
+                    <p className="text-center text-[13px] text-[#48484A] py-16">履歴がありません</p>
+                  ) : (
+                    <div>
                         {filteredTx.map((t, idx) => {
                           const dateStr = formatDateShort(t.date);
                           const [mo, da] = dateStr.split('/');
@@ -896,7 +895,7 @@ function AppMain() {
                                     <span className="text-[#3A3A3C]">·</span>
                                     <span className="text-[11px] text-[#48484A]">{t.paymentMethod}</span>
                                     {st === 'special' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium">特別費</span></>)}
-                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#B8791E] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
+                                    {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#4A7BA6] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
                                     {t.recurringId && (<><span className="text-[#3A3A3C]">·</span><span className="text-[11px] text-[#636366] font-medium flex items-center gap-0.5"><Repeat size={9} />定期</span></>)}
                                   </div>
                                 </div>
@@ -906,30 +905,27 @@ function AppMain() {
                             </div>
                           );
                         })}
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )
                 ) : (
-                  <Card className="flex-1 flex flex-col overflow-hidden p-4">
+                  <Card className="p-4">
                     <div className="grid grid-cols-7 text-center mb-2">
                       {['日','月','火','水','木','金','土'].map(d => <span key={d} className="text-[10px] text-[#48484A]">{d}</span>)}
                     </div>
-                    <div className="flex-1 overflow-y-auto scrollbar-hide">
-                      <div className="grid grid-cols-7 gap-y-1">
-                        {calDays.map((day, i) => {
-                          if (!day) return <div key={i} className="h-14" />;
-                          const amt = S.daily[day] || 0;
-                          const cy = Number(month.split('-')[0]), cm = Number(month.split('-')[1]);
-                          const isToday = day === today.d && cm === today.m && cy === today.y;
-                          return (
-                            <button key={i} onClick={() => openWithDate(`${month}-${String(day).padStart(2, '0')}`)}
-                              className="h-14 flex flex-col items-center justify-start pt-1 rounded-xl active:bg-white/[0.04] transition-colors">
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-medium ${isToday ? 'bg-[#0A84FF] text-white' : 'text-[#8E8E93]'}`}>{day}</span>
-                              {amt > 0 && <span className="text-[9px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
+                    <div className="grid grid-cols-7 gap-y-1">
+                      {calDays.map((day, i) => {
+                        if (!day) return <div key={i} className="h-14" />;
+                        const amt = S.daily[day] || 0;
+                        const cy = Number(month.split('-')[0]), cm = Number(month.split('-')[1]);
+                        const isToday = day === today.d && cm === today.m && cy === today.y;
+                        return (
+                          <button key={i} onClick={() => openWithDate(`${month}-${String(day).padStart(2, '0')}`)}
+                            className="h-14 flex flex-col items-center justify-start pt-1 rounded-xl active:bg-white/[0.04] transition-colors">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-medium ${isToday ? 'bg-[#0A84FF] text-white' : 'text-[#8E8E93]'}`}>{day}</span>
+                            {amt > 0 && <span className="text-[9px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
+                          </button>
+                        );
+                      })}
                     </div>
                   </Card>
                 )}
@@ -1102,7 +1098,7 @@ function AppMain() {
               {S.spSavings > 0 && (
                 <Card className="p-5">
                   <div className="flex items-center gap-2 mb-2">
-                    <PiggyBank size={13} className="text-[#B8791E]" />
+                    <PiggyBank size={13} className="text-[#4A7BA6]" />
                     <p className="text-[11px] text-[#8E8E93]">貯金からの支払い（今月）</p>
                   </div>
                   <div className="flex items-baseline gap-2">
@@ -1450,18 +1446,18 @@ function AppMain() {
                 </div>
                 {inSpendType === 'savings' && (
                   <div className="mt-2 space-y-2">
-                    <p className="ml-1 text-[11px] text-[#B8791E] flex items-center gap-1.5">
+                    <p className="ml-1 text-[11px] text-[#4A7BA6] flex items-center gap-1.5">
                       <PiggyBank size={12} /> 可変費には含まれず、先取り累計から差し引かれます
                     </p>
                     {bucketOptions.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                         <button type="button" onClick={() => setInSavingsBucket('')}
-                          className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === '' ? 'bg-[#B8791E] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                          className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === '' ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                           指定なし
                         </button>
                         {bucketOptions.map(name => (
                           <button key={name} type="button" onClick={() => setInSavingsBucket(name)}
-                            className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#B8791E] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                            className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                             {name}
                           </button>
                         ))}
