@@ -736,12 +736,6 @@ function AppMain() {
                       <p className="mt-2.5 text-[11px] text-[#48484A] tabular-nums">
                         予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
                       </p>
-                      {S.pendingFixed > 0 && (
-                        <button onClick={recordAllRecurring}
-                          className="mt-3 w-full h-9 bg-[#4A7BA6]/15 border border-[#4A7BA6]/30 text-[#4A7BA6] rounded-[12px] text-[12px] font-medium flex items-center justify-center gap-1.5 active:bg-[#4A7BA6]/25 transition-colors">
-                          <Repeat size={12} /> 固定費予定 ¥{S.pendingFixed.toLocaleString()} を今月のログに記録
-                        </button>
-                      )}
                       {isCurrentMonth && S.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
                           <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}<span className="text-[#48484A] ml-1">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span></span>
@@ -1174,8 +1168,11 @@ function AppMain() {
                     <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
                       <CopyCheck size={15} className="text-[#8E8E93]" /> 先月の設定をコピー
                     </button>
-                    <button onClick={exportCSV} className="w-full flex items-center justify-center gap-2 text-[13px] text-[#8E8E93] py-2">
-                      <FileText size={13} /> CSVを書き出す
+                    <button onClick={recordAllRecurring} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
+                      <Repeat size={15} className="text-[#8E8E93]" /> 今月の定期支出を記録{S.pendingFixed > 0 ? `（¥${S.pendingFixed.toLocaleString()}）` : ''}
+                    </button>
+                    <button onClick={exportCSV} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
+                      <FileText size={15} className="text-[#8E8E93]" /> CSVを書き出す
                     </button>
                   </div>
                 </>
