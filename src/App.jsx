@@ -598,6 +598,33 @@ function AppMain() {
     } catch (e) { console.error(e); showToast('エラー'); }
   };
 
+  /* 表示中の月に、未記録の定期支出を一括登録 */
+  const recordAllRecurring = async () => {
+    if (!user) return;
+    const recCard = (config.recurring || []);
+    const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
+    const pending = recCard.filter(r => r.id && r.title && !recordedIds.has(r.id));
+    if (!pending.length) return showToast('未記録の定期支出はありません');
+    const total = pending.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const ok = await confirm({ title: `${pending.length}件の定期支出を記録しますか？`, message: `${formatMonthJP(month)} のログに合計 ¥${total.toLocaleString()} を追加します。`, confirmLabel: '記録する' });
+    if (!ok) return;
+    const [y, m] = month.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    try {
+      await Promise.all(pending.map(r => {
+        const recDay = Math.min(Number(r.day) || 1, lastDay);
+        const dateStr = `${month}-${String(recDay).padStart(2, '0')}`;
+        return addDoc(collection(db, 'users', user.uid, 'transactions'), {
+          date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
+          category: r.category || catNames[0] || '食費', paymentMethod: r.method || CASH,
+          isSpecial: false, fromSavings: false, recurringId: r.id,
+          createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+        });
+      }));
+      showToast(`${pending.length}件を記録しました`);
+    } catch (e) { console.error(e); showToast('エラー'); }
+  };
+
   const exportCSV = async () => {
     const ok = await confirm({ title: 'CSV出力しますか？', confirmLabel: 'ダウンロード' });
     if (!ok) return;
@@ -709,6 +736,12 @@ function AppMain() {
                       <p className="mt-2.5 text-[11px] text-[#48484A] tabular-nums">
                         予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
                       </p>
+                      {S.pendingFixed > 0 && (
+                        <button onClick={recordAllRecurring}
+                          className="mt-3 w-full h-9 bg-[#4A7BA6]/15 border border-[#4A7BA6]/30 text-[#4A7BA6] rounded-[12px] text-[12px] font-medium flex items-center justify-center gap-1.5 active:bg-[#4A7BA6]/25 transition-colors">
+                          <Repeat size={12} /> 固定費予定 ¥{S.pendingFixed.toLocaleString()} を今月のログに記録
+                        </button>
+                      )}
                       {isCurrentMonth && S.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
                           <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}<span className="text-[#48484A] ml-1">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span></span>
