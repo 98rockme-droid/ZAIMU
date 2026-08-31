@@ -738,7 +738,7 @@ function AppMain() {
                       </p>
                       {isCurrentMonth && S.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
-                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}<span className="text-[#48484A] ml-1">（自由に使った分 ¥{S.freeSpent.toLocaleString()}）</span></span>
+                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
                           <span className={`text-[11px] font-medium tabular-nums shrink-0 ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
                             {paceDiff <= 0 ? `−¥${Math.abs(paceDiff).toLocaleString()}` : `+¥${paceDiff.toLocaleString()}`}
                           </span>
@@ -875,7 +875,7 @@ function AppMain() {
                   {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[12px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                        className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
                         <option value="ALL">すべて</option>
                         {opts.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -884,14 +884,14 @@ function AppMain() {
                   ))}
                   <div className="flex-1 relative">
                     <select value={filter.spendType} onChange={e => setFilter(p => ({ ...p, spendType: e.target.value }))}
-                      className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[12px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                      className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
                       <option value="ALL">全種別</option>
                       {SPEND_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                     <ChevronDown size={12} className="absolute right-2.5 top-[10px] text-[#48484A] pointer-events-none" />
                   </div>
                   <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', spendType: 'ALL' }); }}
-                    className="w-9 h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[12px] flex items-center justify-center text-[#48484A] shrink-0">
+                    className="w-9 h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] flex items-center justify-center text-[#48484A] shrink-0">
                     <X size={14} />
                   </button>
                 </div>
@@ -909,7 +909,7 @@ function AppMain() {
                           const st = getSpendType(t);
                           return (
                             <div key={t.id}>
-                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-1 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer rounded-xl">
+                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-1 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer rounded-[10px]">
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
                                   <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
@@ -947,7 +947,7 @@ function AppMain() {
                         const isToday = day === today.d && cm === today.m && cy === today.y;
                         return (
                           <button key={i} onClick={() => openWithDate(`${month}-${String(day).padStart(2, '0')}`)}
-                            className="h-14 flex flex-col items-center justify-start pt-1 rounded-xl active:bg-white/[0.04] transition-colors">
+                            className="h-14 flex flex-col items-center justify-start pt-1 rounded-[10px] active:bg-white/[0.04] transition-colors">
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-medium ${isToday ? 'bg-[#0A84FF] text-white' : 'text-[#8E8E93]'}`}>{day}</span>
                             {amt > 0 && <span className="text-[9px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
                           </button>
@@ -1149,7 +1149,7 @@ function AppMain() {
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
                       <p className="text-[12px] text-[#8E8E93] truncate">{user.email}</p>
                     </div>
-                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-[12px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
+                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
                   <div>
                     <Label>メニュー</Label>
@@ -1169,7 +1169,7 @@ function AppMain() {
                       <CopyCheck size={15} className="text-[#8E8E93]" /> 先月の設定をコピー
                     </button>
                     <button onClick={recordAllRecurring} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
-                      <Repeat size={15} className="text-[#8E8E93]" /> 今月の定期支出を記録{S.pendingFixed > 0 ? `（¥${S.pendingFixed.toLocaleString()}）` : ''}
+                      <Repeat size={15} className="text-[#8E8E93]" /> 今月の定期支出を記録
                     </button>
                     <button onClick={exportCSV} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
                       <FileText size={15} className="text-[#8E8E93]" /> CSVを書き出す
@@ -1200,7 +1200,7 @@ function AppMain() {
                                   <div className="mt-3 pl-6 space-y-2">
                                     <p className="text-[12px] text-[#8E8E93] leading-relaxed">{item.a}</p>
                                     {item.formula && (
-                                      <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px] border border-white/[0.06]">
+                                      <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px]">
                                         <p className="text-[10px] text-[#48484A] mb-1">計算式</p>
                                         <p className="text-[12px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
                                       </div>
@@ -1458,7 +1458,7 @@ function AppMain() {
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {methods.map(m => (
                     <button key={m} type="button" onClick={() => setInMethod(m)}
-                      className={`shrink-0 h-10 px-4 rounded-[12px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`shrink-0 h-10 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {m}
                     </button>
                   ))}
@@ -1469,7 +1469,7 @@ function AppMain() {
                 <div className="flex gap-2">
                   {SPEND_TYPES.map(({ value, label }) => (
                     <button key={value} type="button" onClick={() => setInSpendType(value)}
-                      className={`flex-1 h-10 rounded-[12px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`flex-1 h-10 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {label}
                     </button>
                   ))}
@@ -1482,12 +1482,12 @@ function AppMain() {
                     {bucketOptions.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                         <button type="button" onClick={() => setInSavingsBucket('')}
-                          className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === '' ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                          className={`shrink-0 h-9 px-3.5 rounded-[14px] text-[12px] font-medium transition-colors ${inSavingsBucket === '' ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                           指定なし
                         </button>
                         {bucketOptions.map(name => (
                           <button key={name} type="button" onClick={() => setInSavingsBucket(name)}
-                            className={`shrink-0 h-9 px-3.5 rounded-[12px] text-[12px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                            className={`shrink-0 h-9 px-3.5 rounded-[14px] text-[12px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                             {name}
                           </button>
                         ))}
@@ -1501,7 +1501,7 @@ function AppMain() {
                   <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                     {config.templates.map((t, i) => (
-                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[12px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
+                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
                         <Zap size={11} /> {t.title}
                       </button>
                     ))}
