@@ -82,16 +82,16 @@ export const Card = ({ children, className = '', onClick }) => (
 );
 
 export const Label = ({ children, trailing }) => (
-  <div className="flex items-center justify-between px-1.5 mb-2.5">
-    <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide">{children}</span>
-    {trailing && <span className="text-[11px] text-[#8E8E93]">{trailing}</span>}
+  <div className="flex items-center justify-between px-1.5 mb-2.5 gap-3">
+    <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide truncate">{children}</span>
+    {trailing && <span className="text-[11px] text-[#8E8E93] shrink-0 whitespace-nowrap tabular-nums">{trailing}</span>}
   </div>
 );
 
 export const Row = ({ label, value, accent = false, muted = false, danger = false }) => (
-  <div className="flex items-center justify-between px-4 py-3.5 gap-4">
-    <span className={`text-[14px] leading-snug ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
-    <span className={`tabular-nums shrink-0 ${
+  <div className="flex items-center justify-between px-4 py-3.5 gap-3">
+    <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
+    <span className={`tabular-nums shrink-0 whitespace-nowrap ${
       danger ? 'text-[#FF453A] text-[14px] font-semibold'
       : accent ? 'text-[16px] font-bold text-white'
       : muted ? 'text-[#636366] text-[13px]'
@@ -107,7 +107,7 @@ export const Separator = () => (
 );
 
 export const NavButton = ({ active, onClick, icon }) => (
-  <button onClick={onClick} className={`flex items-center justify-center w-12 h-10 rounded-xl transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
+  <button onClick={onClick} className={`flex items-center justify-center w-12 h-10 rounded-[14px] transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
     {icon}
   </button>
 );
@@ -131,10 +131,10 @@ export const OfflineBanner = ({ isOffline }) => (
 );
 
 export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
-  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/[0.04] transition-colors text-left">
+  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/[0.04] transition-colors text-left gap-3">
     <div className="flex items-center gap-3 min-w-0 flex-1 text-[14px] text-white">{left}</div>
-    <div className="flex items-center gap-1.5 shrink-0 ml-3">
-      {right && <span className="text-[13px] text-[#8E8E93]">{right}</span>}
+    <div className="flex items-center gap-1.5 shrink-0">
+      {right && <span className="text-[13px] text-[#8E8E93] whitespace-nowrap tabular-nums">{right}</span>}
       {showChevron && <ChevronDown size={14} className="text-[#48484A] -rotate-90" />}
     </div>
   </button>
@@ -184,11 +184,11 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="bg-[#2C2C2E] rounded-[16px] px-4 py-3.5 text-right font-mono text-[22px] text-white tabular-nums break-all border border-white/[0.06]">{display}</div>
+      <div className="bg-[#2C2C2E] rounded-[14px] px-4 py-3.5 text-right font-mono text-[22px] text-white tabular-nums break-all">{display}</div>
       <div className="grid grid-cols-4 gap-2 h-60">
         {btns.map((b, i) => (
           <button key={i} type="button" onClick={b.act}
-            className={`rounded-[14px] bg-[#2C2C2E] border border-white/[0.06] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
+            className={`rounded-[14px] bg-[#2C2C2E] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
             {b.l}
           </button>
         ))}
