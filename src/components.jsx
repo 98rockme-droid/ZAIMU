@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { CreditCard, ChevronDown, Calculator, Delete, CheckCircle2, AlertTriangle, WifiOff, X } from 'lucide-react';
+import { CreditCard, ChevronDown, Calculator, Delete, CheckCircle2, AlertTriangle, WifiOff, X, Plus } from 'lucide-react';
 
 export const safeCalculate = (expression) => {
   if (!expression) return '0';
@@ -135,6 +135,15 @@ export const SubRow = ({ label, value, danger = false }) => (
 
 export const EmptyState = ({ children }) => (
   <p className="text-[12px] text-[#48484A] text-center py-7 px-5 leading-relaxed">{children}</p>
+);
+
+// カードの最終行に置く「追加」行（SettingsRowと同じ余白・高さ）
+export const AddRow = ({ label, onClick }) => (
+  <button type="button" onClick={onClick}
+    className="w-full flex items-center gap-3 px-4 py-4 active:bg-white/[0.04] transition-colors text-left">
+    <Plus size={15} className="text-[#0A84FF] shrink-0" />
+    <span className="text-[14px] text-[#0A84FF] truncate">{label}</span>
+  </button>
 );
 
 export const NavButton = ({ active, onClick, icon }) => (
