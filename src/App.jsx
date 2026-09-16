@@ -110,15 +110,6 @@ const ModalHeader = ({ title, onClose }) => (
   </div>
 );
 
-const AddButton = ({ label, onClick }) => (
-  <button
-    onClick={onClick}
-    className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] text-[#8E8E93] rounded-[14px] text-[13px] font-medium flex items-center justify-center gap-2 mb-3 active:bg-white/[0.04] transition-colors"
-  >
-    <Plus size={14} /> {label}
-  </button>
-);
-
 function AppMain() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -855,16 +846,16 @@ function AppMain() {
               <div className="flex-1 px-4 pt-1 pb-32 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   filteredTx.length === 0 ? (
-                    <EmptyState>履歴がありません</EmptyState>
+                    <Card><EmptyState>履歴がありません</EmptyState></Card>
                   ) : (
-                    <div>
+                    <Card>
                         {filteredTx.map((t, idx) => {
                           const dateStr = formatDateShort(t.date);
                           const [mo, da] = dateStr.split('/');
                           const st = getSpendType(t);
                           return (
                             <div key={t.id}>
-                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-1 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer rounded-[10px]">
+                              <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
                                   <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
@@ -883,11 +874,11 @@ function AppMain() {
                                 </div>
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
                               </div>
-                              {idx < filteredTx.length - 1 && <Separator full />}
+                              {idx < filteredTx.length - 1 && <Separator />}
                             </div>
                           );
                         })}
-                    </div>
+                    </Card>
                   )
                 ) : (
                   <Card className="p-4">
@@ -971,12 +962,12 @@ function AppMain() {
                         <Card>
                           {yearData.months.slice().reverse().map((m, i, arr) => (
                             <div key={m}>
-                              <div className="px-4 py-3 flex items-center justify-between gap-3">
-                                <span className="text-[13px] text-[#8E8E93] shrink-0">{formatMonthJP(m)}</span>
-                                <div className="flex gap-4 tabular-nums">
-                                  <span className="text-[13px] text-white">¥{yearData.spend[m].toLocaleString()}</span>
-                                  <span className="text-[12px] text-[#636366] w-20 text-right">積立 ¥{yearData.save[m].toLocaleString()}</span>
+                              <div className="px-4 py-3.5 flex items-center justify-between gap-3">
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-[14px] text-[#EBEBF5]/80 truncate">{formatMonthJP(m)}</span>
+                                  <span className="text-[11px] text-[#48484A] tabular-nums">積立 ¥{yearData.save[m].toLocaleString()}</span>
                                 </div>
+                                <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{yearData.spend[m].toLocaleString()}</span>
                               </div>
                               {i < arr.length - 1 && <Separator />}
                             </div>
@@ -1122,16 +1113,24 @@ function AppMain() {
                       </div>
                     </Card>
                   </div>
-                  <div className="space-y-2 pt-1">
-                    <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
-                      <CopyCheck size={15} className="text-[#8E8E93]" /> 先月の設定をコピー
-                    </button>
-                    <button onClick={recordAllRecurring} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
-                      <Repeat size={15} className="text-[#8E8E93]" /> 今月の定期支出を記録
-                    </button>
-                    <button onClick={exportCSV} className="w-full h-12 bg-[#1C1C1E] border border-white/[0.06] text-white rounded-[14px] text-[14px] font-medium flex items-center justify-center gap-2 active:bg-white/[0.04] transition-colors">
-                      <FileText size={15} className="text-[#8E8E93]" /> CSVを書き出す
-                    </button>
+                  <div>
+                    <Label>データ</Label>
+                    <Card>
+                      <SettingsRow
+                        onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
+                        left={<div className="flex items-center gap-3"><CopyCheck size={17} className="text-[#8E8E93] shrink-0" /><span>先月の設定をコピー</span></div>}
+                        showChevron />
+                      <Separator />
+                      <SettingsRow
+                        onClick={recordAllRecurring}
+                        left={<div className="flex items-center gap-3"><Repeat size={17} className="text-[#8E8E93] shrink-0" /><span>今月の定期支出を記録</span></div>}
+                        showChevron />
+                      <Separator />
+                      <SettingsRow
+                        onClick={exportCSV}
+                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#8E8E93] shrink-0" /><span>CSVを書き出す</span></div>}
+                        showChevron />
+                    </Card>
                   </div>
                 </>
               )}
@@ -1197,17 +1196,15 @@ function AppMain() {
                   </div>
                   <div>
                     <Label trailing={`合計 ¥${S.savTotal.toLocaleString()}`}>先取り設定</Label>
-                    <AddButton label="先取り項目を追加" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} />
-                    {buckets.length > 0 && (
-                      <Card><div>
-                        {buckets.map((b, i) => (
-                          <div key={b.id || i}>
-                            <SettingsRow onClick={() => openEdit('savingsBucket', b, i)} left={b.name} right={`¥${Number(b.amount || 0).toLocaleString()}`} />
-                            {i < buckets.length - 1 && <Separator />}
-                          </div>
-                        ))}
-                      </div></Card>
-                    )}
+                    <Card>
+                      {buckets.map((b, i) => (
+                        <div key={b.id || i}>
+                          <SettingsRow onClick={() => openEdit('savingsBucket', b, i)} left={b.name} right={`¥${Number(b.amount || 0).toLocaleString()}`} />
+                          <Separator />
+                        </div>
+                      ))}
+                      <AddRow label="先取り項目を追加" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} />
+                    </Card>
                   </div>
                   <div>
                     <Label>引落予定のカード</Label>
@@ -1223,76 +1220,65 @@ function AppMain() {
                 </div>
               )}
               {settingTab === 'category' && (
-                <div>
-                  <AddButton label="カテゴリを追加" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} />
-                  <Card><div>
-                    {(config?.categories || []).map((c, i, arr) => {
-                      const b = monthly.catBudgets?.[c.name] || 0;
-                      return (
-                        <div key={c.name}>
-                          <SettingsRow onClick={() => openEdit('category', { name: c.name, budget: b }, i)} left={c.name} right={`¥${Number(b).toLocaleString()}`} />
-                          {i < arr.length - 1 && <Separator />}
-                        </div>
-                      );
-                    })}
-                    {(config?.categories || []).length === 0 && (
-                      <EmptyState>カテゴリごとに予算を設定すると、分析タブで使いすぎをチェックできます</EmptyState>
-                    )}
-                  </div></Card>
-                </div>
+                <Card>
+                  {(config?.categories || []).length === 0 && (
+                    <><EmptyState>カテゴリごとに予算を設定すると、分析タブで使いすぎをチェックできます</EmptyState><Separator /></>
+                  )}
+                  {(config?.categories || []).map((c, i) => {
+                    const b = monthly.catBudgets?.[c.name] || 0;
+                    return (
+                      <div key={c.name}>
+                        <SettingsRow onClick={() => openEdit('category', { name: c.name, budget: b }, i)} left={c.name} right={`¥${Number(b).toLocaleString()}`} />
+                        <Separator />
+                      </div>
+                    );
+                  })}
+                  <AddRow label="カテゴリを追加" onClick={() => openEdit('category', { name: '', budget: '' }, -1)} />
+                </Card>
               )}
               {settingTab === 'template' && (
-                <div>
-                  <AddButton label="テンプレートを追加" onClick={() => openEdit('template', { title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH }, -1)} />
-                  <Card><div>
-                    {(config?.templates || []).map((t, i, arr) => (
-                      <div key={i}>
-                        <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col"><span className="text-[14px] text-white">{t.title}</span><span className="text-[11px] text-[#48484A]">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
-                        {i < arr.length - 1 && <Separator />}
-                      </div>
-                    ))}
-                    {(config?.templates || []).length === 0 && (
-                      <EmptyState>よく使う支出を登録すると、入力時にワンタップで呼び出せます</EmptyState>
-                    )}
-                  </div></Card>
-                </div>
+                <Card>
+                  {(config?.templates || []).length === 0 && (
+                    <><EmptyState>よく使う支出を登録すると、入力時にワンタップで呼び出せます</EmptyState><Separator /></>
+                  )}
+                  {(config?.templates || []).map((t, i) => (
+                    <div key={i}>
+                      <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{t.title}</span><span className="text-[11px] text-[#48484A] truncate">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
+                      <Separator />
+                    </div>
+                  ))}
+                  <AddRow label="テンプレートを追加" onClick={() => openEdit('template', { title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH }, -1)} />
+                </Card>
               )}
               {settingTab === 'recurring' && (
-                <div>
-                  <AddButton label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1 }, -1)} />
-                  {(monthly.fixedCosts || []).length > 0 && (
-                    <button onClick={migrateFixed}
-                      className="w-full h-11 mb-3 bg-[#0A84FF]/10 border border-[#0A84FF]/30 text-[#0A84FF] rounded-[14px] text-[13px] font-medium flex items-center justify-center gap-2 active:bg-[#0A84FF]/20 transition-colors">
-                      <CopyCheck size={14} /> 旧・固定費リストから一括移行（{(monthly.fixedCosts || []).length}件）
-                    </button>
+                <Card>
+                  {(config?.recurring || []).length === 0 && (
+                    <><EmptyState>サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</EmptyState><Separator /></>
                   )}
-                  <Card><div>
-                    {(config?.recurring || []).map((r, i, arr) => (
-                      <div key={r.id || i}>
-                        <SettingsRow onClick={() => openEdit('recurring', r, i)}
-                          left={<div className="flex flex-col"><span className="text-[14px] text-white">{r.title}</span><span className="text-[11px] text-[#48484A]">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
-                          right={`¥${Number(r.amount || 0).toLocaleString()}`} />
-                        {i < arr.length - 1 && <Separator />}
-                      </div>
-                    ))}
-                    {(config?.recurring || []).length === 0 && (
-                      <EmptyState>サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</EmptyState>
-                    )}
-                  </div></Card>
-                </div>
+                  {(config?.recurring || []).map((r, i) => (
+                    <div key={r.id || i}>
+                      <SettingsRow onClick={() => openEdit('recurring', r, i)}
+                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#48484A] truncate">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
+                        right={`¥${Number(r.amount || 0).toLocaleString()}`} />
+                      <Separator />
+                    </div>
+                  ))}
+                  {(monthly.fixedCosts || []).length > 0 && (
+                    <><SettingsRow onClick={migrateFixed} left={<div className="flex items-center gap-3"><CopyCheck size={15} className="text-[#0A84FF] shrink-0" /><span className="text-[#0A84FF]">旧・固定費リストから一括移行</span></div>} right={`${(monthly.fixedCosts || []).length}件`} /><Separator /></>
+                  )}
+                  <AddRow label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1 }, -1)} />
+                </Card>
               )}
               {settingTab === 'payment' && (
-                <div>
-                  <AddButton label="支払方法を追加" onClick={() => openEdit('payment', { name: '' }, -1)} />
-                  <Card><div>
-                    {methods.map((m, i, arr) => (
-                      <div key={m}>
-                        <SettingsRow onClick={() => openEdit('payment', { name: m }, i)} left={m} />
-                        {i < arr.length - 1 && <Separator />}
-                      </div>
-                    ))}
-                  </div></Card>
-                </div>
+                <Card>
+                  {methods.map((m, i) => (
+                    <div key={m}>
+                      <SettingsRow onClick={() => openEdit('payment', { name: m }, i)} left={m} />
+                      <Separator />
+                    </div>
+                  ))}
+                  <AddRow label="支払方法を追加" onClick={() => openEdit('payment', { name: '' }, -1)} />
+                </Card>
               )}
             </div>
           )}
