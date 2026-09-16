@@ -10,11 +10,12 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil, ChevronUp, PiggyBank, Repeat
+  HelpCircle, Pencil, PiggyBank, Repeat
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
   SettingsRow, CalculatorPad, useConfirm, toNumber,
+  ExpandableRow, SubRow, EmptyState,
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring
@@ -149,7 +150,7 @@ function AppMain() {
   const [editingItem, setEditingItem] = useState(null);
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [faqQ, setFaqQ] = useState('');
-  const [savingsExpanded, setSavingsExpanded] = useState(false);
+  const [budgetExpanded, setBudgetExpanded] = useState(false);
 
   const [txList, setTxList] = useState([]);
   const [txLoadedMonth, setTxLoadedMonth] = useState(null);
@@ -728,127 +729,81 @@ function AppMain() {
                 <div>
                   <Label>今月</Label>
                   <Card>
-                    <div className="px-5 pt-6 pb-5 border-b border-white/[0.06]">
+                    {/* メイン数字 + 進捗バー */}
+                    <div className="px-5 pt-6 pb-5">
                       <p className="text-[11px] text-[#8E8E93] mb-1">実質あと使える（カード）</p>
                       <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                         ¥{S.freeRemain.toLocaleString()}
                       </p>
+                      <div className="mt-4 relative">
+                        <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-700 ${S.freeRemain < 0 ? 'bg-[#FF453A]' : 'bg-white/60'}`}
+                            style={{ width: `${S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0}%` }} />
+                        </div>
+                        {showPaceMarker && (
+                          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
+                        )}
+                      </div>
                       <p className="mt-2.5 text-[11px] text-[#48484A] tabular-nums">
                         予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
                       </p>
                       {isCurrentMonth && S.freeBudget > 0 && (
-                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06]">
-                          <span className="text-[11px] text-[#8E8E93]">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
-                          <span className={`text-[11px] font-medium tabular-nums shrink-0 ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
+                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06] gap-3">
+                          <span className="text-[11px] text-[#8E8E93] truncate">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
+                          <span className={`text-[11px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
                             {paceDiff <= 0 ? `−¥${Math.abs(paceDiff).toLocaleString()}` : `+¥${paceDiff.toLocaleString()}`}
                           </span>
                         </div>
                       )}
                     </div>
 
-                    <Row label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
-                    <div className="border-b border-white/[0.04]" />
+                    <Separator />
 
-                    <button
-                      type="button"
-                      onClick={() => setSavingsExpanded(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3.5 gap-4 active:bg-white/[0.03] transition-colors"
+                    {/* 予算の計算フロー（折りたたみ） */}
+                    <ExpandableRow
+                      label="今月の予算（カード）"
+                      value={`¥${S.varBudget.toLocaleString()}`}
+                      accent
+                      expanded={budgetExpanded}
+                      onToggle={() => setBudgetExpanded(v => !v)}
                     >
-                      <span className="text-[14px] text-[#636366]">先取り合計</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[#636366] text-[13px] tabular-nums">−¥{S.savTotal.toLocaleString()}</span>
-                        {buckets.length > 0 && (
-                          savingsExpanded
-                            ? <ChevronUp size={13} className="text-[#48484A]" />
-                            : <ChevronDown size={13} className="text-[#48484A]" />
-                        )}
-                      </div>
-                    </button>
-
-                    {savingsExpanded && buckets.length > 0 && (
-                      <div className="px-4 pb-3 space-y-2">
-                        {buckets.map(b => (
-                          <div key={b.id} className="flex items-center justify-between pl-3">
-                            <span className="text-[12px] text-[#48484A]">{b.name}</span>
-                            <span className="text-[12px] text-[#636366] tabular-nums">¥{Number(b.amount || 0).toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <Separator />
-                    <Row label="先取り後の残り" value={`¥${S.lifeBudget.toLocaleString()}`} muted />
-                    <div className="border-b border-white/[0.04]" />
-                    <Row label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} muted />
-                    <Separator />
-                    <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} accent />
+                      <SubRow label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
+                      <SubRow label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} />
+                      {buckets.map(b => (
+                        <div key={b.id} className="flex items-center justify-between pl-7 gap-3">
+                          <span className="text-[11px] text-[#3A3A3C] truncate">{b.name}</span>
+                          <span className="text-[11px] text-[#48484A] tabular-nums shrink-0">¥{Number(b.amount || 0).toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
+                    </ExpandableRow>
                   </Card>
                 </div>
 
                 <div>
-                  <Label>進捗</Label>
+                  <Label>残高・見通し</Label>
                   <Card>
-                    <div className="px-5 py-5 space-y-4 border-b border-white/[0.06]">
-                      {[
-                        { label: '実質自由（カード）', spent: S.spCard + S.pendingFixed, remain: S.freeRemain, target: S.varBudget, pace: S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0, over: S.freeRemain < 0, noTarget: false },
-                      ].map(({ label, spent, remain, target, pace, over, noTarget }) => (
-                        <div key={label}>
-                          <div className="flex justify-between items-center mb-1.5 gap-3">
-                            <span className="text-[11px] text-[#8E8E93] truncate">{label}</span>
-                            <span className="text-[11px] text-[#8E8E93] tabular-nums shrink-0 whitespace-nowrap">
-                              {noTarget ? '未設定' : `¥${remain.toLocaleString()} / ¥${target.toLocaleString()}`}
-                            </span>
-                          </div>
-                          <div className="relative">
-                            <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-700 ${over ? 'bg-[#FF453A]' : 'bg-white/60'}`} style={{ width: `${pace}%` }} />
-                            </div>
-                            {showPaceMarker && !noTarget && (
-                              <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                     <Row label="現金残高" value={`¥${S.cashRemain.toLocaleString()}`} danger={S.cashRemain < 0} />
-                    <div className="border-b border-white/[0.04]" />
+                    <Separator />
                     <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
-                    <div className="border-b border-white/[0.04]" />
-                    <button
-                      type="button"
-                      onClick={() => setCumSavingsExpanded(v => !v)}
-                      className="w-full flex items-center justify-between px-4 py-3.5 gap-4 active:bg-white/[0.03] transition-colors"
+                    <Separator />
+                    <ExpandableRow
+                      label="先取り累計"
+                      value={`¥${Number(savingsBalance || 0).toLocaleString()}`}
+                      expanded={cumSavingsExpanded}
+                      onToggle={() => setCumSavingsExpanded(v => !v)}
                     >
-                      <span className="text-[14px] text-[#EBEBF5]/80">先取り累計</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-white text-[14px] font-medium tabular-nums">¥{Number(savingsBalance || 0).toLocaleString()}</span>
-                        {cumSavingsExpanded
-                          ? <ChevronUp size={13} className="text-[#48484A]" />
-                          : <ChevronDown size={13} className="text-[#48484A]" />}
-                      </div>
-                    </button>
-                    {cumSavingsExpanded && (
-                      <div className="px-4 pb-3 space-y-2">
-                        {Object.keys(savingsBreakdown).map(name => {
-                          const balance = (savingsBreakdown[name] || 0) - (withdrawnByBucket[name] || 0);
-                          return (
-                            <div key={name} className="flex items-center justify-between pl-3">
-                              <span className="text-[12px] text-[#48484A]">{name}</span>
-                              <span className={`text-[12px] tabular-nums ${balance < 0 ? 'text-[#FF453A]' : 'text-[#636366]'}`}>¥{balance.toLocaleString()}</span>
-                            </div>
-                          );
-                        })}
-                        {(withdrawnByBucket['指定なし'] || 0) > 0 && (
-                          <div className="flex items-center justify-between pl-3">
-                            <span className="text-[12px] text-[#48484A]">取り崩し（指定なし）</span>
-                            <span className="text-[12px] text-[#4A7BA6] tabular-nums">−¥{withdrawnByBucket['指定なし'].toLocaleString()}</span>
-                          </div>
-                        )}
-                        {savingsWithdrawn > 0 && (
-                          <p className="pl-3 pt-1 text-[11px] text-[#48484A]">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
-                        )}
-                      </div>
-                    )}
+                      {Object.keys(savingsBreakdown).map(name => {
+                        const balance = (savingsBreakdown[name] || 0) - (withdrawnByBucket[name] || 0);
+                        return <SubRow key={name} label={name} value={`¥${balance.toLocaleString()}`} danger={balance < 0} />;
+                      })}
+                      {(withdrawnByBucket['指定なし'] || 0) > 0 && (
+                        <SubRow label="取り崩し（指定なし）" value={`−¥${withdrawnByBucket['指定なし'].toLocaleString()}`} />
+                      )}
+                      {savingsWithdrawn > 0 && (
+                        <p className="pl-3 pt-1 text-[11px] text-[#48484A] tabular-nums">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
+                      )}
+                    </ExpandableRow>
                   </Card>
                 </div>
               </div>
@@ -900,7 +855,7 @@ function AppMain() {
               <div className="flex-1 px-4 pt-1 pb-32 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   filteredTx.length === 0 ? (
-                    <p className="text-center text-[13px] text-[#48484A] py-16">履歴がありません</p>
+                    <EmptyState>履歴がありません</EmptyState>
                   ) : (
                     <div>
                         {filteredTx.map((t, idx) => {
@@ -928,7 +883,7 @@ function AppMain() {
                                 </div>
                                 <span className="text-[15px] font-semibold text-white tabular-nums shrink-0">¥{Number(t.amount || 0).toLocaleString()}</span>
                               </div>
-                              {idx < filteredTx.length - 1 && <div className="h-px bg-white/[0.04]" />}
+                              {idx < filteredTx.length - 1 && <Separator full />}
                             </div>
                           );
                         })}
@@ -976,7 +931,7 @@ function AppMain() {
               {/* 年間ビュー */}
               {analysisView === 'year' && (
                 !yearData ? (
-                  <p className="text-[13px] text-[#48484A] text-center py-10">読み込み中...</p>
+                  <EmptyState>読み込み中...</EmptyState>
                 ) : (() => {
                   const maxSpend = Math.max(...yearData.months.map(m => yearData.spend[m]), 1);
                   const totalSpend = yearData.months.reduce((s, m) => s + yearData.spend[m], 0);
@@ -1005,9 +960,9 @@ function AppMain() {
                         <Label>年間サマリー</Label>
                         <Card>
                           <Row label="年間支出合計" value={`¥${totalSpend.toLocaleString()}`} />
-                          <div className="border-b border-white/[0.04] mx-4" />
+                          <Separator />
                           <Row label="月平均支出" value={`¥${Math.round(totalSpend / activeMonths).toLocaleString()}`} />
-                          <div className="border-b border-white/[0.04] mx-4" />
+                          <Separator />
                           <Row label="年間先取り合計" value={`¥${totalSave.toLocaleString()}`} accent />
                         </Card>
                       </div>
@@ -1023,7 +978,7 @@ function AppMain() {
                                   <span className="text-[12px] text-[#636366] w-20 text-right">積立 ¥{yearData.save[m].toLocaleString()}</span>
                                 </div>
                               </div>
-                              {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                              {i < arr.length - 1 && <Separator />}
                             </div>
                           ))}
                         </Card>
@@ -1034,7 +989,9 @@ function AppMain() {
               )}
 
               {analysisView === 'month' && (<>
-              <Card>
+              <div>
+                <Label>カテゴリ別の支出</Label>
+                <Card>
                 <div className="p-5 space-y-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -1061,18 +1018,19 @@ function AppMain() {
                         ))}
                       </div>
                     </div>
-                  ) : <p className="text-[13px] text-[#48484A] text-center py-6">データがありません</p>}
+                  ) : <EmptyState>データがありません</EmptyState>}
                 </div>
-              </Card>
+                </Card>
+              </div>
               <div>
                 <Label>予算の進捗</Label>
                 <Card>
                   <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="固定費予定（未記録）" value={`−¥${S.pendingFixed.toLocaleString()}`} muted />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="実質あと使える" value={`¥${S.freeRemain.toLocaleString()}`} danger={S.freeRemain < 0} accent={S.freeRemain >= 0} />
                 </Card>
               </div>
@@ -1080,11 +1038,11 @@ function AppMain() {
                 <Label>支出の内訳</Label>
                 <Card>
                   <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="うち定期支出（記録済み）" value={`¥${S.recRecorded.toLocaleString()}`} muted />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
-                  <div className="border-b border-white/[0.04] mx-4" />
+                  <Separator />
                   <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
                 </Card>
               </div>
@@ -1106,7 +1064,7 @@ function AppMain() {
                               <div className={`h-full rounded-full ${over ? 'bg-[#FF453A]' : 'bg-white/50'}`} style={{ width: `${pct}%` }} />
                             </div>
                           </div>
-                          {idx < activeCats.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                          {idx < activeCats.length - 1 && <Separator />}
                         </div>
                       );
                     })}
@@ -1158,7 +1116,7 @@ function AppMain() {
                         {MENU.map((item, idx) => (
                           <div key={item.id}>
                             <SettingsRow onClick={() => setSettingTab(item.id)} left={<div className="flex items-center gap-3"><span className="text-[#8E8E93]">{item.icon}</span><span>{item.label}</span></div>} showChevron />
-                            {idx < MENU.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                            {idx < MENU.length - 1 && <Separator />}
                           </div>
                         ))}
                       </div>
@@ -1208,13 +1166,13 @@ function AppMain() {
                                   </div>
                                 )}
                               </div>
-                              {ii < sec.items.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                              {ii < sec.items.length - 1 && <Separator />}
                             </div>
                           ))}
                         </div>
                       </Card>
                     </div>
-                  )) : <p className="text-center text-[13px] text-[#48484A] py-8">見つかりませんでした</p>}
+                  )) : <EmptyState>見つかりませんでした</EmptyState>}
                 </div>
               )}
               {settingTab === 'budget' && (
@@ -1229,10 +1187,10 @@ function AppMain() {
                         ].map((item, idx) => (
                           <div key={item.key}>
                             <SettingsRow onClick={() => openEdit(item.key, { value: item.val }, 0)} left={item.label} right={`¥${Number(item.val || 0).toLocaleString()}`} />
-                            {idx < 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                            {idx < 1 && <Separator />}
                           </div>
                         ))}
-                        <div className="border-b border-white/[0.04] mx-4" />
+                        <Separator />
                         <SettingsRow onClick={() => openEdit('memo', { memo: monthly.memo }, 0)} left="今月のメモ" right={monthly.memo ? '設定済み' : '未設定'} />
                       </div>
                     </Card>
@@ -1245,7 +1203,7 @@ function AppMain() {
                         {buckets.map((b, i) => (
                           <div key={b.id || i}>
                             <SettingsRow onClick={() => openEdit('savingsBucket', b, i)} left={b.name} right={`¥${Number(b.amount || 0).toLocaleString()}`} />
-                            {i < buckets.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                            {i < buckets.length - 1 && <Separator />}
                           </div>
                         ))}
                       </div></Card>
@@ -1257,7 +1215,7 @@ function AppMain() {
                       {methods.filter(m => m !== CASH).map((m, i, arr) => (
                         <div key={m}>
                           <SettingsRow onClick={() => openEdit('bill', { name: m, bill: monthly.cardBills?.[m] ?? 0, due: monthly.cardDueDates?.[m] ?? '' }, 0)} left={m} right={`¥${Number(monthly.cardBills?.[m] || 0).toLocaleString()} (${monthly.cardDueDates?.[m] || '-'}日)`} />
-                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                          {i < arr.length - 1 && <Separator />}
                         </div>
                       ))}
                     </div></Card>
@@ -1273,10 +1231,13 @@ function AppMain() {
                       return (
                         <div key={c.name}>
                           <SettingsRow onClick={() => openEdit('category', { name: c.name, budget: b }, i)} left={c.name} right={`¥${Number(b).toLocaleString()}`} />
-                          {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                          {i < arr.length - 1 && <Separator />}
                         </div>
                       );
                     })}
+                    {(config?.categories || []).length === 0 && (
+                      <EmptyState>カテゴリごとに予算を設定すると、分析タブで使いすぎをチェックできます</EmptyState>
+                    )}
                   </div></Card>
                 </div>
               )}
@@ -1287,9 +1248,12 @@ function AppMain() {
                     {(config?.templates || []).map((t, i, arr) => (
                       <div key={i}>
                         <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col"><span className="text-[14px] text-white">{t.title}</span><span className="text-[11px] text-[#48484A]">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
-                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                        {i < arr.length - 1 && <Separator />}
                       </div>
                     ))}
+                    {(config?.templates || []).length === 0 && (
+                      <EmptyState>よく使う支出を登録すると、入力時にワンタップで呼び出せます</EmptyState>
+                    )}
                   </div></Card>
                 </div>
               )}
@@ -1308,11 +1272,11 @@ function AppMain() {
                         <SettingsRow onClick={() => openEdit('recurring', r, i)}
                           left={<div className="flex flex-col"><span className="text-[14px] text-white">{r.title}</span><span className="text-[11px] text-[#48484A]">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
                           right={`¥${Number(r.amount || 0).toLocaleString()}`} />
-                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                        {i < arr.length - 1 && <Separator />}
                       </div>
                     ))}
                     {(config?.recurring || []).length === 0 && (
-                      <p className="text-[12px] text-[#48484A] text-center py-6 px-4">サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</p>
+                      <EmptyState>サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</EmptyState>
                     )}
                   </div></Card>
                 </div>
@@ -1324,7 +1288,7 @@ function AppMain() {
                     {methods.map((m, i, arr) => (
                       <div key={m}>
                         <SettingsRow onClick={() => openEdit('payment', { name: m }, i)} left={m} />
-                        {i < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                        {i < arr.length - 1 && <Separator />}
                       </div>
                     ))}
                   </div></Card>
@@ -1364,7 +1328,7 @@ function AppMain() {
                     <span className="text-[12px] text-[#8E8E93]">{l}</span>
                     <span className="text-[13px] text-white">{v}</span>
                   </div>
-                  {idx < arr.length - 1 && <div className="border-b border-white/[0.04] mx-4" />}
+                  {idx < arr.length - 1 && <Separator />}
                 </div>
               ))}
             </Card>
@@ -1539,9 +1503,17 @@ function AppMain() {
       )}
 
       {/* 設定編集モーダル */}
-      {editingItem && (
+      {editingItem && (() => {
+        const TYPE_LABELS = {
+          salary: '手取り給与', cashBudget: '月初のスタート現金', memo: '今月のメモ',
+          bill: '引落予定', savingsBucket: '先取り項目', category: 'カテゴリ',
+          template: 'テンプレート', recurring: '定期支出', payment: '支払方法'
+        };
+        const isNew = editingItem.index === -1;
+        const name = TYPE_LABELS[editingItem.type] || '項目';
+        return (
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
-          <ModalHeader title="編集する" onClose={() => setEditingItem(null)} />
+          <ModalHeader title={isNew ? `${name}を追加` : name} onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-4">
             {['salary', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
@@ -1552,14 +1524,15 @@ function AppMain() {
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
-              {editingItem.index !== -1 && !['salary', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
+              {!isNew && !['salary', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
-              <PrimaryButton onClick={saveSettings}>変更を保存する</PrimaryButton>
+              <PrimaryButton onClick={saveSettings}>{isNew ? '追加する' : '保存する'}</PrimaryButton>
             </div>
           </div>
         </Modal>
-      )}
+        );
+      })()}
     </div>
   );
 }
