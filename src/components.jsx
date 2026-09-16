@@ -102,8 +102,39 @@ export const Row = ({ label, value, accent = false, muted = false, danger = fals
   </div>
 );
 
-export const Separator = () => (
-  <div className="h-px bg-white/[0.04] mx-4" />
+export const Separator = ({ full = false }) => (
+  <div className={`h-px bg-white/[0.04] ${full ? '' : 'mx-4'}`} />
+);
+
+// タップで内訳を開ける行（Rowと同じ見た目を保つ）
+export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false, accent = false, children }) => (
+  <>
+    <button type="button" onClick={onToggle}
+      className="w-full flex items-center justify-between px-4 py-3.5 gap-3 active:bg-white/[0.03] transition-colors text-left">
+      <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className={`tabular-nums whitespace-nowrap ${
+          accent ? 'text-[16px] font-bold text-white'
+          : muted ? 'text-[#636366] text-[13px]'
+          : 'text-white text-[14px] font-medium'
+        }`}>{value}</span>
+        <ChevronDown size={13} className={`text-[#48484A] transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </div>
+    </button>
+    {expanded && children && <div className="px-4 pb-3 space-y-2">{children}</div>}
+  </>
+);
+
+// 内訳の子行
+export const SubRow = ({ label, value, danger = false }) => (
+  <div className="flex items-center justify-between pl-3 gap-3">
+    <span className="text-[12px] text-[#48484A] truncate">{label}</span>
+    <span className={`text-[12px] tabular-nums shrink-0 whitespace-nowrap ${danger ? 'text-[#FF453A]' : 'text-[#636366]'}`}>{value}</span>
+  </div>
+);
+
+export const EmptyState = ({ children }) => (
+  <p className="text-[12px] text-[#48484A] text-center py-7 px-5 leading-relaxed">{children}</p>
 );
 
 export const NavButton = ({ active, onClick, icon }) => (
