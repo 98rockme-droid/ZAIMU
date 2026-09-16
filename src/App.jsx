@@ -15,7 +15,7 @@ import {
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
   SettingsRow, CalculatorPad, useConfirm, toNumber,
-  ExpandableRow, SubRow, EmptyState,
+  ExpandableRow, SubRow, EmptyState, AddRow,
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring
