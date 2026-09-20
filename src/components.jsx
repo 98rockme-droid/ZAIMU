@@ -82,14 +82,14 @@ export const Card = ({ children, className = '', onClick }) => (
 );
 
 export const Label = ({ children, trailing }) => (
-  <div className="flex items-center justify-between px-1.5 mb-2.5 gap-3">
+  <div className="flex items-center justify-between px-1.5 mb-2 gap-3">
     <span className="text-[11px] font-medium text-[#8E8E93] truncate">{children}</span>
     {trailing && <span className="text-[11px] text-[#8E8E93] shrink-0 whitespace-nowrap tabular-nums">{trailing}</span>}
   </div>
 );
 
 export const Row = ({ label, value, accent = false, muted = false, danger = false }) => (
-  <div className="flex items-center justify-between px-4 py-3.5 gap-3">
+  <div className="flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3">
     <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
     <span className={`tabular-nums shrink-0 whitespace-nowrap ${
       danger ? 'text-[#FF453A] text-[14px] font-semibold'
@@ -110,7 +110,7 @@ export const Separator = ({ full = false }) => (
 export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false, accent = false, children }) => (
   <>
     <button type="button" onClick={onToggle}
-      className="w-full flex items-center justify-between px-4 py-3.5 gap-3 active:bg-white/[0.03] transition-colors text-left">
+      className="w-full flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3 active:bg-white/[0.03] transition-colors text-left">
       <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`tabular-nums whitespace-nowrap ${
@@ -134,13 +134,13 @@ export const SubRow = ({ label, value, danger = false }) => (
 );
 
 export const EmptyState = ({ children }) => (
-  <p className="text-[12px] text-[#48484A] text-center py-7 px-5 leading-relaxed">{children}</p>
+  <p className="text-[12px] text-[#48484A] text-center py-6 px-5 leading-relaxed">{children}</p>
 );
 
 // カードの最終行に置く「追加」行（SettingsRowと同じ余白・高さ）
 export const AddRow = ({ label, onClick }) => (
   <button type="button" onClick={onClick}
-    className="w-full flex items-center gap-3 px-4 py-4 active:bg-white/[0.04] transition-colors text-left">
+    className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left">
     <Plus size={15} className="text-[#0A84FF] shrink-0" />
     <span className="text-[14px] text-[#0A84FF] truncate">{label}</span>
   </button>
@@ -173,7 +173,7 @@ export const OfflineBanner = ({ isOffline }) => (
 );
 
 export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
-  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-4 active:bg-white/[0.04] transition-colors text-left gap-3">
+  <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left gap-3">
     <div className="flex items-center gap-3 min-w-0 flex-1 text-[14px] text-white">{left}</div>
     <div className="flex items-center gap-1.5 shrink-0">
       {right && <span className="text-[13px] text-[#8E8E93] whitespace-nowrap tabular-nums">{right}</span>}
@@ -241,13 +241,13 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 const FieldLabel = ({ children }) => (
-  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">{children}</label>
+  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">{children}</label>
 );
 
 // 金額入力（計算機ボタンはザブトンなし・min-w-0ではみ出し防止）
 const AmountInputSimple = ({ value, onChange, openCalculator }) => (
   <div className="flex gap-1.5 items-center w-full min-w-0">
-    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-11 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
       <span className="text-[15px] text-[#8E8E93] shrink-0">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
         className="flex-1 min-w-0 w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
@@ -278,7 +278,7 @@ export const EditFormMemo = ({ editingItem, setEditingItem }) => (
     <FieldLabel>今月のメモ</FieldLabel>
     <div className="bg-[#2C2C2E] rounded-[14px] border border-white/[0.06] p-4">
       <textarea value={editingItem.data.memo || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, memo: e.target.value } })}
-        className="w-full h-32 bg-transparent text-[14px] text-white outline-none resize-none leading-relaxed" />
+        className="w-full h-32 bg-transparent text-[16px] text-white outline-none resize-none leading-relaxed" />
     </div>
   </div>
 );
@@ -299,7 +299,7 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
     </div>
     <div>
       <FieldLabel>引落日</FieldLabel>
-      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-12 px-4 w-1/2">
+      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
         <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })}
           className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
         <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
@@ -313,7 +313,7 @@ export const EditFormSavingsBucket = ({ editingItem, setEditingItem, openCalcula
     <div>
       <FieldLabel>項目名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -331,7 +331,7 @@ export const EditFormCategory = ({ editingItem, setEditingItem, openCalculator }
     <div>
       <FieldLabel>カテゴリ名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>月の予算</FieldLabel>
@@ -349,7 +349,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     <div>
       <FieldLabel>内容</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -362,10 +362,10 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
     </div>
   </div>
 );
@@ -375,7 +375,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div>
       <FieldLabel>テンプレート名</FieldLabel>
       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>初期金額</FieldLabel>
@@ -388,18 +388,18 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
     <div className="relative">
       <FieldLabel>カテゴリ</FieldLabel>
       <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
     </div>
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
     </div>
   </div>
 );
@@ -409,7 +409,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
     <div>
       <FieldLabel>内容</FieldLabel>
       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        placeholder="例: Netflix" className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors" />
+        placeholder="例: Netflix" className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -421,7 +421,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
     </div>
     <div>
       <FieldLabel>毎月の記録日</FieldLabel>
-      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-12 px-4 w-1/2">
+      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
         <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
           className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
         <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
@@ -430,18 +430,18 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
     <div className="relative">
       <FieldLabel>カテゴリ</FieldLabel>
       <select value={editingItem.data.category || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, category: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
     </div>
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
       <select value={editingItem.data.method || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, method: e.target.value } })}
-        className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
+        className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
     </div>
   </div>
 );
@@ -450,7 +450,7 @@ export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>
     <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
-      className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none focus:border-white/20 transition-colors" />
+      className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors" />
   </div>
 );
 
