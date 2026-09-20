@@ -83,7 +83,7 @@ export const Card = ({ children, className = '', onClick }) => (
 
 export const Label = ({ children, trailing }) => (
   <div className="flex items-center justify-between px-1.5 mb-2.5 gap-3">
-    <span className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide truncate">{children}</span>
+    <span className="text-[11px] font-medium text-[#8E8E93] truncate">{children}</span>
     {trailing && <span className="text-[11px] text-[#8E8E93] shrink-0 whitespace-nowrap tabular-nums">{trailing}</span>}
   </div>
 );
@@ -146,9 +146,10 @@ export const AddRow = ({ label, onClick }) => (
   </button>
 );
 
-export const NavButton = ({ active, onClick, icon }) => (
-  <button onClick={onClick} className={`flex items-center justify-center w-12 h-10 rounded-[14px] transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
+export const NavButton = ({ active, onClick, icon, label }) => (
+  <button onClick={onClick} className={`flex flex-col items-center justify-center gap-0.5 w-14 h-11 rounded-[10px] transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
     {icon}
+    {label && <span className="text-[11px] leading-none">{label}</span>}
   </button>
 );
 
@@ -162,7 +163,8 @@ export const Toast = ({ message, isVisible }) => (
 );
 
 export const OfflineBanner = ({ isOffline }) => (
-  <div className={`fixed top-14 left-0 right-0 z-40 transition-all duration-300 ${isOffline ? 'opacity-100' : 'opacity-0 -translate-y-full pointer-events-none'}`}>
+  <div className={`fixed left-0 right-0 z-40 transition-all duration-300 ${isOffline ? 'opacity-100' : 'opacity-0 -translate-y-full pointer-events-none'}`}
+    style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
     <div className="bg-[#2C2C2E] px-4 py-2 flex items-center justify-center gap-2 border-b border-white/[0.06]">
       <WifiOff size={12} className="text-[#FF9F0A]" />
       <span className="text-[11px] font-medium text-[#8E8E93]">オフライン中 — データは自動的に同期されます</span>
@@ -225,7 +227,7 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-[#2C2C2E] rounded-[14px] px-4 py-3.5 text-right font-mono text-[22px] text-white tabular-nums break-all">{display}</div>
-      <div className="grid grid-cols-4 gap-2 h-60">
+      <div className="grid grid-cols-4 gap-2 h-[276px]">
         {btns.map((b, i) => (
           <button key={i} type="button" onClick={b.act}
             className={`rounded-[14px] bg-[#2C2C2E] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
@@ -239,7 +241,7 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 const FieldLabel = ({ children }) => (
-  <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">{children}</label>
+  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">{children}</label>
 );
 
 // 金額入力（計算機ボタンはザブトンなし・min-w-0ではみ出し防止）
@@ -251,7 +253,7 @@ const AmountInputSimple = ({ value, onChange, openCalculator }) => (
         className="flex-1 min-w-0 w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
     </div>
     <button type="button" onClick={openCalculator}
-      className="w-10 h-10 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+      className="w-11 h-11 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
       <Calculator size={20} />
     </button>
   </div>
