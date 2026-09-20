@@ -91,6 +91,7 @@ const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
   >
     <div
       className="w-full sm:max-w-md bg-[#1C1C1E]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-t-3xl sm:rounded-3xl border border-white/[0.12] shadow-2xl flex flex-col overflow-hidden overflow-x-hidden max-h-[92vh]"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       onClick={e => e.stopPropagation()}
     >
       {children}
@@ -103,7 +104,7 @@ const ModalHeader = ({ title, onClose }) => (
     <span className="text-[16px] font-semibold text-white">{title}</span>
     <button
       onClick={onClose}
-      className="w-8 h-8 flex items-center justify-center rounded-full bg-[#2C2C2E] text-[#8E8E93]"
+      className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full text-[#8E8E93] active:bg-white/[0.06] transition-colors"
     >
       <X size={15} />
     </button>
@@ -679,10 +680,10 @@ function AppMain() {
       <div className="w-full max-w-md h-full flex flex-col bg-black mx-auto relative">
 
         {/* HEADER */}
-        <header className="flex-none h-14 px-4 flex items-center justify-between bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50">
+        <header className="flex-none px-4 flex items-center justify-between bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <>
-              <button onClick={() => setSettingTab('menu')} className="p-2 text-[#8E8E93]"><ArrowLeft size={18} /></button>
+              <button onClick={() => setSettingTab('menu')} className="w-11 h-11 -ml-2 flex items-center justify-center text-[#8E8E93]"><ArrowLeft size={18} /></button>
               <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
                 <span className="text-[14px] font-semibold text-white">{menuTitle}</span>
                 {settingTab === 'category' && (
@@ -695,11 +696,11 @@ function AppMain() {
             <>
               <div className="w-8" />
               <div className="flex items-center gap-0.5">
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(getMonthString(d)); }} className="p-2 text-[#8E8E93]"><ChevronLeft size={16} /></button>
+                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#8E8E93]"><ChevronLeft size={16} /></button>
                 <span className="text-[14px] font-semibold text-white min-w-[96px] text-center tabular-nums">{formatMonthJP(month)}</span>
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(getMonthString(d)); }} className="p-2 text-[#8E8E93]"><ChevronRight size={16} /></button>
+                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#8E8E93]"><ChevronRight size={16} /></button>
               </div>
-              <button onClick={() => setMonth(getMonthString(new Date()))} className="p-2 text-[#8E8E93]"><Calendar size={16} /></button>
+              <button onClick={() => setMonth(getMonthString(new Date()))} className="w-11 h-11 -mr-2 flex items-center justify-center text-[#8E8E93]"><Calendar size={16} /></button>
             </>
           )}
         </header>
@@ -708,7 +709,7 @@ function AppMain() {
 
           {/* HOME */}
           {activeTab === 'home' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide pb-32">
+            <div className="flex-1 overflow-y-auto scrollbar-hide pb-36">
               {monthly.memo && (
                 <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full px-4 py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#1C1C1E]/60">
                   <span className="text-[13px] mt-0.5 shrink-0">📌</span>
@@ -808,12 +809,12 @@ function AppMain() {
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..."
-                      className="w-full h-10 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[13px] text-white outline-none placeholder-[#48484A]" />
-                    <Search size={14} className="absolute left-3 top-3 text-[#48484A]" />
+                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                    <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
                   </div>
-                  <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-0.5">
+                  <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] gap-0.5">
                     {[['list', <AlignJustify size={14} />], ['calendar', <CalendarDays size={14} />]].map(([v, icon]) => (
-                      <button key={v} onClick={() => setLogView(v)} className={`w-8 h-8 rounded-[10px] flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>{icon}</button>
+                      <button key={v} onClick={() => setLogView(v)} className={`w-11 h-11 rounded-[10px] flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>{icon}</button>
                     ))}
                   </div>
                 </div>
@@ -821,29 +822,29 @@ function AppMain() {
                   {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                        className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
                         <option value="ALL">すべて</option>
                         {opts.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
-                      <ChevronDown size={12} className="absolute right-2.5 top-[10px] text-[#48484A] pointer-events-none" />
+                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#48484A] pointer-events-none" />
                     </div>
                   ))}
                   <div className="flex-1 relative">
                     <select value={filter.spendType} onChange={e => setFilter(p => ({ ...p, spendType: e.target.value }))}
-                      className="w-full h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
                       <option value="ALL">全種別</option>
                       {SPEND_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
-                    <ChevronDown size={12} className="absolute right-2.5 top-[10px] text-[#48484A] pointer-events-none" />
+                    <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#48484A] pointer-events-none" />
                   </div>
                   <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', spendType: 'ALL' }); }}
-                    className="w-9 h-9 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] flex items-center justify-center text-[#48484A] shrink-0">
+                    className="w-11 h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] flex items-center justify-center text-[#48484A] shrink-0">
                     <X size={14} />
                   </button>
                 </div>
               </div>
 
-              <div className="flex-1 px-4 pt-1 pb-32 overflow-y-auto scrollbar-hide">
+              <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   filteredTx.length === 0 ? (
                     <Card><EmptyState>履歴がありません</EmptyState></Card>
@@ -857,7 +858,7 @@ function AppMain() {
                             <div key={t.id}>
                               <div onClick={() => setViewingTx(t)} className="flex items-center gap-3 px-4 py-3.5 active:bg-white/[0.03] transition-colors cursor-pointer">
                                 <div className="flex flex-col items-center justify-center w-9 shrink-0">
-                                  <span className="text-[10px] font-medium text-[#48484A] leading-none">{mo}月</span>
+                                  <span className="text-[11px] font-medium text-[#48484A] leading-none">{mo}月</span>
                                   <span className="text-[18px] font-semibold text-[#8E8E93] leading-tight tabular-nums">{da}</span>
                                 </div>
                                 <div className="w-px h-8 bg-white/[0.06] shrink-0" />
@@ -883,7 +884,7 @@ function AppMain() {
                 ) : (
                   <Card className="p-4">
                     <div className="grid grid-cols-7 text-center mb-2">
-                      {['日','月','火','水','木','金','土'].map(d => <span key={d} className="text-[10px] text-[#48484A]">{d}</span>)}
+                      {['日','月','火','水','木','金','土'].map(d => <span key={d} className="text-[11px] text-[#48484A]">{d}</span>)}
                     </div>
                     <div className="grid grid-cols-7 gap-y-1">
                       {calDays.map((day, i) => {
@@ -895,7 +896,7 @@ function AppMain() {
                           <button key={i} onClick={() => openWithDate(`${month}-${String(day).padStart(2, '0')}`)}
                             className="h-14 flex flex-col items-center justify-start pt-1 rounded-[10px] active:bg-white/[0.04] transition-colors">
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-medium ${isToday ? 'bg-[#0A84FF] text-white' : 'text-[#8E8E93]'}`}>{day}</span>
-                            {amt > 0 && <span className="text-[9px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
+                            {amt > 0 && <span className="text-[11px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
                           </button>
                         );
                       })}
@@ -908,12 +909,12 @@ function AppMain() {
 
           {/* ANALYSIS */}
           {activeTab === 'analysis' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-32 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-36 space-y-5">
               {/* 月間/年間 切替 */}
               <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-1">
                 {[['month', '月間'], ['year', '年間']].map(([v, l]) => (
                   <button key={v} onClick={() => setAnalysisView(v)}
-                    className={`flex-1 h-9 rounded-[10px] text-[13px] font-medium transition-colors ${analysisView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>
+                    className={`flex-1 h-11 rounded-[10px] text-[13px] font-medium transition-colors ${analysisView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>
                     {l}
                   </button>
                 ))}
@@ -940,7 +941,7 @@ function AppMain() {
                               return (
                                 <div key={m} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
                                   <div className={`w-full rounded-t-[4px] ${isCur ? 'bg-[#0A84FF]' : 'bg-white/25'}`} style={{ height: `${h}%` }} />
-                                  <span className="text-[9px] text-[#48484A] tabular-nums">{Number(m.split('-')[1])}</span>
+                                  <span className="text-[11px] text-[#48484A] tabular-nums">{Number(m.split('-')[1])}</span>
                                 </div>
                               );
                             })}
@@ -1089,7 +1090,7 @@ function AppMain() {
 
           {/* SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-32 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-36 space-y-5">
               {settingTab === 'menu' && (
                 <>
                   <div className="flex items-center gap-3.5 p-4 bg-[#1C1C1E] rounded-[20px] border border-white/[0.06]">
@@ -1098,7 +1099,7 @@ function AppMain() {
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
                       <p className="text-[12px] text-[#8E8E93] truncate">{user.email}</p>
                     </div>
-                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-9 h-9 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
+                    <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
                   <div>
                     <Label>メニュー</Label>
@@ -1139,7 +1140,7 @@ function AppMain() {
                   <div className="relative">
                     <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
-                    {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-3 top-3 text-[#48484A]"><X size={14} /></button>}
+                    {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-1 top-0 w-11 h-11 flex items-center justify-center text-[#48484A]"><X size={14} /></button>}
                   </div>
                   {filteredFaq.length > 0 ? filteredFaq.map((sec, si) => (
                     <div key={si}>
@@ -1158,7 +1159,7 @@ function AppMain() {
                                     <p className="text-[12px] text-[#8E8E93] leading-relaxed">{item.a}</p>
                                     {item.formula && (
                                       <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px]">
-                                        <p className="text-[10px] text-[#48484A] mb-1">計算式</p>
+                                        <p className="text-[11px] text-[#48484A] mb-1">計算式</p>
                                         <p className="text-[12px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
                                       </div>
                                     )}
@@ -1285,15 +1286,18 @@ function AppMain() {
         </main>
 
         {/* FOOTER — Liquid Glass風フローティングバー */}
-        <footer className="fixed bottom-5 left-5 right-5 z-50 max-w-[400px] mx-auto rounded-[30px] bg-white/[0.08] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.12] shadow-2xl shadow-black/40 flex items-center justify-around px-3 py-2">
-          {[[<Home size={22} />, 'home'], [<History size={22} />, 'log']].map(([icon, tab]) => (
-            <NavButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} icon={icon} />
+        <footer
+          className="fixed left-5 right-5 z-50 max-w-[400px] mx-auto rounded-[30px] bg-white/[0.08] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.12] shadow-2xl shadow-black/40 flex items-center justify-around px-3 py-2"
+          style={{ bottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        >
+          {[[<Home size={20} />, 'home', 'ホーム'], [<History size={20} />, 'log', '履歴']].map(([icon, tab, label]) => (
+            <NavButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} icon={icon} label={label} />
           ))}
-          <button onClick={openNew} className="w-12 h-12 bg-[#0A84FF] text-white rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/30">
-            <Plus size={20} />
+          <button onClick={openNew} aria-label="支出を入力" className="w-12 h-12 bg-[#0A84FF] text-white rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-lg shadow-[#0A84FF]/30 shrink-0">
+            <Plus size={22} />
           </button>
-          {[[<BarChart3 size={22} />, 'analysis'], [<Settings size={22} />, 'settings']].map(([icon, tab]) => (
-            <NavButton key={tab} active={activeTab === tab} onClick={() => { setActiveTab(tab); if (tab === 'settings') setSettingTab('menu'); }} icon={icon} />
+          {[[<BarChart3 size={20} />, 'analysis', '分析'], [<Settings size={20} />, 'settings', '設定']].map(([icon, tab, label]) => (
+            <NavButton key={tab} active={activeTab === tab} onClick={() => { setActiveTab(tab); if (tab === 'settings') setSettingTab('menu'); }} icon={icon} label={label} />
           ))}
         </footer>
       </div>
@@ -1344,7 +1348,7 @@ function AppMain() {
       {/* 計算機モーダル */}
       {showCalc && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center sm:p-6 bg-black/60 backdrop-blur-sm" onClick={() => setShowCalc(false)}>
-          <div className="w-full sm:max-w-xs bg-[#1C1C1E]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-t-3xl sm:rounded-3xl border border-white/[0.12] p-5 pb-8" onClick={e => e.stopPropagation()}>
+          <div className="w-full sm:max-w-xs bg-[#1C1C1E]/80 backdrop-blur-2xl backdrop-saturate-150 rounded-t-3xl sm:rounded-3xl border border-white/[0.12] p-5" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
             <CalculatorPad initialValue={calcInit} onConfirm={val => { if (calcCb) calcCb(val); setShowCalc(false); }} />
           </div>
         </div>
@@ -1357,7 +1361,7 @@ function AppMain() {
           <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10">
             <form onSubmit={submitTx} className="space-y-4 w-full min-w-0">
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">金額</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">金額</label>
                 <div className="flex gap-1.5 items-center w-full min-w-0">
                   <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
                     <span className="text-[16px] text-[#8E8E93] shrink-0">¥</span>
@@ -1371,13 +1375,13 @@ function AppMain() {
                     />
                   </div>
                   <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
-                    className="w-10 h-10 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+                    className="w-11 h-11 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
                     <Calculator size={20} />
                   </button>
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">内容</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">内容</label>
                 <input
                   key={`title-${txFormKey}`}
                   value={inTitle}
@@ -1388,14 +1392,14 @@ function AppMain() {
                 />
               </div>
               <div className="relative">
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">カテゴリ</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">カテゴリ</label>
                 <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none">
                   {catNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#48484A] pointer-events-none" />
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">日付</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">日付</label>
                 <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                   <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                     <span className="text-[14px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
@@ -1404,22 +1408,22 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">支払方法</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">支払方法</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {methods.map(m => (
                     <button key={m} type="button" onClick={() => setInMethod(m)}
-                      className={`shrink-0 h-10 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {m}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">種別</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">種別</label>
                 <div className="flex gap-2">
                   {SPEND_TYPES.map(({ value, label }) => (
                     <button key={value} type="button" onClick={() => setInSpendType(value)}
-                      className={`flex-1 h-10 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
                       {label}
                     </button>
                   ))}
@@ -1448,10 +1452,10 @@ function AppMain() {
               </div>
               {!editingTx && config.templates.length > 0 && (
                 <div>
-                  <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">テンプレート</label>
+                  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                     {config.templates.map((t, i) => (
-                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-9 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
+                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-11 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
                         <Zap size={11} /> {t.title}
                       </button>
                     ))}
@@ -1472,7 +1476,7 @@ function AppMain() {
           <ModalHeader title="設定をコピー" onClose={() => setCopyOpen(false)} />
           <div className="p-5 pb-10 space-y-4">
             <div>
-              <label className="text-[11px] font-medium text-[#8E8E93] uppercase tracking-wide ml-1 block mb-1.5">コピー元の月</label>
+              <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">コピー元の月</label>
               <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                 <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                   <span className="text-[14px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
