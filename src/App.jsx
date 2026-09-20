@@ -100,7 +100,7 @@ const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
 );
 
 const ModalHeader = ({ title, onClose }) => (
-  <div className="flex-none px-5 py-4 flex items-center justify-between border-b border-white/[0.06]">
+  <div className="flex-none px-5 py-3 flex items-center justify-between border-b border-white/[0.06]">
     <span className="text-[16px] font-semibold text-white">{title}</span>
     <button
       onClick={onClose}
@@ -717,17 +717,17 @@ function AppMain() {
                   <ChevronDown size={13} className={`text-[#48484A] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
                 </button>
               )}
-              <div className="px-4 pt-6 space-y-7">
+              <div className="px-4 pt-4 space-y-5">
                 <div>
                   <Label>今月</Label>
                   <Card>
                     {/* メイン数字 + 進捗バー */}
-                    <div className="px-5 pt-6 pb-5">
+                    <div className="px-5 pt-5 pb-4">
                       <p className="text-[11px] text-[#8E8E93] mb-1">実質あと使える（カード）</p>
                       <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                         ¥{S.freeRemain.toLocaleString()}
                       </p>
-                      <div className="mt-4 relative">
+                      <div className="mt-3.5 relative">
                         <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
                           <div className={`h-full rounded-full transition-all duration-700 ${S.freeRemain < 0 ? 'bg-[#FF453A]' : 'bg-white/60'}`}
                             style={{ width: `${S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0}%` }} />
@@ -805,11 +805,11 @@ function AppMain() {
           {/* LOG */}
           {activeTab === 'log' && (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-none px-4 pt-3 pb-2 space-y-2">
+              <div className="flex-none px-4 pt-3 pb-2 space-y-1.5">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..."
-                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[16px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
                   </div>
                   <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] gap-0.5">
@@ -822,7 +822,7 @@ function AppMain() {
                   {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                        className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
                         <option value="ALL">すべて</option>
                         {opts.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
@@ -831,7 +831,7 @@ function AppMain() {
                   ))}
                   <div className="flex-1 relative">
                     <select value={filter.spendType} onChange={e => setFilter(p => ({ ...p, spendType: e.target.value }))}
-                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[12px] text-white outline-none appearance-none">
+                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
                       <option value="ALL">全種別</option>
                       {SPEND_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -909,7 +909,7 @@ function AppMain() {
 
           {/* ANALYSIS */}
           {activeTab === 'analysis' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-36 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
               {/* 月間/年間 切替 */}
               <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-1">
                 {[['month', '月間'], ['year', '年間']].map(([v, l]) => (
@@ -984,7 +984,7 @@ function AppMain() {
               <div>
                 <Label>カテゴリ別の支出</Label>
                 <Card>
-                <div className="p-5 space-y-5">
+                <div className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] text-[#8E8E93] mb-1.5">通常支出</p>
@@ -1047,7 +1047,7 @@ function AppMain() {
                       const over = bud > 0 && cur > bud, pct = bud > 0 ? Math.min(100, cur / bud * 100) : 0;
                       return (
                         <div key={n}>
-                          <div className="px-4 py-4">
+                          <div className="px-4 py-3">
                             <div className="flex justify-between mb-2">
                               <span className="text-[14px] text-white">{n}</span>
                               <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#8E8E93]'}`}>¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}</span>
@@ -1090,10 +1090,10 @@ function AppMain() {
 
           {/* SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-6 pb-36 space-y-5">
+            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
               {settingTab === 'menu' && (
                 <>
-                  <div className="flex items-center gap-3.5 p-4 bg-[#1C1C1E] rounded-[20px] border border-white/[0.06]">
+                  <div className="flex items-center gap-3 p-3.5 bg-[#1C1C1E] rounded-[20px] border border-white/[0.06]">
                     {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-[14px]" /> : <div className="w-10 h-10 rounded-[14px] bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>}
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
@@ -1138,7 +1138,7 @@ function AppMain() {
               {settingTab === 'faq' && (
                 <div className="space-y-4">
                   <div className="relative">
-                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-4 text-[13px] text-white outline-none placeholder-[#48484A]" />
+                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-4 text-[16px] text-white outline-none placeholder-[#48484A]" />
                     <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
                     {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-1 top-0 w-11 h-11 flex items-center justify-center text-[#48484A]"><X size={14} /></button>}
                   </div>
@@ -1149,7 +1149,7 @@ function AppMain() {
                         <div>
                           {sec.items.map((item, ii) => (
                             <div key={ii}>
-                              <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-4 cursor-pointer active:bg-white/[0.03] transition-colors">
+                              <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-3 cursor-pointer active:bg-white/[0.03] transition-colors">
                                 <div className="flex justify-between items-start gap-3">
                                   <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
                                   <ChevronDown size={14} className={`text-[#48484A] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
@@ -1306,7 +1306,7 @@ function AppMain() {
       {viewingTx && (
         <Modal onClose={() => setViewingTx(null)} zIndex="z-[60]">
           <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-5">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-4">
             <div className="flex flex-col items-center gap-2 py-2">
               <span className="text-[12px] text-[#8E8E93] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
               <p className="text-[40px] font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</p>
@@ -1358,10 +1358,10 @@ function AppMain() {
       {isTxOpen && (
         <Modal onClose={closeTx}>
           <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10">
-            <form onSubmit={submitTx} className="space-y-4 w-full min-w-0">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8">
+            <form onSubmit={submitTx} className="space-y-3.5 w-full min-w-0">
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">金額</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">金額</label>
                 <div className="flex gap-1.5 items-center w-full min-w-0">
                   <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
                     <span className="text-[16px] text-[#8E8E93] shrink-0">¥</span>
@@ -1381,34 +1381,34 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">内容</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">内容</label>
                 <input
                   key={`title-${txFormKey}`}
                   value={inTitle}
                   onChange={e => setInTitle(e.target.value)}
                   placeholder="例: スーパーでお買い物"
-                  className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
+                  className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
                   required
                 />
               </div>
               <div className="relative">
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">カテゴリ</label>
-                <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[14px] text-white outline-none appearance-none">
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">カテゴリ</label>
+                <select value={inCat} onChange={e => setInCat(e.target.value)} className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none">
                   {catNames.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <ChevronDown size={13} className="absolute right-4 bottom-4 text-[#48484A] pointer-events-none" />
+                <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#48484A] pointer-events-none" />
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">日付</label>
-                <div className="relative h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">日付</label>
+                <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                   <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
-                    <span className="text-[14px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
+                    <span className="text-[16px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
                   </div>
                   <input type="date" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">支払方法</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">支払方法</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {methods.map(m => (
                     <button key={m} type="button" onClick={() => setInMethod(m)}
@@ -1419,7 +1419,7 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">種別</label>
+                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">種別</label>
                 <div className="flex gap-2">
                   {SPEND_TYPES.map(({ value, label }) => (
                     <button key={value} type="button" onClick={() => setInSpendType(value)}
@@ -1452,7 +1452,7 @@ function AppMain() {
               </div>
               {!editingTx && config.templates.length > 0 && (
                 <div>
-                  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">テンプレート</label>
+                  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                     {config.templates.map((t, i) => (
                       <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-11 px-3.5 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-[12px] text-[#8E8E93] flex items-center gap-1.5">
@@ -1474,12 +1474,12 @@ function AppMain() {
       {copyOpen && (
         <Modal onClose={() => setCopyOpen(false)}>
           <ModalHeader title="設定をコピー" onClose={() => setCopyOpen(false)} />
-          <div className="p-5 pb-10 space-y-4">
+          <div className="px-5 pt-4 pb-8 space-y-3.5">
             <div>
-              <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1.5">コピー元の月</label>
-              <div className="relative w-full h-12 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
+              <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">コピー元の月</label>
+              <div className="relative w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                 <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
-                  <span className="text-[14px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
+                  <span className="text-[16px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
                 </div>
                 <input type="month" value={copyFrom} onChange={e => setCopyFrom(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
               </div>
@@ -1504,7 +1504,7 @@ function AppMain() {
         return (
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title={isNew ? `${name}を追加` : name} onClose={() => setEditingItem(null)} />
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-5 pb-10 space-y-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-3.5">
             {['salary', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
