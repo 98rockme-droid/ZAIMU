@@ -40,7 +40,7 @@ export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = '実行�
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-6 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="w-full max-w-[300px] bg-[#1C1C1E] rounded-[20px] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-[300px] bg-[#2C2C2E] rounded-[20px] overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-5 pt-6 pb-4 flex flex-col items-center gap-2 text-center">
           {danger && (
             <div className="w-10 h-10 rounded-full bg-[#FF453A]/10 flex items-center justify-center mb-1">
@@ -48,10 +48,10 @@ export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = '実行�
             </div>
           )}
           <p className="text-[15px] font-semibold text-white leading-snug">{title}</p>
-          {message && <p className="text-[13px] text-[#8E8E93] leading-relaxed">{message}</p>}
+          {message && <p className="text-[13px] text-[#98989D] leading-relaxed">{message}</p>}
         </div>
         <div className="border-t border-white/[0.08] grid grid-cols-2">
-          <button type="button" onClick={onCancel} className="h-12 text-[15px] text-[#8E8E93] border-r border-white/[0.08] active:bg-white/[0.04] transition-colors">キャンセル</button>
+          <button type="button" onClick={onCancel} className="h-12 text-[15px] text-[#98989D] border-r border-white/[0.08] active:bg-white/[0.04] transition-colors">キャンセル</button>
           <button type="button" onClick={onConfirm} className={`h-12 text-[15px] font-semibold transition-colors ${danger ? 'text-[#FF453A]' : 'text-[#0A84FF]'}`}>{confirmLabel}</button>
         </div>
       </div>
@@ -76,25 +76,25 @@ export const useConfirm = () => {
 };
 
 export const Card = ({ children, className = '', onClick }) => (
-  <div onClick={onClick} className={`bg-[#1C1C1E] rounded-[20px] border border-white/[0.06] overflow-hidden w-full ${className}`}>
+  <div onClick={onClick} className={`bg-[#2C2C2E] rounded-[20px] overflow-hidden w-full ${className}`}>
     {children}
   </div>
 );
 
 export const Label = ({ children, trailing }) => (
   <div className="flex items-center justify-between px-1.5 mb-2 gap-3">
-    <span className="text-[11px] font-medium text-[#8E8E93] truncate">{children}</span>
-    {trailing && <span className="text-[11px] text-[#8E8E93] shrink-0 whitespace-nowrap tabular-nums">{trailing}</span>}
+    <span className="text-[11px] font-medium text-[#98989D] truncate">{children}</span>
+    {trailing && <span className="text-[11px] text-[#98989D] shrink-0 whitespace-nowrap tabular-nums">{trailing}</span>}
   </div>
 );
 
 export const Row = ({ label, value, accent = false, muted = false, danger = false }) => (
   <div className="flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3">
-    <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
+    <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#7C7C80]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
     <span className={`tabular-nums shrink-0 whitespace-nowrap ${
       danger ? 'text-[#FF453A] text-[14px] font-semibold'
       : accent ? 'text-[16px] font-bold text-white'
-      : muted ? 'text-[#636366] text-[13px]'
+      : muted ? 'text-[#7C7C80] text-[13px]'
       : 'text-white text-[14px] font-medium'
     }`}>
       {value}
@@ -103,7 +103,7 @@ export const Row = ({ label, value, accent = false, muted = false, danger = fals
 );
 
 export const Separator = ({ full = false }) => (
-  <div className={`h-px bg-white/[0.04] ${full ? '' : 'mx-4'}`} />
+  <div className={`h-px bg-white/[0.08] ${full ? '' : 'mx-4'}`} />
 );
 
 // タップで内訳を開ける行（Rowと同じ見た目を保つ）
@@ -111,14 +111,14 @@ export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false,
   <>
     <button type="button" onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3 active:bg-white/[0.03] transition-colors text-left">
-      <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#636366]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
+      <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#7C7C80]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`tabular-nums whitespace-nowrap ${
           accent ? 'text-[16px] font-bold text-white'
-          : muted ? 'text-[#636366] text-[13px]'
+          : muted ? 'text-[#7C7C80] text-[13px]'
           : 'text-white text-[14px] font-medium'
         }`}>{value}</span>
-        <ChevronDown size={13} className={`text-[#48484A] transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} className={`text-[#636366] transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </div>
     </button>
     {expanded && children && <div className="px-4 pb-3 space-y-2">{children}</div>}
@@ -128,13 +128,13 @@ export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false,
 // 内訳の子行
 export const SubRow = ({ label, value, danger = false }) => (
   <div className="flex items-center justify-between pl-3 gap-3">
-    <span className="text-[12px] text-[#48484A] truncate">{label}</span>
-    <span className={`text-[12px] tabular-nums shrink-0 whitespace-nowrap ${danger ? 'text-[#FF453A]' : 'text-[#636366]'}`}>{value}</span>
+    <span className="text-[12px] text-[#636366] truncate">{label}</span>
+    <span className={`text-[12px] tabular-nums shrink-0 whitespace-nowrap ${danger ? 'text-[#FF453A]' : 'text-[#7C7C80]'}`}>{value}</span>
   </div>
 );
 
 export const EmptyState = ({ children }) => (
-  <p className="text-[12px] text-[#48484A] text-center py-6 px-5 leading-relaxed">{children}</p>
+  <p className="text-[12px] text-[#636366] text-center py-6 px-5 leading-relaxed">{children}</p>
 );
 
 // カードの最終行に置く「追加」行（SettingsRowと同じ余白・高さ）
@@ -147,7 +147,7 @@ export const AddRow = ({ label, onClick }) => (
 );
 
 export const NavButton = ({ active, onClick, icon, label }) => (
-  <button onClick={onClick} className={`flex flex-col items-center justify-center gap-0.5 w-14 h-11 rounded-[10px] transition-colors ${active ? 'text-white' : 'text-[#48484A]'}`}>
+  <button onClick={onClick} className={`flex flex-col items-center justify-center gap-0.5 w-14 h-11 rounded-[10px] transition-colors ${active ? 'text-white' : 'text-[#636366]'}`}>
     {icon}
     {label && <span className="text-[11px] leading-none">{label}</span>}
   </button>
@@ -167,7 +167,7 @@ export const OfflineBanner = ({ isOffline }) => (
     style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
     <div className="bg-[#2C2C2E] px-4 py-2 flex items-center justify-center gap-2 border-b border-white/[0.06]">
       <WifiOff size={12} className="text-[#FF9F0A]" />
-      <span className="text-[11px] font-medium text-[#8E8E93]">オフライン中 — データは自動的に同期されます</span>
+      <span className="text-[11px] font-medium text-[#98989D]">オフライン中 — データは自動的に同期されます</span>
     </div>
   </div>
 );
@@ -176,8 +176,8 @@ export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
   <button type="button" onClick={onClick} className="w-full flex items-center justify-between px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left gap-3">
     <div className="flex items-center gap-3 min-w-0 flex-1 text-[14px] text-white">{left}</div>
     <div className="flex items-center gap-1.5 shrink-0">
-      {right && <span className="text-[13px] text-[#8E8E93] whitespace-nowrap tabular-nums">{right}</span>}
-      {showChevron && <ChevronDown size={14} className="text-[#48484A] -rotate-90" />}
+      {right && <span className="text-[13px] text-[#98989D] whitespace-nowrap tabular-nums">{right}</span>}
+      {showChevron && <ChevronDown size={14} className="text-[#636366] -rotate-90" />}
     </div>
   </button>
 );
@@ -191,7 +191,7 @@ export const PrimaryButton = ({ children, onClick, type = 'button', className = 
 
 export const SecondaryButton = ({ children, onClick, type = 'button', className = '' }) => (
   <button type={type} onClick={onClick}
-    className={`w-full h-12 bg-[#2C2C2E] text-[#8E8E93] rounded-[14px] font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}>
+    className={`w-full h-12 bg-[#2C2C2E] text-[#98989D] rounded-[14px] font-medium text-[14px] flex items-center justify-center gap-2 active:bg-white/[0.06] transition-colors ${className}`}>
     {children}
   </button>
 );
@@ -212,13 +212,13 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
   };
   const btns = [
     { l: 'C', act: () => setDisplay('0'), cls: 'text-[#FF453A]' },
-    { l: '/', act: () => push('/'), cls: 'text-[#8E8E93]' },
-    { l: '*', act: () => push('*'), cls: 'text-[#8E8E93]' },
-    { l: <Delete size={16} />, act: () => setDisplay(p => p.length > 1 ? p.slice(0, -1) : '0'), cls: 'text-[#8E8E93]' },
+    { l: '/', act: () => push('/'), cls: 'text-[#98989D]' },
+    { l: '*', act: () => push('*'), cls: 'text-[#98989D]' },
+    { l: <Delete size={16} />, act: () => setDisplay(p => p.length > 1 ? p.slice(0, -1) : '0'), cls: 'text-[#98989D]' },
     { l: '7', act: () => push('7') }, { l: '8', act: () => push('8') }, { l: '9', act: () => push('9') },
-    { l: '-', act: () => push('-'), cls: 'text-[#8E8E93]' },
+    { l: '-', act: () => push('-'), cls: 'text-[#98989D]' },
     { l: '4', act: () => push('4') }, { l: '5', act: () => push('5') }, { l: '6', act: () => push('6') },
-    { l: '+', act: () => push('+'), cls: 'text-[#8E8E93]' },
+    { l: '+', act: () => push('+'), cls: 'text-[#98989D]' },
     { l: '1', act: () => push('1') }, { l: '2', act: () => push('2') }, { l: '3', act: () => push('3') },
     { l: '=', act: () => { setDisplay(String(safeCalculate(display))); setIsResult(true); }, cls: 'bg-[#0A84FF] text-white row-span-2' },
     { l: '0', act: () => push('0'), cls: 'col-span-2' },
@@ -241,19 +241,19 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
 };
 
 const FieldLabel = ({ children }) => (
-  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">{children}</label>
+  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">{children}</label>
 );
 
 // 金額入力（計算機ボタンはザブトンなし・min-w-0ではみ出し防止）
 const AmountInputSimple = ({ value, onChange, openCalculator }) => (
   <div className="flex gap-1.5 items-center w-full min-w-0">
     <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-11 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-      <span className="text-[15px] text-[#8E8E93] shrink-0">¥</span>
+      <span className="text-[15px] text-[#98989D] shrink-0">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
         className="flex-1 min-w-0 w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
     </div>
     <button type="button" onClick={openCalculator}
-      className="w-11 h-11 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+      className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
       <Calculator size={20} />
     </button>
   </div>
@@ -286,7 +286,7 @@ export const EditFormMemo = ({ editingItem, setEditingItem }) => (
 export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) => (
   <div className="space-y-4">
     <div className="flex items-center gap-3 p-4 bg-[#2C2C2E] rounded-[14px] border border-white/[0.06]">
-      <CreditCard size={16} className="text-[#8E8E93]" />
+      <CreditCard size={16} className="text-[#98989D]" />
       <span className="text-[14px] font-medium text-white">{editingItem.data.name}</span>
     </div>
     <div>
@@ -302,7 +302,7 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
       <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
         <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })}
           className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
-        <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
+        <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
       </div>
     </div>
   </div>
@@ -365,7 +365,7 @@ export const EditFormFixed = ({ editingItem, setEditingItem, openCalculator, pay
         className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#98989D] pointer-events-none" />
     </div>
   </div>
 );
@@ -391,7 +391,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
         className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#98989D] pointer-events-none" />
     </div>
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
@@ -399,7 +399,7 @@ export const EditFormTemplate = ({ editingItem, setEditingItem, openCalculator, 
         className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#98989D] pointer-events-none" />
     </div>
   </div>
 );
@@ -409,7 +409,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
     <div>
       <FieldLabel>内容</FieldLabel>
       <input value={editingItem.data.title || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, title: e.target.value } })}
-        placeholder="例: Netflix" className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors" />
+        placeholder="例: Netflix" className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
     </div>
     <div>
       <FieldLabel>金額</FieldLabel>
@@ -424,7 +424,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
       <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
         <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
           className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
-        <span className="text-[13px] text-[#8E8E93] ml-2 shrink-0">日</span>
+        <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
       </div>
     </div>
     <div className="relative">
@@ -433,7 +433,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
         className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#98989D] pointer-events-none" />
     </div>
     <div className="relative">
       <FieldLabel>支払方法</FieldLabel>
@@ -441,7 +441,7 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
         className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none appearance-none focus:border-white/20 transition-colors">
         {paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}
       </select>
-      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#8E8E93] pointer-events-none" />
+      <ChevronDown size={13} className="absolute right-4 bottom-3.5 text-[#98989D] pointer-events-none" />
     </div>
   </div>
 );
@@ -460,9 +460,9 @@ export class ErrorBoundary extends React.Component {
   componentDidCatch(e, info) { console.error(e, info); }
   render() {
     if (this.state.hasError) return (
-      <div className="h-screen w-full bg-black flex flex-col items-center justify-center p-8 gap-4">
+      <div className="h-screen w-full bg-[#1C1C1E] flex flex-col items-center justify-center p-8 gap-4">
         <p className="text-[15px] font-semibold text-white">エラーが発生しました</p>
-        <p className="text-[13px] text-[#8E8E93] text-center">画面を再読み込みしてください。</p>
+        <p className="text-[13px] text-[#98989D] text-center">画面を再読み込みしてください。</p>
         <button onClick={() => window.location.reload()} className="mt-2 px-6 h-11 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[14px]">再読み込み</button>
       </div>
     );
