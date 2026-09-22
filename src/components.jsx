@@ -107,14 +107,15 @@ export const Separator = ({ full = false }) => (
 );
 
 // タップで内訳を開ける行（Rowと同じ見た目を保つ）
-export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false, accent = false, children }) => (
+export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false, accent = false, danger = false, children }) => (
   <>
     <button type="button" onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3 active:bg-white/[0.03] transition-colors text-left">
       <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#7C7C80]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className={`tabular-nums whitespace-nowrap ${
-          accent ? 'text-[16px] font-bold text-white'
+          danger ? 'text-[#FF453A] text-[14px] font-semibold'
+          : accent ? 'text-[16px] font-bold text-white'
           : muted ? 'text-[#7C7C80] text-[13px]'
           : 'text-white text-[14px] font-medium'
         }`}>{value}</span>
@@ -153,11 +154,17 @@ export const NavButton = ({ active, onClick, icon, label }) => (
   </button>
 );
 
-export const Toast = ({ message, isVisible }) => (
-  <div className={`fixed bottom-32 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 pointer-events-none ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-    <div className="bg-[#2C2C2E] text-white px-4 py-2.5 rounded-full border border-white/[0.08] flex items-center gap-2 shadow-xl">
+export const Toast = ({ message, isVisible, action }) => (
+  <div className={`fixed bottom-32 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 ${isVisible && action ? 'pointer-events-auto' : 'pointer-events-none'} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+    <div className="bg-[#3A3A3C] text-white pl-4 pr-1.5 py-1.5 min-h-[44px] rounded-full flex items-center gap-2 shadow-xl whitespace-nowrap">
       <CheckCircle2 size={13} className="text-[#30D158] shrink-0" />
-      <span className="text-[12px] font-medium">{message}</span>
+      <span className="text-[13px] font-medium pr-2.5">{message}</span>
+      {action && (
+        <button type="button" onClick={action.onClick}
+          className="h-11 px-3.5 -my-1.5 rounded-full text-[13px] font-semibold text-[#0A84FF] active:bg-white/[0.08] transition-colors">
+          {action.label}
+        </button>
+      )}
     </div>
   </div>
 );
@@ -260,7 +267,7 @@ const AmountInputSimple = ({ value, onChange, openCalculator }) => (
 );
 
 export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
-  const labelMap = { salary: '手取り給与', totalBudget: 'クレジットカード利用目安', cashBudget: '月初のスタート現金', savings: '今月の積立額' };
+  const labelMap = { salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'おろした金額', savings: '今月の積立額' };
   return (
     <div>
       <FieldLabel>{labelMap[editingItem.type] || '金額'}</FieldLabel>
@@ -296,6 +303,7 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
         onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, bill: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.bill ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, bill: String(val) } })))}
       />
+      <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">空欄なら前月の利用額から自動で計算します。明細の金額が違うときだけ入力してください</p>
     </div>
     <div>
       <FieldLabel>引落日</FieldLabel>
