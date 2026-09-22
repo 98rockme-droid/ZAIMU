@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc,
-  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion
+  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion, arrayRemove, limit
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -70,7 +70,8 @@ const normalizeMonthly = (data) => {
     cashBudget: d.cashBudget || 0, cardBills: bills, fixedCosts: d.fixedCosts || [],
     catBudgets: d.catBudgets || {}, cardDueDates: dues, savings: d.savings || 0,
     savingsBuckets: d.savingsBuckets || [], memo: d.memo || '',
-    skippedRecurring: d.skippedRecurring || []
+    skippedRecurring: d.skippedRecurring || [],
+    cashTopups: d.cashTopups || []
   };
 };
 const normalizeConfig = data => ({
@@ -146,6 +147,8 @@ function AppMain() {
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [faqQ, setFaqQ] = useState('');
   const [budgetExpanded, setBudgetExpanded] = useState(false);
+  const [cashExpanded, setCashExpanded] = useState(false);
+  const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
   const [selDay, setSelDay] = useState(null);
   const [selYearMonth, setSelYearMonth] = useState(null);
 
@@ -156,6 +159,8 @@ function AppMain() {
   const prevFetchRef = useRef(null);
   const [monthly, setMonthly] = useState(normalizeMonthly({}));
   const [mLoadedMonth, setMLoadedMonth] = useState(null);
+  const [mEmpty, setMEmpty] = useState(false);
+  const inheritRef = useRef(new Set());
   const [config, setConfig] = useState(normalizeConfig({}));
   const [savingsTotal, setSavingsTotal] = useState(0);
   const [savingsWithdrawn, setSavingsWithdrawn] = useState(0);
@@ -183,7 +188,7 @@ function AppMain() {
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
-      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元になり、今月の予算（カード）からも差し引かれます。ATMで追加でおろした場合はこの金額に足して更新してください。' },
+      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元になり、今月の予算（カード）からも差し引かれます。月の途中でATMからおろした分は、ホームの現金残高をタップして記録できます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
@@ -191,9 +196,10 @@ function AppMain() {
     { category: 'ホーム画面の見方', items: [
       { q: '実質あと使える（カード）', a: '残り全体から、まだ記録されていない固定費（定期支出）の予定額を差し引いた、本当に自由に使える金額です。', formula: '今月の予算（カード） − カード支出 − 固定費予定' },
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。', formula: '手取り給与 − 先取り合計' },
-      { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金を引いた、カードで使える予算の上限です。固定費もこの中から実支出として記録されます。', formula: '先取り後の残り − 月初のスタート現金' },
+      { q: '今月の予算（カード）', a: '先取り後の残りから、今月使う現金（スタート現金＋ATMでおろした分）を引いた、カードで使える予算の上限です。固定費もこの中から実支出として記録されます。', formula: '先取り後の残り − 月初のスタート現金 − ATMでおろした現金' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
-      { q: '現金残高', a: '月初のスタート現金から今月の現金支出を引いた残高です。', formula: '月初のスタート現金 − 現金支出' },
+      { q: '現金残高', a: '手元にあるはずの現金です。タップすると内訳の確認と、ATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: 'ATMで現金をおろしたら？', a: 'ホームの現金残高をタップし「ATMで現金をおろした」から金額を記録してください。現金残高に加算され、その分カードで使える予算から差し引かれます。記録した行をタップすると修正・削除できます。' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。', formula: '先取りの積立合計 − 貯金からの支払い合計' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る金額のシミュレーションです。実質あと使える額と現金残高の合計です。`, formula: '実質あと使える（カード） + 現金残高' },
       { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
@@ -205,7 +211,9 @@ function AppMain() {
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など毎月決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
       { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
-      { q: '来月の設定はどうすればいいですか？', a: '設定タブの「先月の設定をコピー」で引き継げます。' },
+      { q: '来月の設定はどうすればいいですか？', a: '新しい月にアプリを開くと、直近の月の手取り給与・先取り・スタート現金などが自動で引き継がれます。金額が変わる項目だけ資金計画で編集してください。手動で引き継ぎたいときは設定タブの「先月の設定をコピー」も使えます。' },
+      { q: '今月の引落予定はどう計算される？', a: '支払方法ごとに、前月にその方法で使った金額を今月の引落予定として自動で表示します。カード明細と金額が違うときは、資金計画の「今月の引落予定」から手入力で上書きできます（空欄に戻すと自動に戻ります）。' },
+      { q: '支出を間違えて削除したら？', a: '削除した直後に表示される「元に戻す」をタップすると、そのまま復元できます（数秒間表示されます）。' },
       { q: 'データのバックアップはできますか？', a: '設定タブのCSVを書き出すから全取引データをダウンロードできます。' }
     ]}
   ], [mn, nextMn]);
@@ -216,7 +224,13 @@ function AppMain() {
     return FAQ.map(s => ({ ...s, items: s.items.filter(i => i.q.toLowerCase().includes(q) || i.a.toLowerCase().includes(q) || (i.formula || '').toLowerCase().includes(q)) })).filter(s => s.items.length);
   }, [faqQ, FAQ]);
 
-  const showToast = msg => { setToast({ visible: true, message: msg }); setTimeout(() => setToast({ visible: false, message: '' }), 2500); };
+  const toastTimer = useRef(null);
+  const showToast = (msg, action = null) => {
+    clearTimeout(toastTimer.current);
+    setToast({ visible: true, message: msg, action });
+    toastTimer.current = setTimeout(() => setToast({ visible: false, message: '', action: null }), action ? 5000 : 2500);
+  };
+  const hideToast = () => { clearTimeout(toastTimer.current); setToast({ visible: false, message: '', action: null }); };
   const openCalc = (init, cb) => { setCalcInit(init); setCalcCb(() => cb); setShowCalc(true); };
 
   useEffect(() => {
@@ -261,7 +275,13 @@ function AppMain() {
     const fm = month;
     setMLoadedMonth(null);
     return onSnapshot(doc(db, 'users', user.uid, 'months', month),
-      s => { setMonthly(normalizeMonthly(s.exists() ? s.data() : {})); if (!s.metadata.fromCache) setMLoadedMonth(fm); }, console.error);
+      s => {
+        const raw = s.exists() ? s.data() : {};
+        setMonthly(normalizeMonthly(raw));
+        // 手取り・先取り・スタート現金がどれも未設定なら「空の月」
+        setMEmpty(!(Number(raw.salary) > 0) && !(raw.savingsBuckets || []).length && !(Number(raw.cashBudget) > 0));
+        if (!s.metadata.fromCache) setMLoadedMonth(fm);
+      }, console.error);
   }, [month, user]);
 
   useEffect(() => {
@@ -340,6 +360,57 @@ function AppMain() {
     });
   }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring]);
 
+  /* 月設定の自動引き継ぎ: 今月が未設定なら、直近の設定済みの月からコピー */
+  useEffect(() => {
+    if (!user || mLoadedMonth !== month || !mEmpty) return;
+    if (month !== getMonthString(new Date())) return; // 実際の今月だけ（閲覧しただけの未来月は作らない）
+    if (inheritRef.current.has(month)) return;
+    inheritRef.current.add(month);
+    (async () => {
+      try {
+        const snap = await getDocs(query(
+          collection(db, 'users', user.uid, 'months'),
+          where(documentId(), '<', month), orderBy(documentId(), 'desc'), limit(6)
+        ));
+        const src = snap.docs.find(d => Number(d.data().salary) > 0);
+        if (!src) return;
+        const d = src.data();
+        await setDoc(doc(db, 'users', user.uid, 'months', month), {
+          salary: d.salary || 0, cashBudget: d.cashBudget || 0,
+          catBudgets: d.catBudgets || {}, cardDueDates: d.cardDueDates || {},
+          savings: d.savings || 0, savingsBuckets: d.savingsBuckets || [],
+          inheritedFrom: src.id
+        }, { merge: true });
+        showToast(`${formatMonthJP(src.id)}の設定を引き継ぎました`);
+      } catch (e) { console.error(e); }
+    })();
+  }, [user, mLoadedMonth, mEmpty, month]);
+
+  /* 入力候補: 入力モーダルを初めて開いたときに過去の支出を取得 */
+  useEffect(() => {
+    if (!user || !isTxOpen || histTx) return;
+    getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'), limit(300)))
+      .then(s => setHistTx(s.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(e => { console.error(e); setHistTx([]); });
+  }, [user, isTxOpen, histTx]);
+
+  // タイトルごとに「最新の内容」と「使った回数」をまとめる
+  const titleIndex = useMemo(() => {
+    const map = new Map();
+    const seen = new Set();
+    [...txList, ...(histTx || [])]
+      .filter(t => t.title && !seen.has(t.id) && seen.add(t.id))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .forEach(t => {
+        const k = t.title.trim();
+        if (!k) return;
+        const cur = map.get(k);
+        if (cur) cur.count += 1;
+        else map.set(k, { title: k, amount: Number(t.amount) || 0, category: t.category, paymentMethod: t.paymentMethod, count: 1 });
+      });
+    return [...map.values()];
+  }, [txList, histTx]);
+
   /* 年間ビューのデータ取得（直近12ヶ月） */
   useEffect(() => {
     if (!user || activeTab !== 'analysis' || analysisView !== 'year' || yearData) return;
@@ -371,6 +442,9 @@ function AppMain() {
   const S = useMemo(() => {
     const salary = Number(monthly?.salary) || 0;
     const cashBudget = Number(monthly?.cashBudget) || 0;
+    // 月の途中でATMからおろした現金（現金の手元に加わり、カードで使える予算からは減る）
+    const cashTopupTotal = (monthly?.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const cashAvail = cashBudget + cashTopupTotal;
     const norm = txList.filter(t => getSpendType(t) === 'normal');
     const normPrev = prevTxList.filter(t => getSpendType(t) === 'normal');
     const spCard = norm.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
@@ -379,7 +453,7 @@ function AppMain() {
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
     // 今月の予算 = 手取り − 先取り − スタート現金（固定費は実支出として計上）
-    const varBudget = lifeBudget - cashBudget;
+    const varBudget = lifeBudget - cashAvail;
     const varRemain = varBudget - spCard;
     // 定期支出（固定費）: カード払いのみ予算計算の対象（現金払いは現金残高の軸で管理）
     const recCard = (config?.recurring || []).filter(r => (r.method || CASH) !== CASH);
@@ -391,7 +465,7 @@ function AppMain() {
     const freeBudget = varBudget - recTotalAll;
     const freeSpent = spCard - recRecorded;
     const freeRemain = varRemain - pendingFixed;
-    const cashRemain = cashBudget - spCash;
+    const cashRemain = cashAvail - spCash;
     const cats = norm.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const prevCats = normPrev.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const catBudSum = (config?.categories || []).reduce((s, c) => s + (monthly?.catBudgets?.[c.name] || 0), 0);
@@ -399,7 +473,7 @@ function AppMain() {
     const spSpecialPrev = prevTxList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const spSavings = txList.filter(t => getSpendType(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     return {
-      cashBudget,
+      cashBudget, cashTopupTotal, cashAvail,
       cashRemain, projCash: freeRemain + cashRemain,
       catBudSum, savTotal, lifeBudget, varBudget, varRemain,
       pendingFixed, recTotalAll, recRecorded, freeBudget, freeSpent, freeRemain,
@@ -560,6 +634,13 @@ function AppMain() {
       if (['salary', 'cashBudget'].includes(type)) {
         const fm = { salary: 'salary', cashBudget: 'cashBudget' };
         await setDoc(mRef, { [fm[type]]: toNumber(data.value) }, { merge: true });
+      } else if (type === 'cashTopup') {
+        const amt = toNumber(data.value);
+        if (amt <= 0) return showToast('金額を入力してください');
+        const list = [...(monthly.cashTopups || [])];
+        if (index === -1) list.push({ id: `ct_${Date.now()}`, amount: amt, date: getTodayString() });
+        else list[index] = { ...list[index], amount: amt };
+        await setDoc(mRef, { cashTopups: list }, { merge: true });
       } else if (type === 'memo') {
         await setDoc(mRef, { memo: data.memo || '' }, { merge: true });
       } else if (type === 'bill') {
@@ -599,7 +680,8 @@ function AppMain() {
     const mRef = doc(db, 'users', user.uid, 'months', month);
     const cRef = doc(db, 'users', user.uid, 'settings', 'config');
     try {
-      if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
+      if (type === 'cashTopup') await setDoc(mRef, { cashTopups: (monthly.cashTopups || []).filter((_, i) => i !== index) }, { merge: true });
+      else if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'template') await setDoc(cRef, { ...config, templates: (config.templates || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'recurring') await setDoc(cRef, { ...config, recurring: (config.recurring || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'payment') await setDoc(cRef, { ...config, paymentMethods: (config.paymentMethods || []).filter((_, i) => i !== index) }, { merge: true });
@@ -624,7 +706,7 @@ function AppMain() {
         const d = snap.data();
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
           salary: d.salary || 0, budget: d.budget || 0, cashBudget: d.cashBudget || 0,
-          fixedCosts: d.fixedCosts || [], catBudgets: d.catBudgets || {}, cardBills: d.cardBills || {},
+          catBudgets: d.catBudgets || {},
           cardDueDates: d.cardDueDates || {}, savings: d.savings || 0, savingsBuckets: d.savingsBuckets || []
         }, { merge: true });
         showToast('コピーしました'); setCopyOpen(false);
@@ -738,7 +820,7 @@ function AppMain() {
   return (
     <div className="fixed inset-0 w-full bg-[#1C1C1E] text-white font-sans flex flex-col overflow-hidden">
       {confirmDialog}
-      <Toast message={toast.message} isVisible={toast.visible} />
+      <Toast message={toast.message} isVisible={toast.visible} action={toast.action} />
       <OfflineBanner isOffline={isOffline} />
 
       <div className="w-full max-w-md h-full flex flex-col bg-[#1C1C1E] mx-auto relative">
@@ -832,6 +914,7 @@ function AppMain() {
                         </div>
                       ))}
                       <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
+                      {S.cashTopupTotal > 0 && <SubRow label="ATMでおろした現金" value={`−¥${S.cashTopupTotal.toLocaleString()}`} />}
                     </ExpandableRow>
                   </Card>
                 </div>
@@ -839,7 +922,28 @@ function AppMain() {
                 <div>
                   <Label>残高・見通し</Label>
                   <Card>
-                    <Row label="現金残高" value={`¥${S.cashRemain.toLocaleString()}`} danger={S.cashRemain < 0} />
+                    <ExpandableRow
+                      label="現金残高"
+                      value={`¥${S.cashRemain.toLocaleString()}`}
+                      danger={S.cashRemain < 0}
+                      expanded={cashExpanded}
+                      onToggle={() => setCashExpanded(v => !v)}
+                    >
+                      <SubRow label="月初のスタート現金" value={`¥${S.cashBudget.toLocaleString()}`} />
+                      {(monthly.cashTopups || []).map((c, i) => (
+                        <button key={c.id || i} type="button" onClick={() => openEdit('cashTopup', { value: c.amount }, i)}
+                          className="w-full flex items-center justify-between pl-3 gap-3 min-h-[32px] text-left active:opacity-60">
+                          <span className="text-[12px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした</span>
+                          <span className="text-[12px] text-[#7C7C80] tabular-nums shrink-0">+¥{Number(c.amount || 0).toLocaleString()}</span>
+                        </button>
+                      ))}
+                      <SubRow label="今月の現金支出" value={`−¥${S.spCash.toLocaleString()}`} />
+                      <button type="button" onClick={() => openEdit('cashTopup', { value: '' }, -1)}
+                        className="w-full flex items-center gap-2 pl-3 min-h-[44px] text-left active:opacity-60">
+                        <Plus size={14} className="text-[#0A84FF] shrink-0" />
+                        <span className="text-[13px] text-[#0A84FF]">ATMで現金をおろした</span>
+                      </button>
+                    </ExpandableRow>
                     <Separator />
                     <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
                     <Separator />
@@ -1368,15 +1472,36 @@ function AppMain() {
                     </Card>
                   </div>
                   <div>
-                    <Label>引落予定のカード</Label>
-                    <Card><div>
-                      {methods.filter(m => m !== CASH).map((m, i, arr) => (
-                        <div key={m}>
-                          <SettingsRow onClick={() => openEdit('bill', { name: m, bill: monthly.cardBills?.[m] ?? 0, due: monthly.cardDueDates?.[m] ?? '' }, 0)} left={m} right={`¥${Number(monthly.cardBills?.[m] || 0).toLocaleString()} (${monthly.cardDueDates?.[m] || '-'}日)`} />
-                          {i < arr.length - 1 && <Separator />}
-                        </div>
-                      ))}
-                    </div></Card>
+                    {(() => {
+                      // 前月にその支払方法で使った額 = 今月の引落予定（手入力があればそちらを優先）
+                      const prevByMethod = prevTxList.reduce((a, t) => {
+                        const m = t.paymentMethod || CASH;
+                        if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
+                        return a;
+                      }, {});
+                      const rows = methods.filter(m => m !== CASH).map(m => {
+                        const manual = Number(monthly.cardBills?.[m]) || 0;
+                        const auto = prevByMethod[m] || 0;
+                        return { m, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
+                      });
+                      const total = rows.reduce((s, r) => s + r.shown, 0);
+                      return (
+                        <>
+                          <Label trailing={`合計 ¥${total.toLocaleString()}`}>今月の引落予定</Label>
+                          <Card>
+                            {rows.map((r, i) => (
+                              <div key={r.m}>
+                                <SettingsRow
+                                  onClick={() => openEdit('bill', { name: r.m, bill: r.manual || '', due: r.due ?? '' }, 0)}
+                                  left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.m}</span><span className="text-[11px] text-[#636366] truncate">{r.manual > 0 ? '手入力' : '前月の利用額から自動'}{r.due ? ` · ${r.due}日` : ''}</span></div>}
+                                  right={`¥${r.shown.toLocaleString()}`} />
+                                {i < rows.length - 1 && <Separator />}
+                              </div>
+                            ))}
+                          </Card>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -1492,11 +1617,26 @@ function AppMain() {
                 });
                 if (!ok) return;
                 try {
-                  await deleteDoc(doc(db, 'users', user.uid, 'transactions', viewingTx.id));
+                  const { id: delId, ...delData } = viewingTx;
+                  const delMonth = month;
+                  await deleteDoc(doc(db, 'users', user.uid, 'transactions', delId));
                   if (isRec) {
-                    await setDoc(doc(db, 'users', user.uid, 'months', month), { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
+                    await setDoc(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
                   }
-                  setViewingTx(null); showToast('削除しました');
+                  setViewingTx(null);
+                  showToast('削除しました', {
+                    label: '元に戻す',
+                    onClick: async () => {
+                      hideToast();
+                      try {
+                        await setDoc(doc(db, 'users', user.uid, 'transactions', delId), delData);
+                        if (isRec) {
+                          await setDoc(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayRemove(delData.recurringId) }, { merge: true });
+                        }
+                        showToast('元に戻しました');
+                      } catch (e) { console.error(e); showToast('復元できませんでした'); }
+                    }
+                  });
                 } catch (e) { console.error(e); showToast('エラー'); }
               }}><Trash2 size={17} /></DangerIconButton>
               <PrimaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); startEdit(tx); }}><Pencil size={14} /> 編集する</PrimaryButton>
@@ -1566,6 +1706,32 @@ function AppMain() {
                   className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors"
                   required
                 />
+                {!editingTx && (() => {
+                  const q = inTitle.trim().toLowerCase();
+                  if (!q) return null;
+                  const sugg = titleIndex
+                    .filter(x => x.title.toLowerCase().includes(q) && x.title !== inTitle.trim())
+                    .sort((a, b) => (b.title.toLowerCase().startsWith(q) - a.title.toLowerCase().startsWith(q)) || (b.count - a.count))
+                    .slice(0, 5);
+                  if (!sugg.length) return null;
+                  return (
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5 mt-2">
+                      {sugg.map(x => (
+                        <button key={x.title} type="button"
+                          onClick={() => {
+                            setInTitle(x.title);
+                            if (catNames.includes(x.category)) setInCat(x.category);
+                            if (methods.includes(x.paymentMethod)) setInMethod(x.paymentMethod);
+                            if (!inAmount) setInAmount(String(x.amount));
+                          }}
+                          className="shrink-0 h-11 px-3.5 rounded-[14px] bg-[#2C2C2E] flex flex-col justify-center text-left active:bg-[#3A3A3C] transition-colors">
+                          <span className="text-[13px] text-white leading-tight whitespace-nowrap">{x.title}</span>
+                          <span className="text-[11px] text-[#636366] leading-tight whitespace-nowrap tabular-nums">{x.category} · ¥{x.amount.toLocaleString()}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">カテゴリ</label>
@@ -1659,7 +1825,7 @@ function AppMain() {
       {/* 設定編集モーダル */}
       {editingItem && (() => {
         const TYPE_LABELS = {
-          salary: '手取り給与', cashBudget: '月初のスタート現金', memo: '今月のメモ',
+          salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ',
           bill: '引落予定', savingsBucket: '先取り項目', category: 'カテゴリ',
           template: 'テンプレート', recurring: '定期支出', payment: '支払方法'
         };
@@ -1669,7 +1835,7 @@ function AppMain() {
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title={isNew ? `${name}を追加` : name} onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-3.5">
-            {['salary', 'cashBudget'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+            {['salary', 'cashBudget', 'cashTopup'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
