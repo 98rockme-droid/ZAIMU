@@ -107,7 +107,7 @@ const ModalHeader = ({ title, onClose }) => (
     <span className="text-[16px] font-semibold text-white">{title}</span>
     <button
       onClick={onClose}
-      className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full text-[#8E8E93] active:bg-white/[0.06] transition-colors"
+      className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full text-[#98989D] active:bg-white/[0.06] transition-colors"
     >
       <X size={15} />
     </button>
@@ -697,10 +697,10 @@ function AppMain() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-[#8E8E93] text-[14px]">読み込み中...</div>;
+  if (authLoading) return <div className="h-screen bg-[#1C1C1E] flex items-center justify-center text-[#98989D] text-[14px]">読み込み中...</div>;
 
   if (!user) return (
-    <div className="h-screen w-full bg-black flex flex-col items-center justify-center p-8 gap-10">
+    <div className="h-screen w-full bg-[#1C1C1E] flex flex-col items-center justify-center p-8 gap-10">
       <h1 className="text-[32px] font-semibold tracking-tight text-white">ZAIMU</h1>
       <PrimaryButton onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}>
         <Lock size={15} /> Googleでログイン
@@ -736,22 +736,22 @@ function AppMain() {
   ];
 
   return (
-    <div className="fixed inset-0 w-full bg-black text-white font-sans flex flex-col overflow-hidden">
+    <div className="fixed inset-0 w-full bg-[#1C1C1E] text-white font-sans flex flex-col overflow-hidden">
       {confirmDialog}
       <Toast message={toast.message} isVisible={toast.visible} />
       <OfflineBanner isOffline={isOffline} />
 
-      <div className="w-full max-w-md h-full flex flex-col bg-black mx-auto relative">
+      <div className="w-full max-w-md h-full flex flex-col bg-[#1C1C1E] mx-auto relative">
 
         {/* HEADER */}
-        <header className="flex-none px-4 flex items-center justify-between bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}>
+        <header className="flex-none px-4 flex items-center justify-between bg-[#1C1C1E]/75 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           {activeTab === 'settings' && settingTab !== 'menu' ? (
             <>
-              <button onClick={() => setSettingTab('menu')} className="w-11 h-11 -ml-2 flex items-center justify-center text-[#8E8E93]"><ArrowLeft size={18} /></button>
+              <button onClick={() => setSettingTab('menu')} className="w-11 h-11 -ml-2 flex items-center justify-center text-[#98989D]"><ArrowLeft size={18} /></button>
               <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
                 <span className="text-[14px] font-semibold text-white">{menuTitle}</span>
                 {settingTab === 'category' && (
-                  <span className="text-[11px] text-[#8E8E93]">¥{S.catBudSum.toLocaleString()}</span>
+                  <span className="text-[11px] text-[#98989D]">¥{S.catBudSum.toLocaleString()}</span>
                 )}
               </div>
               <div className="w-10" />
@@ -760,11 +760,11 @@ function AppMain() {
             <>
               <div className="w-8" />
               <div className="flex items-center gap-0.5">
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#8E8E93]"><ChevronLeft size={16} /></button>
+                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronLeft size={16} /></button>
                 <span className="text-[14px] font-semibold text-white min-w-[96px] text-center tabular-nums">{formatMonthJP(month)}</span>
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#8E8E93]"><ChevronRight size={16} /></button>
+                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronRight size={16} /></button>
               </div>
-              <button onClick={() => setMonth(getMonthString(new Date()))} className="w-11 h-11 -mr-2 flex items-center justify-center text-[#8E8E93]"><Calendar size={16} /></button>
+              <button onClick={() => setMonth(getMonthString(new Date()))} className="w-11 h-11 -mr-2 flex items-center justify-center text-[#98989D]"><Calendar size={16} /></button>
             </>
           )}
         </header>
@@ -775,10 +775,10 @@ function AppMain() {
           {activeTab === 'home' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide pb-36">
               {monthly.memo && (
-                <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full px-4 py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#1C1C1E]/60">
+                <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full px-4 py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#2C2C2E]/60">
                   <span className="text-[13px] mt-0.5 shrink-0">📌</span>
-                  <span className={`flex-1 text-[12px] text-[#8E8E93] leading-relaxed ${memoExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>{monthly.memo}</span>
-                  <ChevronDown size={13} className={`text-[#48484A] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
+                  <span className={`flex-1 text-[12px] text-[#98989D] leading-relaxed ${memoExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>{monthly.memo}</span>
+                  <ChevronDown size={13} className={`text-[#636366] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
                 </button>
               )}
               <div className="px-4 pt-4 space-y-5">
@@ -787,7 +787,7 @@ function AppMain() {
                   <Card>
                     {/* メイン数字 + 進捗バー */}
                     <div className="px-5 pt-5 pb-4">
-                      <p className="text-[11px] text-[#8E8E93] mb-1">実質あと使える（カード）</p>
+                      <p className="text-[11px] text-[#98989D] mb-1">実質あと使える（カード）</p>
                       <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
                         ¥{S.freeRemain.toLocaleString()}
                       </p>
@@ -800,12 +800,12 @@ function AppMain() {
                           <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
                         )}
                       </div>
-                      <p className="mt-2.5 text-[11px] text-[#48484A] tabular-nums">
+                      <p className="mt-2.5 text-[11px] text-[#636366] tabular-nums">
                         予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
                       </p>
                       {isCurrentMonth && S.freeBudget > 0 && (
-                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.06] gap-3">
-                          <span className="text-[11px] text-[#8E8E93] truncate">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
+                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.08] gap-3">
+                          <span className="text-[11px] text-[#98989D] truncate">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
                           <span className={`text-[11px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
                             {paceDiff <= 0 ? `−¥${Math.abs(paceDiff).toLocaleString()}` : `+¥${paceDiff.toLocaleString()}`}
                           </span>
@@ -827,8 +827,8 @@ function AppMain() {
                       <SubRow label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} />
                       {buckets.map(b => (
                         <div key={b.id} className="flex items-center justify-between pl-7 gap-3">
-                          <span className="text-[11px] text-[#3A3A3C] truncate">{b.name}</span>
-                          <span className="text-[11px] text-[#48484A] tabular-nums shrink-0">¥{Number(b.amount || 0).toLocaleString()}</span>
+                          <span className="text-[11px] text-[#545458] truncate">{b.name}</span>
+                          <span className="text-[11px] text-[#636366] tabular-nums shrink-0">¥{Number(b.amount || 0).toLocaleString()}</span>
                         </div>
                       ))}
                       <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
@@ -857,7 +857,7 @@ function AppMain() {
                         <SubRow label="取り崩し（指定なし）" value={`−¥${withdrawnByBucket['指定なし'].toLocaleString()}`} />
                       )}
                       {savingsWithdrawn > 0 && (
-                        <p className="pl-3 pt-1 text-[11px] text-[#48484A] tabular-nums">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
+                        <p className="pl-3 pt-1 text-[11px] text-[#636366] tabular-nums">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
                       )}
                     </ExpandableRow>
                   </Card>
@@ -873,12 +873,12 @@ function AppMain() {
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..."
-                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-3 text-[16px] text-white outline-none placeholder-[#48484A]" />
-                    <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
+                      className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-9 pr-3 text-[16px] text-white outline-none placeholder-[#636366]" />
+                    <Search size={14} className="absolute left-3 top-3.5 text-[#636366]" />
                   </div>
-                  <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] gap-0.5">
+                  <div className="flex bg-[#2C2C2E] rounded-[14px] gap-0.5">
                     {[['list', <AlignJustify size={14} />], ['calendar', <CalendarDays size={14} />]].map(([v, icon]) => (
-                      <button key={v} onClick={() => setLogView(v)} className={`w-11 h-11 rounded-[10px] flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>{icon}</button>
+                      <button key={v} onClick={() => setLogView(v)} className={`w-11 h-11 rounded-[10px] flex items-center justify-center transition-colors ${logView === v ? 'bg-white/10 text-white' : 'text-[#636366]'}`}>{icon}</button>
                     ))}
                   </div>
                 </div>
@@ -886,23 +886,23 @@ function AppMain() {
                   {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
                     <div key={key} className="flex-1 relative">
                       <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
+                        className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
                         <option value="ALL">すべて</option>
                         {opts.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
-                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#48484A] pointer-events-none" />
+                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
                     </div>
                   ))}
                   <div className="flex-1 relative">
                     <select value={filter.spendType} onChange={e => setFilter(p => ({ ...p, spendType: e.target.value }))}
-                      className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
+                      className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
                       <option value="ALL">全種別</option>
                       {SPEND_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
-                    <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#48484A] pointer-events-none" />
+                    <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
                   </div>
                   <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', spendType: 'ALL' }); }}
-                    className="w-11 h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] flex items-center justify-center text-[#48484A] shrink-0">
+                    className="w-11 h-11 bg-[#2C2C2E] rounded-[14px] flex items-center justify-center text-[#636366] shrink-0">
                     <X size={14} />
                   </button>
                 </div>
@@ -933,12 +933,12 @@ function AppMain() {
                                       <div className="flex-1 min-w-0">
                                         <p className="text-[14px] text-white truncate leading-snug">{t.title}</p>
                                         <div className="flex items-center gap-1.5 mt-0.5 overflow-hidden whitespace-nowrap text-[11px]">
-                                          <span className="text-[#48484A]">{t.category}</span>
-                                          <span className="text-[#3A3A3C]">·</span>
-                                          <span className="text-[#48484A] truncate">{t.paymentMethod}</span>
-                                          {st === 'special' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[#636366] font-medium">特別費</span></>)}
-                                          {st === 'savings' && (<><span className="text-[#3A3A3C]">·</span><span className="text-[#4A7BA6] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
-                                          {t.recurringId && (<><span className="text-[#3A3A3C]">·</span><span className="text-[#636366] font-medium flex items-center gap-0.5"><Repeat size={10} />定期</span></>)}
+                                          <span className="text-[#636366]">{t.category}</span>
+                                          <span className="text-[#545458]">·</span>
+                                          <span className="text-[#636366] truncate">{t.paymentMethod}</span>
+                                          {st === 'special' && (<><span className="text-[#545458]">·</span><span className="text-[#7C7C80] font-medium">特別費</span></>)}
+                                          {st === 'savings' && (<><span className="text-[#545458]">·</span><span className="text-[#4A7BA6] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
+                                          {t.recurringId && (<><span className="text-[#545458]">·</span><span className="text-[#7C7C80] font-medium flex items-center gap-0.5"><Repeat size={10} />定期</span></>)}
                                         </div>
                                       </div>
                                       <span className="text-[15px] font-semibold text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
@@ -958,7 +958,7 @@ function AppMain() {
                     <Card className="p-3">
                       <div className="grid grid-cols-7 text-center mb-1">
                         {WEEKDAYS.map((d, i) => (
-                          <span key={d} className={`text-[11px] py-1 ${i === 0 ? 'text-[#FF6961]/70' : i === 6 ? 'text-[#64A8FF]/70' : 'text-[#48484A]'}`}>{d}</span>
+                          <span key={d} className={`text-[11px] py-1 ${i === 0 ? 'text-[#FF6961]/70' : i === 6 ? 'text-[#64A8FF]/70' : 'text-[#636366]'}`}>{d}</span>
                         ))}
                       </div>
                       <div className="grid grid-cols-7 gap-1">
@@ -1004,7 +1004,7 @@ function AppMain() {
                                     className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left">
                                     <div className="flex-1 min-w-0">
                                       <p className="text-[14px] text-white truncate">{t.title}</p>
-                                      <p className="text-[11px] text-[#48484A] truncate">{tags}</p>
+                                      <p className="text-[11px] text-[#636366] truncate">{tags}</p>
                                     </div>
                                     <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
                                   </button>
@@ -1029,10 +1029,10 @@ function AppMain() {
           {activeTab === 'analysis' && (
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
               {/* 月間/年間 切替 */}
-              <div className="flex bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] p-1 gap-1">
+              <div className="flex bg-[#2C2C2E] rounded-[14px] p-1 gap-1">
                 {[['month', '月間'], ['year', '年間']].map(([v, l]) => (
                   <button key={v} onClick={() => setAnalysisView(v)}
-                    className={`flex-1 h-11 rounded-[10px] text-[13px] font-medium transition-colors ${analysisView === v ? 'bg-white/10 text-white' : 'text-[#48484A]'}`}>
+                    className={`flex-1 h-11 rounded-[10px] text-[13px] font-medium transition-colors ${analysisView === v ? 'bg-white/10 text-white' : 'text-[#636366]'}`}>
                     {l}
                   </button>
                 ))}
@@ -1060,7 +1060,7 @@ function AppMain() {
                             return (
                               <>
                                 <div className="mb-4">
-                                  <p className="text-[11px] text-[#8E8E93]">{formatMonthJP(sel)}</p>
+                                  <p className="text-[11px] text-[#98989D]">{formatMonthJP(sel)}</p>
                                   <div className="flex items-baseline gap-2 mt-1">
                                     <p className="text-[26px] font-semibold text-white tracking-tight tabular-nums leading-none">¥{yearData.spend[sel].toLocaleString()}</p>
                                     {diff !== null && yearData.spend[prevM] > 0 && (
@@ -1069,7 +1069,7 @@ function AppMain() {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-[11px] text-[#48484A] mt-1.5 tabular-nums">積立 ¥{yearData.save[sel].toLocaleString()}</p>
+                                  <p className="text-[11px] text-[#636366] mt-1.5 tabular-nums">積立 ¥{yearData.save[sel].toLocaleString()}</p>
                                 </div>
                                 <div className="flex items-end gap-1 h-32">
                                   {yearData.months.map(m => {
@@ -1080,7 +1080,7 @@ function AppMain() {
                                         aria-label={`${formatMonthJP(m)} ¥${yearData.spend[m].toLocaleString()}`}
                                         className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end min-w-0">
                                         <div className={`w-full rounded-t-[4px] transition-colors ${isSel ? 'bg-[#0A84FF]' : 'bg-white/20'}`} style={{ height: `${h}%` }} />
-                                        <span className={`text-[11px] tabular-nums ${isSel ? 'text-white font-medium' : 'text-[#48484A]'}`}>{Number(m.split('-')[1])}</span>
+                                        <span className={`text-[11px] tabular-nums ${isSel ? 'text-white font-medium' : 'text-[#636366]'}`}>{Number(m.split('-')[1])}</span>
                                       </button>
                                     );
                                   })}
@@ -1108,7 +1108,7 @@ function AppMain() {
                               <div className="px-4 py-3.5 flex items-center justify-between gap-3">
                                 <div className="flex flex-col min-w-0">
                                   <span className="text-[14px] text-[#EBEBF5]/80 truncate">{formatMonthJP(m)}</span>
-                                  <span className="text-[11px] text-[#48484A] tabular-nums">積立 ¥{yearData.save[m].toLocaleString()}</span>
+                                  <span className="text-[11px] text-[#636366] tabular-nums">積立 ¥{yearData.save[m].toLocaleString()}</span>
                                 </div>
                                 <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{yearData.spend[m].toLocaleString()}</span>
                               </div>
@@ -1129,7 +1129,7 @@ function AppMain() {
                 <div className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] text-[#8E8E93] mb-1.5">通常支出</p>
+                      <p className="text-[11px] text-[#98989D] mb-1.5">通常支出</p>
                       <p className="text-[32px] font-semibold text-white tracking-tight leading-none">¥{S.spent.toLocaleString()}</p>
                     </div>
                     <div className={`flex items-center gap-1 px-3 py-1.5 rounded-[10px] text-[11px] font-medium ${S.spent <= S.prevSpent ? 'bg-[#30D158]/10 text-[#30D158]' : 'bg-[#FF453A]/10 text-[#FF453A]'}`}>
@@ -1147,7 +1147,7 @@ function AppMain() {
                   const colorOf = Object.fromEntries(donut.items.map(i => [i.name, i.color]));
                   const catList = Object.entries(S.cats).filter(([, a]) => a > 0).sort((a, b) => b[1] - a[1]);
                   return (
-                    <div className="border-t border-white/[0.06]">
+                    <div className="border-t border-white/[0.08]">
                       {catList.map(([name, amt], i) => {
                         const prev = S.prevCats[name] || 0;
                         const d = amt - prev;
@@ -1163,7 +1163,7 @@ function AppMain() {
                                 </span>
                               )}
                               <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{amt.toLocaleString()}</span>
-                              <ChevronDown size={14} className="text-[#48484A] -rotate-90 shrink-0" />
+                              <ChevronDown size={14} className="text-[#636366] -rotate-90 shrink-0" />
                             </button>
                             {i < catList.length - 1 && <Separator />}
                           </div>
@@ -1210,7 +1210,7 @@ function AppMain() {
                           <div className="px-4 py-3">
                             <div className="flex justify-between mb-2">
                               <span className="text-[14px] text-white">{n}</span>
-                              <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#8E8E93]'}`}>¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}</span>
+                              <span className={`text-[13px] font-medium tabular-nums ${over ? 'text-[#FF453A]' : 'text-[#98989D]'}`}>¥{cur.toLocaleString()} / ¥{bud.toLocaleString()}</span>
                             </div>
                             <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
                               <div className={`h-full rounded-full ${over ? 'bg-[#FF453A]' : 'bg-white/50'}`} style={{ width: `${pct}%` }} />
@@ -1225,10 +1225,10 @@ function AppMain() {
               )}
               {S.spSpecial > 0 && (
                 <Card className="p-5">
-                  <p className="text-[11px] text-[#8E8E93] mb-2">特別費（別枠）</p>
+                  <p className="text-[11px] text-[#98989D] mb-2">特別費（別枠）</p>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSpecial.toLocaleString()}</span>
-                    <span className="text-[12px] text-[#48484A]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
+                    <span className="text-[12px] text-[#636366]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
                   </div>
                 </Card>
               )}
@@ -1236,11 +1236,11 @@ function AppMain() {
                 <Card className="p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <PiggyBank size={13} className="text-[#4A7BA6]" />
-                    <p className="text-[11px] text-[#8E8E93]">貯金からの支払い（今月）</p>
+                    <p className="text-[11px] text-[#98989D]">貯金からの支払い（今月）</p>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSavings.toLocaleString()}</span>
-                    <span className="text-[12px] text-[#48484A]">先取り累計から差し引き済み</span>
+                    <span className="text-[12px] text-[#636366]">先取り累計から差し引き済み</span>
                   </div>
                 </Card>
               )}
@@ -1253,11 +1253,11 @@ function AppMain() {
             <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
               {settingTab === 'menu' && (
                 <>
-                  <div className="flex items-center gap-3 p-3.5 bg-[#1C1C1E] rounded-[20px] border border-white/[0.06]">
-                    {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-[14px]" /> : <div className="w-10 h-10 rounded-[14px] bg-[#2C2C2E] flex items-center justify-center"><User size={16} className="text-[#8E8E93]" /></div>}
+                  <div className="flex items-center gap-3 p-3.5 bg-[#2C2C2E] rounded-[20px]">
+                    {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-[14px]" /> : <div className="w-10 h-10 rounded-[14px] bg-[#3A3A3C] flex items-center justify-center"><User size={16} className="text-[#98989D]" /></div>}
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
-                      <p className="text-[12px] text-[#8E8E93] truncate">{user.email}</p>
+                      <p className="text-[12px] text-[#98989D] truncate">{user.email}</p>
                     </div>
                     <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
@@ -1267,7 +1267,7 @@ function AppMain() {
                       <div>
                         {MENU.map((item, idx) => (
                           <div key={item.id}>
-                            <SettingsRow onClick={() => setSettingTab(item.id)} left={<div className="flex items-center gap-3"><span className="text-[#8E8E93]">{item.icon}</span><span>{item.label}</span></div>} showChevron />
+                            <SettingsRow onClick={() => setSettingTab(item.id)} left={<div className="flex items-center gap-3"><span className="text-[#98989D]">{item.icon}</span><span>{item.label}</span></div>} showChevron />
                             {idx < MENU.length - 1 && <Separator />}
                           </div>
                         ))}
@@ -1279,17 +1279,17 @@ function AppMain() {
                     <Card>
                       <SettingsRow
                         onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
-                        left={<div className="flex items-center gap-3"><CopyCheck size={17} className="text-[#8E8E93] shrink-0" /><span>先月の設定をコピー</span></div>}
+                        left={<div className="flex items-center gap-3"><CopyCheck size={17} className="text-[#98989D] shrink-0" /><span>先月の設定をコピー</span></div>}
                         showChevron />
                       <Separator />
                       <SettingsRow
                         onClick={recordAllRecurring}
-                        left={<div className="flex items-center gap-3"><Repeat size={17} className="text-[#8E8E93] shrink-0" /><span>今月の定期支出を記録</span></div>}
+                        left={<div className="flex items-center gap-3"><Repeat size={17} className="text-[#98989D] shrink-0" /><span>今月の定期支出を記録</span></div>}
                         showChevron />
                       <Separator />
                       <SettingsRow
                         onClick={exportCSV}
-                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#8E8E93] shrink-0" /><span>CSVを書き出す</span></div>}
+                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#98989D] shrink-0" /><span>CSVを書き出す</span></div>}
                         showChevron />
                     </Card>
                   </div>
@@ -1298,9 +1298,9 @@ function AppMain() {
               {settingTab === 'faq' && (
                 <div className="space-y-4">
                   <div className="relative">
-                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#1C1C1E] border border-white/[0.06] rounded-[14px] pl-9 pr-4 text-[16px] text-white outline-none placeholder-[#48484A]" />
-                    <Search size={14} className="absolute left-3 top-3.5 text-[#48484A]" />
-                    {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-1 top-0 w-11 h-11 flex items-center justify-center text-[#48484A]"><X size={14} /></button>}
+                    <input value={faqQ} onChange={e => setFaqQ(e.target.value)} placeholder="検索..." className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-9 pr-4 text-[16px] text-white outline-none placeholder-[#636366]" />
+                    <Search size={14} className="absolute left-3 top-3.5 text-[#636366]" />
+                    {faqQ && <button onClick={() => setFaqQ('')} className="absolute right-1 top-0 w-11 h-11 flex items-center justify-center text-[#636366]"><X size={14} /></button>}
                   </div>
                   {filteredFaq.length > 0 ? filteredFaq.map((sec, si) => (
                     <div key={si}>
@@ -1311,15 +1311,15 @@ function AppMain() {
                             <div key={ii}>
                               <div onClick={() => setExpandedFaq(expandedFaq === `${si}-${ii}` ? null : `${si}-${ii}`)} className="px-4 py-3 cursor-pointer active:bg-white/[0.03] transition-colors">
                                 <div className="flex justify-between items-start gap-3">
-                                  <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#48484A] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
-                                  <ChevronDown size={14} className={`text-[#48484A] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
+                                  <div className="flex items-start gap-2.5"><HelpCircle size={14} className="text-[#636366] mt-0.5 shrink-0" /><span className="text-[13px] text-white leading-snug">{item.q}</span></div>
+                                  <ChevronDown size={14} className={`text-[#636366] transition-transform shrink-0 mt-0.5 ${expandedFaq === `${si}-${ii}` ? 'rotate-180' : ''}`} />
                                 </div>
                                 {expandedFaq === `${si}-${ii}` && (
                                   <div className="mt-3 pl-6 space-y-2">
-                                    <p className="text-[12px] text-[#8E8E93] leading-relaxed">{item.a}</p>
+                                    <p className="text-[12px] text-[#98989D] leading-relaxed">{item.a}</p>
                                     {item.formula && (
                                       <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px]">
-                                        <p className="text-[11px] text-[#48484A] mb-1">計算式</p>
+                                        <p className="text-[11px] text-[#636366] mb-1">計算式</p>
                                         <p className="text-[12px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
                                       </div>
                                     )}
@@ -1404,7 +1404,7 @@ function AppMain() {
                   )}
                   {(config?.templates || []).map((t, i) => (
                     <div key={i}>
-                      <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{t.title}</span><span className="text-[11px] text-[#48484A] truncate">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
+                      <SettingsRow onClick={() => openEdit('template', t, i)} left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{t.title}</span><span className="text-[11px] text-[#636366] truncate">{t.category} · {t.method}</span></div>} right={`¥${Number(t.amount || 0).toLocaleString()}`} />
                       <Separator />
                     </div>
                   ))}
@@ -1419,7 +1419,7 @@ function AppMain() {
                   {(config?.recurring || []).map((r, i) => (
                     <div key={r.id || i}>
                       <SettingsRow onClick={() => openEdit('recurring', r, i)}
-                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#48484A] truncate">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
+                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#636366] truncate">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
                         right={`¥${Number(r.amount || 0).toLocaleString()}`} />
                       <Separator />
                     </div>
@@ -1468,14 +1468,14 @@ function AppMain() {
           <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-4">
             <div className="flex flex-col items-center gap-2 py-2">
-              <span className="text-[12px] text-[#8E8E93] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
+              <span className="text-[12px] text-[#98989D] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
               <p className="text-[40px] font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</p>
             </div>
             <Card>
               {[['内容', viewingTx.title], ['日付', formatFullDateJP(viewingTx.date)], ['支払方法', viewingTx.paymentMethod], ['種別', getSpendType(viewingTx) === 'savings' ? `貯金から${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : ''}` : getSpendType(viewingTx) === 'special' ? '特別費' : '通常']].map(([l, v], idx, arr) => (
                 <div key={l}>
                   <div className="px-4 py-3 flex justify-between gap-4">
-                    <span className="text-[12px] text-[#8E8E93]">{l}</span>
+                    <span className="text-[12px] text-[#98989D]">{l}</span>
                     <span className="text-[13px] text-white">{v}</span>
                   </div>
                   {idx < arr.length - 1 && <Separator />}
@@ -1526,7 +1526,7 @@ function AppMain() {
               {/* テンプレート（ショートカットなので最上部） */}
               {!editingTx && config.templates.length > 0 && (
                 <div>
-                  <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">テンプレート</label>
+                  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">テンプレート</label>
                   <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
                     {config.templates.map((t, i) => (
                       <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-11 px-3.5 bg-[#0A84FF]/10 border border-[#0A84FF]/25 rounded-[14px] text-[13px] text-[#0A84FF] flex items-center gap-1.5 active:bg-[#0A84FF]/20 transition-colors">
@@ -1537,10 +1537,10 @@ function AppMain() {
                 </div>
               )}
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">金額</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">金額</label>
                 <div className="flex gap-1.5 items-center w-full min-w-0">
                   <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-                    <span className="text-[16px] text-[#8E8E93] shrink-0">¥</span>
+                    <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
                     <input
                       key={`amount-${txFormKey}`}
                       type="text" inputMode="decimal"
@@ -1551,46 +1551,46 @@ function AppMain() {
                     />
                   </div>
                   <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
-                    className="w-11 h-11 flex items-center justify-center text-[#8E8E93] active:text-white transition-colors shrink-0">
+                    className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
                     <Calculator size={20} />
                   </button>
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">内容</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">内容</label>
                 <input
                   key={`title-${txFormKey}`}
                   value={inTitle}
                   onChange={e => setInTitle(e.target.value)}
                   placeholder="例: スーパーでお買い物"
-                  className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#48484A] focus:border-white/20 transition-colors"
+                  className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors"
                   required
                 />
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">カテゴリ</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">カテゴリ</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
                   {catNames.map(c => (
                     <button key={c} type="button" onClick={() => setInCat(c)}
-                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inCat === c ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inCat === c ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
                       {c}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">支払方法</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支払方法</label>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
                   {methods.map(m => (
                     <button key={m} type="button" onClick={() => setInMethod(m)}
-                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
                       {m}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">日付</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
                 <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                   <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                     <span className="text-[16px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
@@ -1599,11 +1599,11 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">種別</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">種別</label>
                 <div className="flex gap-2">
                   {SPEND_TYPES.map(({ value, label }) => (
                     <button key={value} type="button" onClick={() => setInSpendType(value)}
-                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
                       {label}
                     </button>
                   ))}
@@ -1617,7 +1617,7 @@ function AppMain() {
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
                         {['', ...bucketOptions].map(name => (
                           <button key={name || '__none'} type="button" onClick={() => setInSavingsBucket(name)}
-                            className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#8E8E93] border border-white/[0.06]'}`}>
+                            className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
                             {name || '指定なし'}
                           </button>
                         ))}
@@ -1640,7 +1640,7 @@ function AppMain() {
           <ModalHeader title="設定をコピー" onClose={() => setCopyOpen(false)} />
           <div className="px-5 pt-4 pb-8 space-y-3.5">
             <div>
-              <label className="text-[11px] font-medium text-[#8E8E93] ml-1 block mb-1">コピー元の月</label>
+              <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">コピー元の月</label>
               <div className="relative w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
                 <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
                   <span className="text-[16px] text-white">{copyFrom ? formatMonthJP(copyFrom) : '月を選択'}</span>
