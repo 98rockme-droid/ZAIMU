@@ -82,6 +82,9 @@ const normalizeConfig = data => ({
 
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
 const catColor = i => GRAYS[i % GRAYS.length];
+// カレンダー用: 1万未満はそのまま、以上はk表記（丸めで誤解を生まない）
+const fmtCompact = n => n < 10000 ? n.toLocaleString() : n < 100000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${Math.round(n / 1000)}k`;
+const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /* ── Modal類はAppMainの外に定義（再マウント防止） ── */
 const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
@@ -143,6 +146,7 @@ function AppMain() {
   const [expandedFaq, setExpandedFaq] = useState(null);
   const [faqQ, setFaqQ] = useState('');
   const [budgetExpanded, setBudgetExpanded] = useState(false);
+  const [selDay, setSelDay] = useState(null);
 
   const [txList, setTxList] = useState([]);
   const [txLoadedMonth, setTxLoadedMonth] = useState(null);
@@ -429,6 +433,28 @@ function AppMain() {
     const msp = filter.spendType === 'ALL' || getSpendType(t) === filter.spendType;
     return ms && mc && mm && msp;
   }), [txList, searchText, filter]);
+
+  // カレンダー用: 日ごとの支出（全種別）と明細
+  const dayMap = useMemo(() => {
+    const m = {};
+    txList.forEach(t => {
+      if (!t.date) return;
+      const d = new Date(t.date);
+      if (isNaN(d)) return;
+      const k = d.getUTCDate();
+      if (!m[k]) m[k] = { total: 0, items: [] };
+      m[k].total += Number(t.amount) || 0;
+      m[k].items.push(t);
+    });
+    return m;
+  }, [txList]);
+  const dayMax = useMemo(() => Math.max(1, ...Object.values(dayMap).map(v => v.total)), [dayMap]);
+
+  // 月を切り替えたら、今月なら今日を・それ以外は未選択に
+  useEffect(() => {
+    const now = new Date();
+    setSelDay(month === getMonthString(now) ? now.getDate() : null);
+  }, [month]);
 
   const calDays = useMemo(() => {
     if (!month) return [];
@@ -882,26 +908,72 @@ function AppMain() {
                     </Card>
                   )
                 ) : (
-                  <Card className="p-4">
-                    <div className="grid grid-cols-7 text-center mb-2">
-                      {['日','月','火','水','木','金','土'].map(d => <span key={d} className="text-[11px] text-[#48484A]">{d}</span>)}
-                    </div>
-                    <div className="grid grid-cols-7 gap-y-1">
-                      {calDays.map((day, i) => {
-                        if (!day) return <div key={i} className="h-14" />;
-                        const amt = S.daily[day] || 0;
-                        const cy = Number(month.split('-')[0]), cm = Number(month.split('-')[1]);
-                        const isToday = day === today.d && cm === today.m && cy === today.y;
-                        return (
-                          <button key={i} onClick={() => openWithDate(`${month}-${String(day).padStart(2, '0')}`)}
-                            className="h-14 flex flex-col items-center justify-start pt-1 rounded-[10px] active:bg-white/[0.04] transition-colors">
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-medium ${isToday ? 'bg-[#0A84FF] text-white' : 'text-[#8E8E93]'}`}>{day}</span>
-                            {amt > 0 && <span className="text-[11px] text-[#48484A] mt-0.5 tabular-nums">¥{(amt / 1000).toFixed(0)}k</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </Card>
+                  <div className="space-y-4">
+                    <Card className="p-3">
+                      <div className="grid grid-cols-7 text-center mb-1">
+                        {WEEKDAYS.map((d, i) => (
+                          <span key={d} className={`text-[11px] py-1 ${i === 0 ? 'text-[#FF6961]/70' : i === 6 ? 'text-[#64A8FF]/70' : 'text-[#48484A]'}`}>{d}</span>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-1">
+                        {calDays.map((day, i) => {
+                          if (!day) return <div key={i} className="h-[52px]" />;
+                          const amt = dayMap[day]?.total || 0;
+                          const dow = i % 7;
+                          const dStr = `${month}-${String(day).padStart(2, '0')}`;
+                          const isToday = dStr === getTodayString();
+                          const isFuture = dStr > getTodayString();
+                          const isSel = selDay === day;
+                          const level = amt > 0 ? Math.min(1, amt / dayMax) : 0;
+                          const numColor = isToday ? 'text-white' : dow === 0 ? 'text-[#FF6961]' : dow === 6 ? 'text-[#64A8FF]' : 'text-[#EBEBF5]/80';
+                          return (
+                            <button key={i} onClick={() => setSelDay(isSel ? null : day)}
+                              aria-label={`${day}日 ${amt > 0 ? `¥${amt.toLocaleString()}` : '支出なし'}`}
+                              className={`h-[52px] flex flex-col items-center justify-center gap-0.5 rounded-[10px] transition-colors ${isSel ? 'ring-1 ring-white/50' : ''} ${isFuture ? 'opacity-40' : ''}`}
+                              style={{ backgroundColor: amt > 0 ? `rgba(10,132,255,${0.08 + level * 0.32})` : 'transparent' }}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[13px] font-medium ${isToday ? 'bg-[#0A84FF]' : ''} ${numColor}`}>{day}</span>
+                              <span className="text-[11px] leading-none tabular-nums text-[#EBEBF5]/70 h-3">{amt > 0 ? fmtCompact(amt) : ''}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </Card>
+
+                    {selDay ? (() => {
+                      const info = dayMap[selDay] || { total: 0, items: [] };
+                      const [cy, cm] = month.split('-').map(Number);
+                      const dow = new Date(Date.UTC(cy, cm - 1, selDay)).getUTCDay();
+                      const dStr = `${month}-${String(selDay).padStart(2, '0')}`;
+                      return (
+                        <div>
+                          <Label trailing={`合計 ¥${info.total.toLocaleString()}`}>{cm}月{selDay}日（{WEEKDAYS[dow]}）</Label>
+                          <Card>
+                            {info.items.length === 0 && (<><EmptyState>この日の支出はありません</EmptyState><Separator /></>)}
+                            {info.items.map(t => {
+                              const st = getSpendType(t);
+                              const tags = [t.category, t.paymentMethod, st === 'special' && '特別費', st === 'savings' && '貯金から', t.recurringId && '定期'].filter(Boolean).join(' · ');
+                              return (
+                                <div key={t.id}>
+                                  <button type="button" onClick={() => setViewingTx(t)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[14px] text-white truncate">{t.title}</p>
+                                      <p className="text-[11px] text-[#48484A] truncate">{tags}</p>
+                                    </div>
+                                    <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
+                                  </button>
+                                  <Separator />
+                                </div>
+                              );
+                            })}
+                            <AddRow label="この日に支出を追加" onClick={() => openWithDate(dStr)} />
+                          </Card>
+                        </div>
+                      );
+                    })() : (
+                      <EmptyState>日付をタップすると、その日の明細を表示します</EmptyState>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
