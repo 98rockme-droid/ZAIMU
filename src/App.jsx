@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, setDoc, onSnapshot, query, deleteDoc,
-  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion, arrayRemove, limit
+  where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion, arrayRemove, limit, startAfter, runTransaction, writeBatch
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -93,10 +93,40 @@ const catColor = i => GRAYS[i % GRAYS.length];
 // カレンダー用: 1万未満はそのまま、以上はk表記（丸めで誤解を生まない）
 const fmtCompact = n => n < 10000 ? n.toLocaleString() : n < 100000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${Math.round(n / 1000)}k`;
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+// 全期間検索の取得上限（新しい順に最大10,000件 = Firestoreの読み取り20回分）
+const SEARCH_PAGE_SIZE = 500;
+const SEARCH_MAX_PAGES = 20;
 // 定期支出がその月に発生するか（毎月 / 毎年その月のみ）
 const isRecurringDueIn = (r, monthStr) => {
   if ((r.freq || 'monthly') === 'yearly') return Number(r.month) === Number(monthStr.split('-')[1]);
   return true;
+};
+
+// 同じ月・同じ定期支出は端末が違っても同じドキュメントを使う。
+const recurringTransactionId = (monthStr, id) => `rec_${monthStr}_${encodeURIComponent(id)}`;
+const createRecurringTransaction = (userId, monthStr, r, fallbackCategory) => {
+  const [y, m] = monthStr.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const recDay = Math.min(Number(r.day) || 1, lastDay);
+  const dateStr = `${monthStr}-${String(recDay).padStart(2, '0')}`;
+  const ref = doc(db, 'users', userId, 'transactions', recurringTransactionId(monthStr, r.id));
+  return runTransaction(db, async transaction => {
+    if ((await transaction.get(ref)).exists()) return false;
+    transaction.set(ref, {
+      date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
+      category: r.category || fallbackCategory || '食費', paymentMethod: r.method || CASH,
+      isSpecial: false, fromSavings: false, recurringId: r.id,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+    return true;
+  });
+};
+
+const csvField = value => {
+  const text = String(value ?? '');
+  // 表計算ソフトで入力文字列が数式として実行されないようにする。
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
 };
 
 /* ── Modal類はAppMainの外に定義（再マウント防止） ── */
@@ -165,6 +195,7 @@ function AppMain() {
   const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
   const [allTx, setAllTx] = useState(null); // 全期間検索用
   const [allTxLoading, setAllTxLoading] = useState(false);
+  const [allTxTruncated, setAllTxTruncated] = useState(false);
   const [selDay, setSelDay] = useState(null);
   const [selYearMonth, setSelYearMonth] = useState(null);
 
@@ -226,13 +257,13 @@ function AppMain() {
     ]},
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。周期は「毎月」と「毎年」から選べるので、年会費のような年1回の支出も登録できます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
-      { q: '履歴の検索はどこまで探せる？', a: '検索欄に文字を入れると、表示中の月だけでなく全期間の支出から探します。結果は日付ごとにまとまって表示され、別の年の支出には年も表示されます。' },
+      { q: '履歴の検索はどこまで探せる？', a: '検索欄に文字を入れると、表示中の月だけでなく全期間の支出から探します。件数が多い場合は読み込みに時間がかかります。結果は日付ごとにまとまって表示されます。' },
       { q: 'カレンダーの「・金額」は何？', a: 'まだ記録されていない定期支出の予定額です。日付をタップすると、その日に予定されている定期支出を確認できます。' },
       { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
       { q: '来月の設定はどうすればいいですか？', a: '新しい月にアプリを開くと、直近の月の手取り給与・先取り・スタート現金などが自動で引き継がれます。金額が変わる項目だけ資金計画で編集してください。手動で引き継ぎたいときは設定タブの「先月の設定をコピー」も使えます。' },
       { q: '今月の引落予定はどう計算される？', a: '支払方法ごとに、前月にその方法で使った金額を今月の引落予定として自動で表示します。カード明細と金額が違うときは、資金計画の「今月の引落予定」から手入力で上書きできます（空欄に戻すと自動に戻ります）。' },
       { q: '支出を間違えて削除したら？', a: '削除した直後に表示される「元に戻す」をタップすると、そのまま復元できます（数秒間表示されます）。' },
-      { q: 'データのバックアップはできますか？', a: '設定タブのCSVを書き出すから全取引データをダウンロードできます。' }
+      { q: 'データのバックアップはできますか？', a: '設定タブの「JSONバックアップ」で取引・月別設定・共通設定を書き出せます。アプリ内への一括復元機能はありません。取引だけを表計算ソフトで見る場合はCSVを書き出してください。' }
     ]}
   ], [mn, nextMn]);
 
@@ -369,13 +400,9 @@ function AppMain() {
       if (recProcessedRef.current.has(key)) return;
       if (txList.some(t => t.recurringId === r.id)) return;
       recProcessedRef.current.add(key);
-      const dateStr = `${month}-${String(recDay).padStart(2, '0')}`;
-      addDoc(collection(db, 'users', user.uid, 'transactions'), {
-        date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
-        category: r.category || catNames[0] || '食費', paymentMethod: r.method || CASH,
-        isSpecial: false, fromSavings: false, recurringId: r.id,
-        createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-      }).then(() => showToast(`定期支出「${r.title}」を記録しました`)).catch(console.error);
+      createRecurringTransaction(user.uid, month, r, catNames[0])
+        .then(created => { if (created) showToast(`定期支出「${r.title}」を記録しました`); })
+        .catch(e => { console.error(e); recProcessedRef.current.delete(key); });
     });
   }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring]);
 
@@ -405,14 +432,30 @@ function AppMain() {
     })();
   }, [user, mLoadedMonth, mEmpty, month]);
 
-  /* 全期間検索: 検索を始めたら全期間の支出を取得（初回のみ） */
+  /* 全期間検索: 500件ずつ最後まで取得（初回のみ） */
   useEffect(() => {
     if (!user || !searchText.trim() || allTx || allTxLoading) return;
     setAllTxLoading(true);
-    getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'), limit(2000)))
-      .then(s => setAllTx(s.docs.map(d => ({ id: d.id, ...d.data() }))))
-      .catch(e => { console.error(e); showToast('検索データの取得に失敗しました'); })
-      .finally(() => setAllTxLoading(false));
+    (async () => {
+      try {
+        const items = [];
+        let cursor = null;
+        let truncated = false;
+        // 上限を設けて、読み取り数と待ち時間が際限なく増えないようにする
+        for (let page = 0; ; page++) {
+          if (page >= SEARCH_MAX_PAGES) { truncated = true; break; }
+          const constraints = [orderBy('date', 'desc'), ...(cursor ? [startAfter(cursor)] : []), limit(SEARCH_PAGE_SIZE)];
+          const snapshot = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), ...constraints));
+          items.push(...snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+          if (snapshot.size < SEARCH_PAGE_SIZE) break;
+          cursor = snapshot.docs[snapshot.docs.length - 1];
+        }
+        setAllTx(items);
+        setAllTxTruncated(truncated);
+        if (truncated) showToast(`直近${items.length.toLocaleString()}件の中から検索しています`);
+      } catch (e) { console.error(e); showToast('検索データの取得に失敗しました'); }
+      finally { setAllTxLoading(false); }
+    })();
   }, [user, searchText, allTx, allTxLoading]);
 
   /* 入力候補: 入力モーダルを初めて開いたときに過去の支出を取得 */
@@ -485,7 +528,8 @@ function AppMain() {
     const varBudget = lifeBudget - cashAvail;
     const varRemain = varBudget - spCard;
     // 定期支出（固定費）: カード払いのみ予算計算の対象（現金払いは現金残高の軸で管理）
-    const recCard = (config?.recurring || []).filter(r => (r.method || CASH) !== CASH && isRecurringDueIn(r, month));
+    const recCard = (config?.recurring || []).filter(r =>
+      (r.method || CASH) !== CASH && isRecurringDueIn(r, month) && !(monthly.skippedRecurring || []).includes(r.id));
     const recTotalAll = recCard.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const recordedIds = new Set(norm.filter(t => t.recurringId).map(t => t.recurringId));
     const pendingFixed = recCard.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
@@ -828,41 +872,59 @@ function AppMain() {
     if (!user) return;
     const recCard = (config.recurring || []);
     const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
-    const pending = recCard.filter(r => r.id && r.title && !recordedIds.has(r.id) && isRecurringDueIn(r, month));
+    const pending = recCard.filter(r =>
+      r.id && r.title && !recordedIds.has(r.id) && isRecurringDueIn(r, month)
+      && !(monthly.skippedRecurring || []).includes(r.id));
     if (!pending.length) return showToast('未記録の定期支出はありません');
     const total = pending.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const ok = await confirm({ title: `${pending.length}件の定期支出を記録しますか？`, message: `${formatMonthJP(month)} のログに合計 ¥${total.toLocaleString()} を追加します。`, confirmLabel: '記録する' });
     if (!ok) return;
-    const [y, m] = month.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
     try {
-      await Promise.all(pending.map(r => {
-        const recDay = Math.min(Number(r.day) || 1, lastDay);
-        const dateStr = `${month}-${String(recDay).padStart(2, '0')}`;
-        return addDoc(collection(db, 'users', user.uid, 'transactions'), {
-          date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
-          category: r.category || catNames[0] || '食費', paymentMethod: r.method || CASH,
-          isSpecial: false, fromSavings: false, recurringId: r.id,
-          createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-        });
-      }));
-      showToast(`${pending.length}件を記録しました`);
+      const results = await Promise.all(pending.map(r => createRecurringTransaction(user.uid, month, r, catNames[0])));
+      const created = results.filter(Boolean).length;
+      showToast(created === pending.length ? `${created}件を記録しました` : `${created}件を記録しました（${pending.length - created}件は既に記録済み）`);
     } catch (e) { console.error(e); showToast('エラー'); }
   };
 
-  const exportCSV = async () => {
-    const ok = await confirm({ title: 'CSV出力しますか？', confirmLabel: 'ダウンロード' });
-    if (!ok) return;
-    const s = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc')));
-    let csv = '\uFEFF日付,タイトル,カテゴリ,金額,支払方法,種別\n';
-    s.forEach(d => {
-      const v = d.data();
-      const typeLabel = v.fromSavings ? '貯金から' : v.isSpecial ? '特別費' : '通常';
-      csv += `${isoToLocalYMD(v.date)},"${v.title}",${v.category},${v.amount},${v.paymentMethod},${typeLabel}\n`;
-    });
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-    const a = document.createElement('a'); a.href = url; a.download = `zaimu_${getTodayString()}.csv`;
+  const downloadData = (content, filename, mimeType) => {
+    const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+    const a = document.createElement('a'); a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const exportCSV = async () => {
+    const ok = await confirm({ title: '取引CSVを出力しますか？', confirmLabel: 'ダウンロード' });
+    if (!ok) return;
+    try {
+      const s = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc')));
+      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '種別']];
+      s.forEach(d => {
+        const v = d.data();
+        rows.push([isoToLocalYMD(v.date), v.title, v.category, v.amount, v.paymentMethod,
+          v.fromSavings ? '貯金から' : v.isSpecial ? '特別費' : '通常']);
+      });
+      downloadData('\uFEFF' + rows.map(row => row.map(csvField).join(',')).join('\n') + '\n',
+        `zaimu_transactions_${getTodayString()}.csv`, 'text/csv;charset=utf-8;');
+    } catch (e) { console.error(e); showToast('CSV出力に失敗しました'); }
+  };
+
+  const exportBackup = async () => {
+    const ok = await confirm({ title: '全データをJSONで書き出しますか？', confirmLabel: 'ダウンロード' });
+    if (!ok) return;
+    try {
+      const base = doc(db, 'users', user.uid);
+      const [tx, months, settings] = await Promise.all([
+        getDocs(collection(base, 'transactions')),
+        getDocs(collection(base, 'months')),
+        getDocs(collection(base, 'settings'))
+      ]);
+      const entries = snapshot => snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
+      const backup = { format: 'zaimu-backup', version: 1, exportedAt: new Date().toISOString(),
+        transactions: entries(tx), months: entries(months), settings: entries(settings) };
+      downloadData(JSON.stringify(backup, null, 2),
+        `zaimu_backup_${getTodayString()}.json`, 'application/json;charset=utf-8;');
+    } catch (e) { console.error(e); showToast('バックアップに失敗しました'); }
   };
 
   if (authLoading) return <div className="h-screen bg-[#1C1C1E] flex items-center justify-center text-[#98989D] text-[14px]">読み込み中...</div>;
@@ -1102,7 +1164,7 @@ function AppMain() {
 
               {isSearching && (
                 <p className="flex-none px-5 pb-1 text-[11px] text-[#636366]">
-                  {allTxLoading ? '全期間から検索中...' : `全期間から ${filteredTx.length}件`}
+                  {allTxLoading ? '全期間から検索中...' : `${allTxTruncated ? `直近${(allTx || []).length.toLocaleString()}件から` : '全期間から'} ${filteredTx.length}件`}
                 </p>
               )}
               <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
@@ -1501,7 +1563,12 @@ function AppMain() {
                       <Separator />
                       <SettingsRow
                         onClick={exportCSV}
-                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#98989D] shrink-0" /><span>CSVを書き出す</span></div>}
+                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#98989D] shrink-0" /><span>取引CSVを書き出す</span></div>}
+                        showChevron />
+                      <Separator />
+                      <SettingsRow
+                        onClick={exportBackup}
+                        left={<div className="flex items-center gap-3"><FileText size={17} className="text-[#98989D] shrink-0" /><span>JSONバックアップを書き出す</span></div>}
                         showChevron />
                     </Card>
                   </div>
@@ -1726,21 +1793,24 @@ function AppMain() {
                 if (!ok) return;
                 try {
                   const { id: delId, ...delData } = viewingTx;
-                  const delMonth = month;
-                  await deleteDoc(doc(db, 'users', user.uid, 'transactions', delId));
-                  if (isRec) {
-                    await setDoc(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
-                  }
+                  // 日付がISO文字列でもTimestampでも安全に「その支出の月」を求める
+                  const delMonth = viewingTx.date ? isoToLocalYMD(viewingTx.date).slice(0, 7) : month;
+                  const batch = writeBatch(db);
+                  batch.delete(doc(db, 'users', user.uid, 'transactions', delId));
+                   if (isRec) batch.set(doc(db, 'users', user.uid, 'months', delMonth),
+                    { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
+                  await batch.commit();
                   setViewingTx(null);
                   showToast('削除しました', {
                     label: '元に戻す',
                     onClick: async () => {
                       hideToast();
                       try {
-                        await setDoc(doc(db, 'users', user.uid, 'transactions', delId), delData);
-                        if (isRec) {
-                          await setDoc(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayRemove(delData.recurringId) }, { merge: true });
-                        }
+                        const restore = writeBatch(db);
+                        restore.set(doc(db, 'users', user.uid, 'transactions', delId), delData);
+                         if (isRec) restore.set(doc(db, 'users', user.uid, 'months', delMonth),
+                          { skippedRecurring: arrayRemove(delData.recurringId) }, { merge: true });
+                        await restore.commit();
                         showToast('元に戻しました');
                       } catch (e) { console.error(e); showToast('復元できませんでした'); }
                     }
