@@ -63,7 +63,26 @@ const getSavingsTotal = md => getSavingsBuckets(md).reduce((s, b) => s + (Number
 const getPace = (spent, target) => (!target || target <= 0) ? 0 : Math.min(100, (spent / target) * 100);
 
 // 支出の種別判定: 'normal' | 'special' | 'savings'
-const getSpendType = t => t?.fromSavings ? 'savings' : t?.isSpecial ? 'special' : 'normal';
+// 支出は「種類（通常/特別費）」と「充当元（予算/貯金）」の2軸で持つ。
+// 旧データは片方しか記録していないため、推測できない軸は null（未設定）として区別する。
+//   旧「通常」    → 種類=通常 / 充当元=予算   （従来と同じ扱い）
+//   旧「特別費」  → 種類=特別費 / 充当元=未設定（予算から引かない＝過去の残額を変えない）
+//   旧「貯金から」→ 種類=未設定 / 充当元=貯金  （従来と同じ扱い）
+const getKind = t => t?.kind || (t?.isSpecial ? 'special' : (t?.fromSavings ? null : 'normal'));
+const getSource = t => t?.source || (t?.fromSavings ? 'savings' : (t?.isSpecial ? null : 'budget'));
+const KIND_LABELS = { normal: '通常', special: '特別費' };
+const SOURCE_LABELS = { budget: '今月の予算', savings: '貯金' };
+const KINDS = [{ value: 'normal', label: '通常' }, { value: 'special', label: '特別費' }];
+// 履歴などに出すタグ（通常×予算は当たり前なので出さない）
+const txTags = t => {
+  const out = [];
+  if (getKind(t) === 'special') out.push({ text: '特別費', cls: 'text-[#98989D] font-medium' });
+  const src = getSource(t);
+  if (src === 'savings') out.push({ text: `貯金から${t.savingsBucket ? `（${t.savingsBucket}）` : ''}`, cls: 'text-[#4A7BA6] font-medium' });
+  if (getKind(t) === null || src === null) out.push({ text: '未設定', cls: 'text-[#FF453A] font-medium' });
+  return out;
+};
+const SOURCES = [{ value: 'budget', label: '今月の予算' }, { value: 'savings', label: '貯金' }];
 
 const normalizeMonthly = (data) => {
   const d = data || {};
@@ -115,6 +134,7 @@ const createRecurringTransaction = (userId, monthStr, r, fallbackCategory) => {
     transaction.set(ref, {
       date: toISODateSafe(dateStr), amount: Number(r.amount) || 0, title: r.title,
       category: r.category || fallbackCategory || '食費', paymentMethod: r.method || CASH,
+      kind: 'normal', source: 'budget', savingsBucket: null,
       isSpecial: false, fromSavings: false, recurringId: r.id,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp()
     });
@@ -180,7 +200,8 @@ function AppMain() {
   const [inTitle, setInTitle] = useState('');
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
-  const [inSpendType, setInSpendType] = useState('normal');
+  const [inKind, setInKind] = useState('normal');
+  const [inSource, setInSource] = useState('budget');
   const [inSavingsBucket, setInSavingsBucket] = useState('');
   const [txFormKey, setTxFormKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -215,7 +236,7 @@ function AppMain() {
   const [savingsBreakdown, setSavingsBreakdown] = useState({});
   const [cumSavingsExpanded, setCumSavingsExpanded] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', spendType: 'ALL' });
+  const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'ALL' });
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
   const [memoText, setMemoText] = useState('');
@@ -251,9 +272,12 @@ function AppMain() {
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る金額のシミュレーションです。実質あと使える額と現金残高の合計です。`, formula: '実質あと使える（カード） + 現金残高' },
       { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
     ]},
-    { category: '支出の種別', items: [
-      { q: '通常と特別費の違いは？', a: '通常は今月の可変費に含まれる支出です。特別費は冠婚葬祭など臨時の支出で、可変費とは別枠で集計されます。' },
-      { q: '「貯金から」とは？', a: '積み立てた貯金を取り崩して支払う支出です。今月の可変費や進捗には影響せず、先取り累計から差し引かれます。どの先取り項目から出すか指定でき、ホームの先取り累計をタップすると項目別の残高を確認できます。' }
+    { category: '支出の記録', items: [
+      { q: '「支出の種類」とは？', a: '通常か特別費かの分類です。冠婚葬祭や家電の買い替えなど臨時の支出を特別費にしておくと、分析タブで普段の支出と分けて確認できます。どちらも充当元が今月の予算なら、今月の残額から引かれます。' },
+      { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の残額から引かれ、「貯金」を選ぶと貯金の残額から引かれて今月の予算には影響しません。' },
+      { q: '現金で払った場合はどうなる？', a: '充当元が今月の予算で支払方法が現金のときは、現金残高から引かれます。今月の予算は月初のスタート現金を先に差し引いてあるので、予算の残額から二重に引くことはありません。' },
+      { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
+      { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
     ]},
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。周期は「毎月」と「毎年」から選べるので、年会費のような年1回の支出も登録できます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
@@ -499,7 +523,7 @@ function AppMain() {
         const spend = {}; monthsArr.forEach(m => { spend[m] = 0; });
         txSnap.forEach(d => {
           const t = d.data();
-          if (getSpendType(t) !== 'normal') return;
+          if (getSource(t) !== 'budget') return; // 予算から充当した分のみ（旧データの未設定は従来どおり対象外）
           const mk = (t.date || '').slice(0, 7);
           if (mk in spend) spend[mk] += Number(t.amount) || 0;
         });
@@ -517,11 +541,24 @@ function AppMain() {
     // 月の途中でATMからおろした現金（現金の手元に加わり、カードで使える予算からは減る）
     const cashTopupTotal = (monthly?.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
     const cashAvail = cashBudget + cashTopupTotal;
-    const norm = txList.filter(t => getSpendType(t) === 'normal');
-    const normPrev = prevTxList.filter(t => getSpendType(t) === 'normal');
-    const spCard = norm.filter(t => t.paymentMethod !== CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const spCash = norm.filter(t => t.paymentMethod === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const spent = norm.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const sum = list => list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    // 充当元ごとに引き当て先を分ける（同じ1円が2つの残額から引かれないようにする）
+    //   予算×カード → 今月の予算の残額から引く
+    //   予算×現金   → 現金残高から引く（予算からは月初に現金を差し引いてあるため二重に引かない）
+    //   貯金        → 該当する貯金の残額から引く（予算・現金残高には影響しない）
+    //   未設定      → どこからも引かない（旧データの数字を変えないため）
+    const budgetTx = txList.filter(t => getSource(t) === 'budget');
+    const budgetTxPrev = prevTxList.filter(t => getSource(t) === 'budget');
+    const norm = budgetTx; // 予算から充当した支出（通常・特別費の両方）
+    const normPrev = budgetTxPrev;
+    const spCard = sum(budgetTx.filter(t => t.paymentMethod !== CASH));
+    const spCash = sum(budgetTx.filter(t => t.paymentMethod === CASH));
+    const spent = spCard + spCash;
+    // 現金・カードの「実際の出入り」は予算残額とは別軸（充当元を問わず合計）
+    const cashOutAll = sum(txList.filter(t => t.paymentMethod === CASH));
+    const cardOutAll = sum(txList.filter(t => t.paymentMethod !== CASH));
+    const spUnset = sum(txList.filter(t => getSource(t) === null));
+    const spUnsetCount = txList.filter(t => getSource(t) === null).length;
     const savTotal = getSavingsTotal(monthly);
     const lifeBudget = salary - savTotal;
     // 今月の予算 = 手取り − 先取り − スタート現金（固定費は実支出として計上）
@@ -542,11 +579,12 @@ function AppMain() {
     const cats = norm.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const prevCats = normPrev.reduce((a, t) => { const c = t.category || '未分類'; a[c] = (a[c] || 0) + (Number(t.amount) || 0); return a; }, {});
     const catBudSum = (config?.categories || []).reduce((s, c) => s + (monthly?.catBudgets?.[c.name] || 0), 0);
-    const spSpecial = txList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const spSpecialPrev = prevTxList.filter(t => getSpendType(t) === 'special').reduce((s, t) => s + (Number(t.amount) || 0), 0);
-    const spSavings = txList.filter(t => getSpendType(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const spSpecial = sum(txList.filter(t => getKind(t) === 'special'));
+    const spSpecialPrev = sum(prevTxList.filter(t => getKind(t) === 'special'));
+    const spSavings = sum(txList.filter(t => getSource(t) === 'savings'));
     return {
       cashBudget, cashTopupTotal, cashAvail,
+      cashOutAll, cardOutAll, spUnset, spUnsetCount,
       cashRemain, projCash: freeRemain + cashRemain,
       catBudSum, savTotal, lifeBudget, varBudget, varRemain,
       pendingFixed, recTotalAll, recRecorded, freeBudget, freeSpent, freeRemain,
@@ -581,8 +619,9 @@ function AppMain() {
     const ms = searchText === '' || String(t.title || '').includes(searchText);
     const mc = filter.cat === 'ALL' || t.category === filter.cat;
     const mm = filter.method === 'ALL' || t.paymentMethod === filter.method;
-    const msp = filter.spendType === 'ALL' || getSpendType(t) === filter.spendType;
-    return ms && mc && mm && msp;
+    const mk = filter.kind === 'ALL' || (filter.kind === 'UNSET' ? getKind(t) === null : getKind(t) === filter.kind);
+    const msr = filter.source === 'ALL' || (filter.source === 'UNSET' ? getSource(t) === null : getSource(t) === filter.source);
+    return ms && mc && mm && mk && msr;
   }), [searchPool, searchText, filter]);
 
   // 履歴を日付ごとにグループ化（新しい日付順）
@@ -654,7 +693,8 @@ function AppMain() {
     setInTitle('');
     setInCat(catNames[0] || '食費');
     setInMethod(methods[0] || CASH);
-    setInSpendType('normal');
+    setInKind('normal');
+    setInSource('budget');
     setInSavingsBucket('');
     setTxFormKey(k => k + 1);
   }, [catNames, methods]);
@@ -662,7 +702,7 @@ function AppMain() {
   // 分析 → 指定カテゴリで絞り込んだ履歴へ移動
   const jumpToCat = name => {
     setSearchText('');
-    setFilter({ cat: name, method: 'ALL', spendType: 'normal' });
+    setFilter({ cat: name, method: 'ALL', kind: 'ALL', source: 'budget' });
     setLogView('list');
     setActiveTab('log');
   };
@@ -675,7 +715,8 @@ function AppMain() {
     setInTitle(t.title || '');
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
-    setInSpendType(getSpendType(t));
+    setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
+    setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
@@ -688,7 +729,8 @@ function AppMain() {
     setInTitle(t.title || '');
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
-    setInSpendType(getSpendType(t));
+    setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
+    setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
@@ -704,11 +746,14 @@ function AppMain() {
     if (isSaving) return; // 二重送信の防止
     const amount = toNumber(inAmount);
     if (!inDate || !amount || !inTitle) return showToast('入力内容を確認してください');
+    if (!inKind || !inSource) return showToast(!inKind ? '支出の種類を選んでください' : '充当元を選んでください');
     const payload = {
       date: toISODateSafe(inDate), amount, title: inTitle, category: inCat, paymentMethod: inMethod,
-      isSpecial: inSpendType === 'special',
-      fromSavings: inSpendType === 'savings',
-      savingsBucket: inSpendType === 'savings' ? (inSavingsBucket || null) : null,
+      kind: inKind, source: inSource,
+      savingsBucket: inSource === 'savings' ? (inSavingsBucket || null) : null,
+      // 旧項目も併記（貯金の集計クエリと、古い版のアプリとの互換のため）
+      isSpecial: inKind === 'special',
+      fromSavings: inSource === 'savings',
       updatedAt: serverTimestamp()
     };
     setIsSaving(true);
@@ -898,11 +943,13 @@ function AppMain() {
     if (!ok) return;
     try {
       const s = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc')));
-      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '種別']];
+      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '支出の種類', '充当元', '貯金の積立先']];
       s.forEach(d => {
         const v = d.data();
         rows.push([isoToLocalYMD(v.date), v.title, v.category, v.amount, v.paymentMethod,
-          v.fromSavings ? '貯金から' : v.isSpecial ? '特別費' : '通常']);
+          KIND_LABELS[getKind(v)] || '未設定',
+          SOURCE_LABELS[getSource(v)] || '未設定',
+          getSource(v) === 'savings' ? (v.savingsBucket || '指定なし') : '']);
       });
       downloadData('\uFEFF' + rows.map(row => row.map(csvField).join(',')).join('\n') + '\n',
         `zaimu_transactions_${getTodayString()}.csv`, 'text/csv;charset=utf-8;');
@@ -958,12 +1005,6 @@ function AppMain() {
   const idealSpend = Math.round(S.freeBudget * idealPct / 100);
   const paceDiff = S.freeSpent - idealSpend;
   const showPaceMarker = isCurrentMonth && idealPct > 2 && idealPct < 98;
-
-  const SPEND_TYPES = [
-    { value: 'normal', label: '通常' },
-    { value: 'special', label: '特別費' },
-    { value: 'savings', label: '貯金から' },
-  ];
 
   return (
     <div className="fixed inset-0 w-full bg-[#1C1C1E] text-white font-sans flex flex-col overflow-hidden">
@@ -1147,15 +1188,24 @@ function AppMain() {
                       <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
                     </div>
                   ))}
-                  <div className="flex-1 relative">
-                    <select value={filter.spendType} onChange={e => setFilter(p => ({ ...p, spendType: e.target.value }))}
-                      className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
-                      <option value="ALL">全種別</option>
-                      {SPEND_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                    <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
-                  </div>
-                  <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', spendType: 'ALL' }); }}
+                </div>
+                <div className="flex gap-2">
+                  {[
+                    { key: 'kind', val: filter.kind, all: '全種類', opts: KINDS },
+                    { key: 'source', val: filter.source, all: '全充当元', opts: SOURCES },
+                  ].map(({ key, val, all, opts }) => (
+                    <div key={key} className="flex-1 relative">
+                      <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
+                        className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
+                        <option value="ALL">{all}</option>
+                        {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        <option value="UNSET">未設定</option>
+                      </select>
+                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
+                    </div>
+                  ))}
+                  <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'ALL' }); }}
+                    aria-label="絞り込みをクリア"
                     className="w-11 h-11 bg-[#2C2C2E] rounded-[14px] flex items-center justify-center text-[#636366] shrink-0">
                     <X size={14} />
                   </button>
@@ -1184,7 +1234,6 @@ function AppMain() {
                             </Label>
                             <Card>
                               {g.items.map((t, idx) => {
-                                const st = getSpendType(t);
                                 return (
                                   <div key={t.id}>
                                     <button type="button" onClick={() => setViewingTx(t)}
@@ -1195,8 +1244,7 @@ function AppMain() {
                                           <span className="text-[#636366]">{t.category}</span>
                                           <span className="text-[#545458]">·</span>
                                           <span className="text-[#636366] truncate">{t.paymentMethod}</span>
-                                          {st === 'special' && (<><span className="text-[#545458]">·</span><span className="text-[#7C7C80] font-medium">特別費</span></>)}
-                                          {st === 'savings' && (<><span className="text-[#545458]">·</span><span className="text-[#4A7BA6] font-medium">貯金から{t.savingsBucket ? `（${t.savingsBucket}）` : ''}</span></>)}
+                                          {txTags(t).map(g => (<React.Fragment key={g.text}><span className="text-[#545458]">·</span><span className={g.cls}>{g.text}</span></React.Fragment>))}
                                           {t.recurringId && (<><span className="text-[#545458]">·</span><span className="text-[#7C7C80] font-medium flex items-center gap-0.5"><Repeat size={10} />定期</span></>)}
                                         </div>
                                       </div>
@@ -1258,8 +1306,7 @@ function AppMain() {
                           <Card>
                             {info.items.length === 0 && (<><EmptyState>この日の支出はありません</EmptyState><Separator /></>)}
                             {info.items.map(t => {
-                              const st = getSpendType(t);
-                              const tags = [t.category, t.paymentMethod, st === 'special' && '特別費', st === 'savings' && '貯金から', t.recurringId && '定期'].filter(Boolean).join(' · ');
+                              const tags = [t.category, t.paymentMethod, ...txTags(t).map(g => g.text), t.recurringId && '定期'].filter(Boolean).join(' · ');
                               return (
                                 <div key={t.id}>
                                   <button type="button" onClick={() => setViewingTx(t)}
@@ -1398,7 +1445,7 @@ function AppMain() {
 
               {analysisView === 'month' && (<>
               <div>
-                <Label>カテゴリ別の支出</Label>
+                <Label>カテゴリ別の支出（予算から）</Label>
                 <Card>
                 <div className="p-5 space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -1453,7 +1500,7 @@ function AppMain() {
                 <Card>
                   <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
                   <Separator />
-                  <Row label="今月使った分（カード）" value={`¥${S.spCard.toLocaleString()}`} />
+                  <Row label="使った分（予算×カード）" value={`¥${S.spCard.toLocaleString()}`} />
                   <Separator />
                   <Row label="固定費予定（未記録）" value={`−¥${S.pendingFixed.toLocaleString()}`} muted />
                   <Separator />
@@ -1463,13 +1510,19 @@ function AppMain() {
               <div>
                 <Label>支出の内訳</Label>
                 <Card>
-                  <Row label="カード支出" value={`¥${S.spCard.toLocaleString()}`} />
+                  <Row label="予算から（カード）" value={`¥${S.spCard.toLocaleString()}`} />
                   <Separator />
                   <Row label="うち定期支出（記録済み）" value={`¥${S.recRecorded.toLocaleString()}`} muted />
                   <Separator />
-                  <Row label="現金支出" value={`¥${S.spCash.toLocaleString()}`} />
+                  <Row label="予算から（現金）" value={`¥${S.spCash.toLocaleString()}`} />
+                  <Separator />
+                  <Row label="貯金から" value={`¥${S.spSavings.toLocaleString()}`} />
                   <Separator />
                   <Row label="今月の先取り" value={`¥${S.savTotal.toLocaleString()}`} />
+                  <Separator />
+                  <Row label="カードの支払予定（全充当元）" value={`¥${S.cardOutAll.toLocaleString()}`} muted />
+                  <Separator />
+                  <Row label="現金の出金（全充当元）" value={`¥${S.cashOutAll.toLocaleString()}`} muted />
                 </Card>
               </div>
               {activeCats.length > 0 && (
@@ -1504,6 +1557,24 @@ function AppMain() {
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSpecial.toLocaleString()}</span>
                     <span className="text-[13px] text-[#636366]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
                   </div>
+                </Card>
+              )}
+              {S.spUnsetCount > 0 && (
+                <Card>
+                  <button type="button"
+                    onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
+                    className="w-full px-5 py-4 text-left active:bg-white/[0.04] transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[13px] text-[#FF453A]">充当元が未設定の支出</p>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[16px] font-semibold text-white tabular-nums">¥{S.spUnset.toLocaleString()}</span>
+                        <ChevronDown size={14} className="text-[#636366] -rotate-90" />
+                      </div>
+                    </div>
+                    <p className="mt-1 text-[11px] text-[#636366] leading-relaxed">
+                      {S.spUnsetCount}件。旧バージョンで記録した支出です。どこから出したお金かが未記録のため、予算・貯金のどちらの残額からも引いていません。タップして分類できます
+                    </p>
+                  </button>
                 </Card>
               )}
               {S.spSavings > 0 && (
@@ -1772,7 +1843,15 @@ function AppMain() {
               <p className="text-[28px] font-semibold text-white tracking-tight tabular-nums">¥{Number(viewingTx.amount).toLocaleString()}</p>
             </div>
             <Card>
-              {[['内容', viewingTx.title], ['日付', formatFullDateJP(viewingTx.date)], ['支払方法', viewingTx.paymentMethod], ['種別', getSpendType(viewingTx) === 'savings' ? `貯金から${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : ''}` : getSpendType(viewingTx) === 'special' ? '特別費' : '通常']].map(([l, v], idx, arr) => (
+              {[
+                ['内容', viewingTx.title],
+                ['日付', formatFullDateJP(viewingTx.date)],
+                ['支払方法', viewingTx.paymentMethod],
+                ['支出の種類', KIND_LABELS[getKind(viewingTx)] || '未設定'],
+                ['充当元', getSource(viewingTx) === 'savings'
+                  ? `貯金${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : '（指定なし）'}`
+                  : SOURCE_LABELS[getSource(viewingTx)] || '未設定']
+              ].map(([l, v], idx, arr) => (
                 <div key={l}>
                   <div className="px-4 py-3 flex justify-between gap-4">
                     <span className="text-[13px] text-[#98989D]">{l}</span>
@@ -1943,19 +2022,37 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">種別</label>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支出の種類</label>
                 <div className="flex gap-2">
-                  {SPEND_TYPES.map(({ value, label }) => (
-                    <button key={value} type="button" onClick={() => setInSpendType(value)}
-                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSpendType === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                  {KINDS.map(({ value, label }) => (
+                    <button key={value} type="button" onClick={() => setInKind(value)}
+                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inKind === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
                       {label}
                     </button>
                   ))}
                 </div>
-                {inSpendType === 'savings' && (
+                {!inKind && <p className="mt-1.5 ml-1 text-[11px] text-[#FF453A]">旧データのため未設定です。選んで保存すると分類できます</p>}
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">充当元</label>
+                <div className="flex gap-2">
+                  {SOURCES.map(({ value, label }) => (
+                    <button key={value} type="button" onClick={() => setInSource(value)}
+                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSource === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {!inSource && <p className="mt-1.5 ml-1 text-[11px] text-[#FF453A]">旧データのため未設定です。選んで保存すると分類できます</p>}
+                {inSource === 'budget' && (
+                  <p className="mt-1.5 ml-1 text-[11px] text-[#636366]">
+                    {inMethod === CASH ? '現金残高から引かれます（予算は月初に現金を差し引き済み）' : '今月の予算の残額から引かれます'}
+                  </p>
+                )}
+                {inSource === 'savings' && (
                   <div className="mt-2 space-y-2">
                     <p className="ml-1 text-[11px] text-[#4A7BA6] flex items-center gap-1.5">
-                      <PiggyBank size={12} /> 可変費には含まれず、先取り累計から差し引かれます
+                      <PiggyBank size={12} /> 今月の予算ではなく、貯金の残額から引かれます
                     </p>
                     {bucketOptions.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
