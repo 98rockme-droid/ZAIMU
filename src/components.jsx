@@ -189,9 +189,9 @@ export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
   </button>
 );
 
-export const PrimaryButton = ({ children, onClick, type = 'button', className = '' }) => (
-  <button type={type} onClick={onClick}
-    className={`w-full h-12 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[15px] flex items-center justify-center gap-2 active:scale-[0.98] transition-all ${className}`}>
+export const PrimaryButton = ({ children, onClick, type = 'button', className = '', disabled = false }) => (
+  <button type={type} onClick={onClick} disabled={disabled}
+    className={`w-full h-12 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[15px] flex items-center justify-center gap-2 transition-all ${disabled ? 'opacity-50' : 'active:scale-[0.98]'} ${className}`}>
     {children}
   </button>
 );

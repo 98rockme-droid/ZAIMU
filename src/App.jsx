@@ -153,6 +153,8 @@ function AppMain() {
   const [inSpendType, setInSpendType] = useState('normal');
   const [inSavingsBucket, setInSavingsBucket] = useState('');
   const [txFormKey, setTxFormKey] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const touchRef = useRef(null);
 
   const [editingTx, setEditingTx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -655,6 +657,7 @@ function AppMain() {
 
   const submitTx = async e => {
     e.preventDefault(); if (!user) return;
+    if (isSaving) return; // 二重送信の防止
     const amount = toNumber(inAmount);
     if (!inDate || !amount || !inTitle) return showToast('入力内容を確認してください');
     const payload = {
@@ -664,17 +667,44 @@ function AppMain() {
       savingsBucket: inSpendType === 'savings' ? (inSavingsBucket || null) : null,
       updatedAt: serverTimestamp()
     };
+    setIsSaving(true);
     try {
       if (editingTx?.id) { await updateDoc(doc(db, 'users', user.uid, 'transactions', editingTx.id), payload); showToast('更新しました'); }
       else { await addDoc(collection(db, 'users', user.uid, 'transactions'), { ...payload, createdAt: serverTimestamp() }); showToast('追加しました'); }
       closeTx();
     } catch (e) { console.error(e); showToast('エラー'); }
+    finally { setIsSaving(false); }
+  };
+
+  // 月の移動（ヘッダーのボタンと横スワイプで共用）
+  const shiftMonth = diff => {
+    const d = new Date(`${month}-01T00:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() + diff);
+    setMonth(getMonthString(d));
+  };
+
+  // 横スワイプで前月・翌月へ（縦スクロールと誤認しないよう角度と距離で判定）
+  const onTouchStart = e => {
+    if (e.touches.length !== 1) return (touchRef.current = null);
+    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  };
+  const onTouchEnd = e => {
+    const st = touchRef.current;
+    touchRef.current = null;
+    if (!st || !e.changedTouches.length) return;
+    const dx = e.changedTouches[0].clientX - st.x;
+    const dy = e.changedTouches[0].clientY - st.y;
+    if (Date.now() - st.t > 600) return;              // ゆっくりの操作は無視
+    if (Math.abs(dx) < 60) return;                     // 短い動きは無視
+    if (Math.abs(dx) < Math.abs(dy) * 1.8) return;     // 縦方向が強い動きは無視
+    shiftMonth(dx < 0 ? 1 : -1);                       // 左スワイプ→翌月 / 右→前月
   };
 
   const openEdit = (type, data, index) => setEditingItem({ type, data: { ...data }, index });
 
   const saveSettings = async () => {
-    if (!user || !editingItem) return;
+    if (!user || !editingItem || isSaving) return;
+    setIsSaving(true);
     const { type, data, index } = editingItem;
     try {
       const mRef = doc(db, 'users', user.uid, 'months', month);
@@ -725,6 +755,7 @@ function AppMain() {
       }
       setEditingItem(null); showToast('保存しました');
     } catch (e) { console.error(e); showToast('エラー'); }
+    finally { setIsSaving(false); }
   };
 
   const deleteItem = async () => {
@@ -897,16 +928,18 @@ function AppMain() {
             <>
               <div className="w-8" />
               <div className="flex items-center gap-0.5">
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronLeft size={16} /></button>
+                <button onClick={() => shiftMonth(-1)} aria-label="前の月" className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronLeft size={16} /></button>
                 <span className="text-[14px] font-semibold text-white min-w-[96px] text-center tabular-nums">{formatMonthJP(month)}</span>
-                <button onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + 1); setMonth(getMonthString(d)); }} className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronRight size={16} /></button>
+                <button onClick={() => shiftMonth(1)} aria-label="次の月" className="w-11 h-11 flex items-center justify-center text-[#98989D]"><ChevronRight size={16} /></button>
               </div>
               <button onClick={() => setMonth(getMonthString(new Date()))} className="w-11 h-11 -mr-2 flex items-center justify-center text-[#98989D]"><Calendar size={16} /></button>
             </>
           )}
         </header>
 
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden"
+          onTouchStart={activeTab === 'settings' ? undefined : onTouchStart}
+          onTouchEnd={activeTab === 'settings' ? undefined : onTouchEnd}>
 
           {/* HOME */}
           {activeTab === 'home' && (
@@ -1457,7 +1490,7 @@ function AppMain() {
                     <Label>データ</Label>
                     <Card>
                       <SettingsRow
-                        onClick={() => { const d = new Date(month + '-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
+                        onClick={() => { const d = new Date(`${month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); setCopyFrom(getMonthString(d)); setCopyOpen(true); }}
                         left={<div className="flex items-center gap-3"><CopyCheck size={17} className="text-[#98989D] shrink-0" /><span>先月の設定をコピー</span></div>}
                         showChevron />
                       <Separator />
@@ -1868,7 +1901,7 @@ function AppMain() {
                 )}
               </div>
               <div className="pt-2">
-                <PrimaryButton type="submit">{editingTx ? '保存する' : '追加する'}</PrimaryButton>
+                <PrimaryButton type="submit" disabled={isSaving}>{isSaving ? '保存中...' : editingTx ? '保存する' : '追加する'}</PrimaryButton>
               </div>
             </form>
           </div>
@@ -1922,7 +1955,7 @@ function AppMain() {
               {!isNew && !['salary', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
-              <PrimaryButton onClick={saveSettings}>{isNew ? '追加する' : '保存する'}</PrimaryButton>
+              <PrimaryButton onClick={saveSettings} disabled={isSaving}>{isSaving ? '保存中...' : isNew ? '追加する' : '保存する'}</PrimaryButton>
             </div>
           </div>
         </Modal>
