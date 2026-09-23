@@ -21,6 +21,7 @@ import {
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring
 } from './components.jsx';
+import { AccountBook, AccountSummary } from './AccountBook.jsx';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -203,6 +204,7 @@ function AppMain() {
   const [inKind, setInKind] = useState('normal');
   const [inSource, setInSource] = useState('budget');
   const [inSavingsBucket, setInSavingsBucket] = useState('');
+  const [inAccountId, setInAccountId] = useState('');
   const [txFormKey, setTxFormKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const touchRef = useRef(null);
@@ -221,6 +223,11 @@ function AppMain() {
   const [selYearMonth, setSelYearMonth] = useState(null);
 
   const [txList, setTxList] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [accountEntries, setAccountEntries] = useState([]);
+  const [accountTx, setAccountTx] = useState([]);
+  const [accountError, setAccountError] = useState(false);
+  const [accountLoaded, setAccountLoaded] = useState({ accounts: false, entries: false, expenses: false });
   const [txLoadedMonth, setTxLoadedMonth] = useState(null);
   const recProcessedRef = useRef(new Set());
   const [prevTxList, setPrevTxList] = useState([]);
@@ -279,6 +286,11 @@ function AppMain() {
       { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
       { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
     ]},
+    { category: '口座・財布', items: [
+      { q: '口座残高と今月の現金残りの違いは？', a: '口座残高は実際のお金の置き場所ごとの残高です。今月の現金残りは月の予算上の目安で、同じ額にはなりません。貯金などの先取り枠は口座残高の合計に足しません。' },
+      { q: '銀行から財布へ現金をおろしたら？', a: '口座・財布で銀行から財布への振替を記録します。予算上の「ATMで現金をおろした」を使う場合はそちらの予算移動も記録します。振替は支出ではありません。' },
+      { q: 'カード払いと引落は？', a: '買い物の支出には口座を指定せず、銀行からカード代金が引き落とされた日に、口座の出金として記録します。口座の出金は月の支出には再計上しません。' }
+    ]},
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。周期は「毎月」と「毎年」から選べるので、年会費のような年1回の支出も登録できます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
       { q: '履歴の検索はどこまで探せる？', a: '検索欄に文字を入れると、表示中の月だけでなく全期間の支出から探します。件数が多い場合は読み込みに時間がかかります。結果は日付ごとにまとまって表示されます。' },
@@ -313,6 +325,19 @@ function AppMain() {
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, u => { setUser(u); setAuthLoading(false); }), []);
+
+  // 実残高は月次予算・先取り枠とは別。旧支出には口座を推測して付与しない。
+  useEffect(() => {
+    if (!user) { setAccounts([]); setAccountEntries([]); setAccountTx([]); setAccountError(false); setAccountLoaded({ accounts: false, entries: false, expenses: false }); return; }
+    setAccountLoaded({ accounts: false, entries: false, expenses: false });
+    const base = doc(db, 'users', user.uid);
+    const failed = err => { console.error(err); setAccountError(true); showToast('口座データを取得できません。権限設定を確認してください'); };
+    const unsubAccounts = onSnapshot(collection(base, 'accounts'), s => { setAccounts(s.docs.map(d => ({ id: d.id, ...d.data() }))); setAccountLoaded(v => ({ ...v, accounts: true })); }, failed);
+    const unsubEntries = onSnapshot(collection(base, 'accountEntries'), s => { setAccountEntries(s.docs.map(d => ({ id: d.id, ...d.data() }))); setAccountLoaded(v => ({ ...v, entries: true })); }, failed);
+    const unsubTx = onSnapshot(query(collection(base, 'transactions'), where('accountId', '!=', null)),
+      s => { setAccountTx(s.docs.map(d => ({ id: d.id, ...d.data() }))); setAccountLoaded(v => ({ ...v, expenses: true })); }, failed);
+    return () => { unsubAccounts(); unsubEntries(); unsubTx(); };
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -696,6 +721,7 @@ function AppMain() {
     setInKind('normal');
     setInSource('budget');
     setInSavingsBucket('');
+    setInAccountId('');
     setTxFormKey(k => k + 1);
   }, [catNames, methods]);
 
@@ -718,6 +744,7 @@ function AppMain() {
     setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
+    setInAccountId(t.accountId || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
@@ -732,6 +759,7 @@ function AppMain() {
     setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
+    setInAccountId(t.accountId || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
@@ -747,8 +775,14 @@ function AppMain() {
     const amount = toNumber(inAmount);
     if (!inDate || !amount || !inTitle) return showToast('入力内容を確認してください');
     if (!inKind || !inSource) return showToast(!inKind ? '支出の種類を選んでください' : '充当元を選んでください');
+    if (editingTx?.accountId && (accountError || !Object.values(accountLoaded).every(Boolean))) return showToast('口座データの読み込み後に保存してください');
+    if (inAccountId) {
+      const account = accounts.find(a => a.id === inAccountId);
+      if (!account || inDate < account.openingDate) return showToast('口座の開始日以降の日付を選んでください');
+    }
     const payload = {
       date: toISODateSafe(inDate), amount, title: inTitle, category: inCat, paymentMethod: inMethod,
+      accountId: inAccountId || null,
       kind: inKind, source: inSource,
       savingsBucket: inSource === 'savings' ? (inSavingsBucket || null) : null,
       // 旧項目も併記（貯金の集計クエリと、古い版のアプリとの互換のため）
@@ -943,13 +977,14 @@ function AppMain() {
     if (!ok) return;
     try {
       const s = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc')));
-      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '支出の種類', '充当元', '貯金の積立先']];
+      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '支出の種類', '充当元', '貯金の積立先', '実際の引落口座']];
       s.forEach(d => {
         const v = d.data();
         rows.push([isoToLocalYMD(v.date), v.title, v.category, v.amount, v.paymentMethod,
           KIND_LABELS[getKind(v)] || '未設定',
           SOURCE_LABELS[getSource(v)] || '未設定',
-          getSource(v) === 'savings' ? (v.savingsBucket || '指定なし') : '']);
+          getSource(v) === 'savings' ? (v.savingsBucket || '指定なし') : '',
+          accounts.find(a => a.id === v.accountId)?.name || '']);
       });
       downloadData('\uFEFF' + rows.map(row => row.map(csvField).join(',')).join('\n') + '\n',
         `zaimu_transactions_${getTodayString()}.csv`, 'text/csv;charset=utf-8;');
@@ -961,14 +996,17 @@ function AppMain() {
     if (!ok) return;
     try {
       const base = doc(db, 'users', user.uid);
-      const [tx, months, settings] = await Promise.all([
+      const [tx, months, settings, savedAccounts, savedEntries] = await Promise.all([
         getDocs(collection(base, 'transactions')),
         getDocs(collection(base, 'months')),
-        getDocs(collection(base, 'settings'))
+        getDocs(collection(base, 'settings')),
+        getDocs(collection(base, 'accounts')),
+        getDocs(collection(base, 'accountEntries'))
       ]);
       const entries = snapshot => snapshot.docs.map(d => ({ id: d.id, data: d.data() }));
-      const backup = { format: 'zaimu-backup', version: 1, exportedAt: new Date().toISOString(),
-        transactions: entries(tx), months: entries(months), settings: entries(settings) };
+      const backup = { format: 'zaimu-backup', version: 2, exportedAt: new Date().toISOString(),
+        transactions: entries(tx), months: entries(months), settings: entries(settings),
+        accounts: entries(savedAccounts), accountEntries: entries(savedEntries) };
       downloadData(JSON.stringify(backup, null, 2),
         `zaimu_backup_${getTodayString()}.json`, 'application/json;charset=utf-8;');
     } catch (e) { console.error(e); showToast('バックアップに失敗しました'); }
@@ -987,6 +1025,7 @@ function AppMain() {
 
   const MENU = [
     { id: 'budget', label: '資金計画', icon: <Landmark size={17} /> },
+    { id: 'accounts', label: '口座・財布', icon: <Wallet size={17} /> },
     { id: 'category', label: 'カテゴリ予算', icon: <Tags size={17} /> },
     { id: 'template', label: 'テンプレート', icon: <Zap size={17} /> },
     { id: 'recurring', label: '定期支出', icon: <Repeat size={17} /> },
@@ -1055,6 +1094,7 @@ function AppMain() {
                 </button>
               )}
               <div className="px-4 pt-4 space-y-5">
+                {accountError ? <p className="text-[#FF453A] text-[12px]">口座残高を取得できません。設定を確認してください。</p> : Object.values(accountLoaded).every(Boolean) && <AccountSummary accounts={accounts} entries={accountEntries} transactions={accountTx} date={month === getMonthString(new Date()) ? getTodayString() : `${month}-${String(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()).padStart(2, '0')}`} />}
                 <div>
                   <Label>今月</Label>
                   <Card>
@@ -1812,6 +1852,9 @@ function AppMain() {
                   <AddRow label="支払方法を追加" onClick={() => openEdit('payment', { name: '' }, -1)} />
                 </Card>
               )}
+              {settingTab === 'accounts' && (
+                accountError ? <p className="text-[#FF453A] text-sm">口座データを取得できません。Firestore の権限設定を確認してください。</p> : Object.values(accountLoaded).every(Boolean) ? <AccountBook db={db} user={user} accounts={accounts} entries={accountEntries} transactions={accountTx} today={getTodayString()} onToast={showToast} /> : <p className="text-[#98989D] text-sm">口座データを読み込み中...</p>
+              )}
             </div>
           )}
         </main>
@@ -1847,6 +1890,7 @@ function AppMain() {
                 ['内容', viewingTx.title],
                 ['日付', formatFullDateJP(viewingTx.date)],
                 ['支払方法', viewingTx.paymentMethod],
+                ['実際の引落口座', accounts.find(a => a.id === viewingTx.accountId)?.name || '未設定'],
                 ['支出の種類', KIND_LABELS[getKind(viewingTx)] || '未設定'],
                 ['充当元', getSource(viewingTx) === 'savings'
                   ? `貯金${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : '（指定なし）'}`
@@ -2012,6 +2056,14 @@ function AppMain() {
                   ))}
                 </div>
               </div>
+              {!accountError && Object.values(accountLoaded).every(Boolean) && accounts.length > 0 && <div>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">引き落とした口座・財布</label>
+                <select className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-3 text-[14px] text-white" value={inAccountId} onChange={e => setInAccountId(e.target.value)}>
+                  <option value="">紐づけない（カード払いなど）</option>
+                  {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <p className="text-[11px] text-[#636366] mt-1 ml-1">指定すると実残高からすぐ差し引きます。カード払いは未指定にし、銀行引落日に口座の出金として記録してください。</p>
+              </div>}
               <div>
                 <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
                 <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
