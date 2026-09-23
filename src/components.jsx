@@ -47,12 +47,12 @@ export const ConfirmDialog = ({ isOpen, title, message, confirmLabel = '実行�
               <AlertTriangle size={18} className="text-[#FF453A]" />
             </div>
           )}
-          <p className="text-[15px] font-semibold text-white leading-snug">{title}</p>
+          <p className="text-[16px] font-semibold text-white leading-snug">{title}</p>
           {message && <p className="text-[13px] text-[#98989D] leading-relaxed">{message}</p>}
         </div>
         <div className="border-t border-white/[0.08] grid grid-cols-2">
-          <button type="button" onClick={onCancel} className="h-12 text-[15px] text-[#98989D] border-r border-white/[0.08] active:bg-white/[0.04] transition-colors">キャンセル</button>
-          <button type="button" onClick={onConfirm} className={`h-12 text-[15px] font-semibold transition-colors ${danger ? 'text-[#FF453A]' : 'text-[#0A84FF]'}`}>{confirmLabel}</button>
+          <button type="button" onClick={onCancel} className="h-12 text-[16px] text-[#98989D] border-r border-white/[0.08] active:bg-white/[0.04] transition-colors">キャンセル</button>
+          <button type="button" onClick={onConfirm} className={`h-12 text-[16px] font-semibold transition-colors ${danger ? 'text-[#FF453A]' : 'text-[#0A84FF]'}`}>{confirmLabel}</button>
         </div>
       </div>
     </div>
@@ -129,13 +129,13 @@ export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false,
 // 内訳の子行
 export const SubRow = ({ label, value, danger = false }) => (
   <div className="flex items-center justify-between pl-3 gap-3">
-    <span className="text-[12px] text-[#636366] truncate">{label}</span>
-    <span className={`text-[12px] tabular-nums shrink-0 whitespace-nowrap ${danger ? 'text-[#FF453A]' : 'text-[#7C7C80]'}`}>{value}</span>
+    <span className="text-[13px] text-[#636366] truncate">{label}</span>
+    <span className={`text-[13px] tabular-nums shrink-0 whitespace-nowrap ${danger ? 'text-[#FF453A]' : 'text-[#7C7C80]'}`}>{value}</span>
   </div>
 );
 
 export const EmptyState = ({ children }) => (
-  <p className="text-[12px] text-[#636366] text-center py-6 px-5 leading-relaxed">{children}</p>
+  <p className="text-[13px] text-[#636366] text-center py-6 px-5 leading-relaxed">{children}</p>
 );
 
 // カードの最終行に置く「追加」行（SettingsRowと同じ余白・高さ）
@@ -173,7 +173,7 @@ export const OfflineBanner = ({ isOffline }) => (
   <div className={`fixed left-0 right-0 z-40 transition-all duration-300 ${isOffline ? 'opacity-100' : 'opacity-0 -translate-y-full pointer-events-none'}`}
     style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
     <div className="bg-[#2C2C2E] px-4 py-2 flex items-center justify-center gap-2 border-b border-white/[0.06]">
-      <WifiOff size={12} className="text-[#FF9F0A]" />
+      <WifiOff size={12} className="text-[#4A7BA6]" />
       <span className="text-[11px] font-medium text-[#98989D]">オフライン中 — データは自動的に同期されます</span>
     </div>
   </div>
@@ -191,7 +191,7 @@ export const SettingsRow = ({ left, right, onClick, showChevron = false }) => (
 
 export const PrimaryButton = ({ children, onClick, type = 'button', className = '', disabled = false }) => (
   <button type={type} onClick={onClick} disabled={disabled}
-    className={`w-full h-12 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[15px] flex items-center justify-center gap-2 transition-all ${disabled ? 'opacity-50' : 'active:scale-[0.98]'} ${className}`}>
+    className={`w-full h-12 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[16px] flex items-center justify-center gap-2 transition-all ${disabled ? 'opacity-50' : 'active:scale-[0.98]'} ${className}`}>
     {children}
   </button>
 );
@@ -237,7 +237,7 @@ export const CalculatorPad = ({ initialValue, onConfirm }) => {
       <div className="grid grid-cols-4 gap-2 h-[276px]">
         {btns.map((b, i) => (
           <button key={i} type="button" onClick={b.act}
-            className={`rounded-[14px] bg-[#2C2C2E] text-[17px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
+            className={`rounded-[14px] bg-[#2C2C2E] text-[16px] font-medium active:scale-95 transition-all flex items-center justify-center ${b.cls || 'text-white'}`}>
             {b.l}
           </button>
         ))}
@@ -255,9 +255,9 @@ const FieldLabel = ({ children }) => (
 const AmountInputSimple = ({ value, onChange, openCalculator }) => (
   <div className="flex gap-1.5 items-center w-full min-w-0">
     <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-11 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-      <span className="text-[15px] text-[#98989D] shrink-0">¥</span>
+      <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
       <input type="text" inputMode="decimal" value={value} onChange={onChange}
-        className="flex-1 min-w-0 w-full bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+        className="flex-1 min-w-0 w-full bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
     </div>
     <button type="button" onClick={openCalculator}
       className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
@@ -309,7 +309,7 @@ export const EditFormBill = ({ editingItem, setEditingItem, openCalculator }) =>
       <FieldLabel>引落日</FieldLabel>
       <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
         <input type="number" value={String(editingItem.data.due ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, due: e.target.value } })}
-          className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+          className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
         <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
       </div>
     </div>
@@ -444,13 +444,13 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
         {(editingItem.data.freq || 'monthly') === 'yearly' && (
           <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 flex-1">
             <input type="number" min="1" max="12" value={String(editingItem.data.month ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, month: e.target.value } })}
-              className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+              className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
             <span className="text-[13px] text-[#98989D] ml-2 shrink-0">月</span>
           </div>
         )}
         <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 flex-1">
           <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
-            className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+            className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
           <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
         </div>
       </div>
@@ -490,7 +490,7 @@ export class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) return (
       <div className="h-screen w-full bg-[#1C1C1E] flex flex-col items-center justify-center p-8 gap-4">
-        <p className="text-[15px] font-semibold text-white">エラーが発生しました</p>
+        <p className="text-[16px] font-semibold text-white">エラーが発生しました</p>
         <p className="text-[13px] text-[#98989D] text-center">画面を再読み込みしてください。</p>
         <button onClick={() => window.location.reload()} className="mt-2 px-6 h-11 bg-[#0A84FF] text-white rounded-[14px] font-semibold text-[14px]">再読み込み</button>
       </div>

@@ -947,7 +947,7 @@ function AppMain() {
               {monthly.memo && (
                 <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full px-4 py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#2C2C2E]/60">
                   <span className="text-[13px] mt-0.5 shrink-0">📌</span>
-                  <span className={`flex-1 text-[12px] text-[#98989D] leading-relaxed ${memoExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>{monthly.memo}</span>
+                  <span className={`flex-1 text-[13px] text-[#98989D] leading-relaxed ${memoExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>{monthly.memo}</span>
                   <ChevronDown size={13} className={`text-[#636366] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
                 </button>
               )}
@@ -1021,8 +1021,8 @@ function AppMain() {
                       {(monthly.cashTopups || []).map((c, i) => (
                         <button key={c.id || i} type="button" onClick={() => openEdit('cashTopup', { value: c.amount }, i)}
                           className="w-full flex items-center justify-between pl-3 gap-3 min-h-[32px] text-left active:opacity-60">
-                          <span className="text-[12px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした</span>
-                          <span className="text-[12px] text-[#7C7C80] tabular-nums shrink-0">+¥{Number(c.amount || 0).toLocaleString()}</span>
+                          <span className="text-[13px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした</span>
+                          <span className="text-[13px] text-[#7C7C80] tabular-nums shrink-0">+¥{Number(c.amount || 0).toLocaleString()}</span>
                         </button>
                       ))}
                       <SubRow label="今月の現金支出" value={`−¥${S.spCash.toLocaleString()}`} />
@@ -1138,7 +1138,7 @@ function AppMain() {
                                           {t.recurringId && (<><span className="text-[#545458]">·</span><span className="text-[#7C7C80] font-medium flex items-center gap-0.5"><Repeat size={10} />定期</span></>)}
                                         </div>
                                       </div>
-                                      <span className="text-[15px] font-semibold text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
+                                      <span className="text-[16px] font-semibold text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
                                     </button>
                                     {idx < g.items.length - 1 && <Separator />}
                                   </div>
@@ -1155,7 +1155,7 @@ function AppMain() {
                     <Card className="p-3">
                       <div className="grid grid-cols-7 text-center mb-1">
                         {WEEKDAYS.map((d, i) => (
-                          <span key={d} className={`text-[11px] py-1 ${i === 0 ? 'text-[#FF6961]/70' : i === 6 ? 'text-[#64A8FF]/70' : 'text-[#636366]'}`}>{d}</span>
+                          <span key={d} className={`text-[11px] py-1 ${i === 0 ? 'text-[#FF453A]/60' : i === 6 ? 'text-[#0A84FF]/70' : 'text-[#636366]'}`}>{d}</span>
                         ))}
                       </div>
                       <div className="grid grid-cols-7 gap-1">
@@ -1169,7 +1169,7 @@ function AppMain() {
                           const isFuture = dStr > getTodayString();
                           const isSel = selDay === day;
                           const level = amt > 0 ? Math.min(1, amt / dayMax) : 0;
-                          const numColor = isToday ? 'text-white' : dow === 0 ? 'text-[#FF6961]' : dow === 6 ? 'text-[#64A8FF]' : 'text-[#EBEBF5]/80';
+                          const numColor = isToday ? 'text-white' : dow === 0 ? 'text-[#FF453A]/80' : dow === 6 ? 'text-[#0A84FF]' : 'text-[#EBEBF5]/80';
                           return (
                             <button key={i} onClick={() => setSelDay(isSel ? null : day)}
                               aria-label={`${day}日 ${amt > 0 ? `¥${amt.toLocaleString()}` : '支出なし'}`}
@@ -1274,9 +1274,9 @@ function AppMain() {
                                 <div className="mb-4">
                                   <p className="text-[11px] text-[#98989D]">{formatMonthJP(sel)}</p>
                                   <div className="flex items-baseline gap-2 mt-1">
-                                    <p className="text-[26px] font-semibold text-white tracking-tight tabular-nums leading-none">¥{yearData.spend[sel].toLocaleString()}</p>
+                                    <p className="text-[28px] font-semibold text-white tracking-tight tabular-nums leading-none">¥{yearData.spend[sel].toLocaleString()}</p>
                                     {diff !== null && yearData.spend[prevM] > 0 && (
-                                      <span className={`text-[12px] font-medium tabular-nums ${diff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
+                                      <span className={`text-[13px] font-medium tabular-nums ${diff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
                                         前月比 {diff <= 0 ? '−' : '+'}¥{Math.abs(diff).toLocaleString()}
                                       </span>
                                     )}
@@ -1342,7 +1342,7 @@ function AppMain() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[11px] text-[#98989D] mb-1.5">通常支出</p>
-                      <p className="text-[32px] font-semibold text-white tracking-tight leading-none">¥{S.spent.toLocaleString()}</p>
+                      <p className="text-[28px] font-semibold text-white tracking-tight tabular-nums leading-none">¥{S.spent.toLocaleString()}</p>
                     </div>
                     <div className={`flex items-center gap-1 px-3 py-1.5 rounded-[10px] text-[11px] font-medium ${S.spent <= S.prevSpent ? 'bg-[#30D158]/10 text-[#30D158]' : 'bg-[#FF453A]/10 text-[#FF453A]'}`}>
                       {S.spent <= S.prevSpent ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
@@ -1440,7 +1440,7 @@ function AppMain() {
                   <p className="text-[11px] text-[#98989D] mb-2">特別費（別枠）</p>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSpecial.toLocaleString()}</span>
-                    <span className="text-[12px] text-[#636366]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
+                    <span className="text-[13px] text-[#636366]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
                   </div>
                 </Card>
               )}
@@ -1452,7 +1452,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSavings.toLocaleString()}</span>
-                    <span className="text-[12px] text-[#636366]">先取り累計から差し引き済み</span>
+                    <span className="text-[13px] text-[#636366]">先取り累計から差し引き済み</span>
                   </div>
                 </Card>
               )}
@@ -1469,7 +1469,7 @@ function AppMain() {
                     {user.photoURL ? <img src={user.photoURL} referrerPolicy="no-referrer" alt="" className="w-10 h-10 rounded-[14px]" /> : <div className="w-10 h-10 rounded-[14px] bg-[#3A3A3C] flex items-center justify-center"><User size={16} className="text-[#98989D]" /></div>}
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium text-white truncate">{user.displayName || 'User'}</p>
-                      <p className="text-[12px] text-[#98989D] truncate">{user.email}</p>
+                      <p className="text-[13px] text-[#98989D] truncate">{user.email}</p>
                     </div>
                     <button onClick={async () => { const ok = await confirm({ title: 'ログアウトしますか？', confirmLabel: 'ログアウト', danger: true }); if (ok) signOut(auth); }} className="w-11 h-11 bg-[#FF453A]/10 text-[#FF453A] rounded-[14px] flex items-center justify-center shrink-0"><LogOut size={15} /></button>
                   </div>
@@ -1528,11 +1528,11 @@ function AppMain() {
                                 </div>
                                 {expandedFaq === `${si}-${ii}` && (
                                   <div className="mt-3 pl-6 space-y-2">
-                                    <p className="text-[12px] text-[#98989D] leading-relaxed">{item.a}</p>
+                                    <p className="text-[13px] text-[#98989D] leading-relaxed">{item.a}</p>
                                     {item.formula && (
                                       <div className="px-3 py-2.5 bg-white/[0.04] rounded-[10px]">
                                         <p className="text-[11px] text-[#636366] mb-1">計算式</p>
-                                        <p className="text-[12px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
+                                        <p className="text-[13px] text-[#EBEBF5]/80 tabular-nums leading-relaxed">{item.formula}</p>
                                       </div>
                                     )}
                                   </div>
@@ -1701,14 +1701,14 @@ function AppMain() {
           <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-4">
             <div className="flex flex-col items-center gap-2 py-2">
-              <span className="text-[12px] text-[#98989D] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
-              <p className="text-[40px] font-semibold text-white tracking-tight">¥{Number(viewingTx.amount).toLocaleString()}</p>
+              <span className="text-[13px] text-[#98989D] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
+              <p className="text-[28px] font-semibold text-white tracking-tight tabular-nums">¥{Number(viewingTx.amount).toLocaleString()}</p>
             </div>
             <Card>
               {[['内容', viewingTx.title], ['日付', formatFullDateJP(viewingTx.date)], ['支払方法', viewingTx.paymentMethod], ['種別', getSpendType(viewingTx) === 'savings' ? `貯金から${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : ''}` : getSpendType(viewingTx) === 'special' ? '特別費' : '通常']].map(([l, v], idx, arr) => (
                 <div key={l}>
                   <div className="px-4 py-3 flex justify-between gap-4">
-                    <span className="text-[12px] text-[#98989D]">{l}</span>
+                    <span className="text-[13px] text-[#98989D]">{l}</span>
                     <span className="text-[13px] text-white">{v}</span>
                   </div>
                   {idx < arr.length - 1 && <Separator />}
