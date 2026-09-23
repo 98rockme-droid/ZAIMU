@@ -428,12 +428,33 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
       />
     </div>
     <div>
-      <FieldLabel>毎月の記録日</FieldLabel>
-      <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
-        <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
-          className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
-        <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
+      <FieldLabel>周期</FieldLabel>
+      <div className="flex gap-2">
+        {[['monthly', '毎月'], ['yearly', '毎年']].map(([v, l]) => (
+          <button key={v} type="button" onClick={() => setEditingItem({ ...editingItem, data: { ...editingItem.data, freq: v } })}
+            className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${(editingItem.data.freq || 'monthly') === v ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+            {l}
+          </button>
+        ))}
       </div>
+    </div>
+    <div>
+      <FieldLabel>記録日</FieldLabel>
+      <div className="flex items-center gap-2">
+        {(editingItem.data.freq || 'monthly') === 'yearly' && (
+          <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 flex-1">
+            <input type="number" min="1" max="12" value={String(editingItem.data.month ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, month: e.target.value } })}
+              className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+            <span className="text-[13px] text-[#98989D] ml-2 shrink-0">月</span>
+          </div>
+        )}
+        <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 flex-1">
+          <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
+            className="w-full min-w-0 bg-transparent text-[17px] font-semibold text-white outline-none tabular-nums" />
+          <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
+        </div>
+      </div>
+      <p className="text-[11px] text-[#636366] mt-1.5 ml-1">{(editingItem.data.freq || 'monthly') === 'yearly' ? '毎年この日に自動で記録されます' : '毎月この日に自動で記録されます'}</p>
     </div>
     <div className="relative">
       <FieldLabel>カテゴリ</FieldLabel>

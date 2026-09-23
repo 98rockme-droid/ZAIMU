@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
-  getFirestore, collection, doc, setDoc, onSnapshot, query, deleteDoc,
+  getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, setDoc, onSnapshot, query, deleteDoc,
   where, getDocs, getDoc, orderBy, addDoc, updateDoc, serverTimestamp, documentId, arrayUnion, arrayRemove, limit
 } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -30,7 +31,13 @@ const firebaseConfig = {
   appId: '1:388166181792:web:d3ccef2742dca358d3bac5'
 };
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// 端末にデータをキャッシュ（起動時に前回のデータを即表示・オフラインでも閲覧可）
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch {
+  db = getFirestore(app); // 既に初期化済みの場合（開発中の再読み込みなど）
+}
 const auth = getAuth(app);
 
 const CASH = '現金';
@@ -86,6 +93,11 @@ const catColor = i => GRAYS[i % GRAYS.length];
 // カレンダー用: 1万未満はそのまま、以上はk表記（丸めで誤解を生まない）
 const fmtCompact = n => n < 10000 ? n.toLocaleString() : n < 100000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : `${Math.round(n / 1000)}k`;
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
+// 定期支出がその月に発生するか（毎月 / 毎年その月のみ）
+const isRecurringDueIn = (r, monthStr) => {
+  if ((r.freq || 'monthly') === 'yearly') return Number(r.month) === Number(monthStr.split('-')[1]);
+  return true;
+};
 
 /* ── Modal類はAppMainの外に定義（再マウント防止） ── */
 const Modal = ({ children, onClose, zIndex = 'z-[65]' }) => (
@@ -149,6 +161,8 @@ function AppMain() {
   const [budgetExpanded, setBudgetExpanded] = useState(false);
   const [cashExpanded, setCashExpanded] = useState(false);
   const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
+  const [allTx, setAllTx] = useState(null); // 全期間検索用
+  const [allTxLoading, setAllTxLoading] = useState(false);
   const [selDay, setSelDay] = useState(null);
   const [selYearMonth, setSelYearMonth] = useState(null);
 
@@ -209,7 +223,9 @@ function AppMain() {
       { q: '「貯金から」とは？', a: '積み立てた貯金を取り崩して支払う支出です。今月の可変費や進捗には影響せず、先取り累計から差し引かれます。どの先取り項目から出すか指定でき、ホームの先取り累計をタップすると項目別の残高を確認できます。' }
     ]},
     { category: '操作', items: [
-      { q: '定期支出とは？', a: 'サブスクや家賃など毎月決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
+      { q: '定期支出とは？', a: 'サブスクや家賃など決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。周期は「毎月」と「毎年」から選べるので、年会費のような年1回の支出も登録できます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
+      { q: '履歴の検索はどこまで探せる？', a: '検索欄に文字を入れると、表示中の月だけでなく全期間の支出から探します。結果は日付ごとにまとまって表示され、別の年の支出には年も表示されます。' },
+      { q: 'カレンダーの「・金額」は何？', a: 'まだ記録されていない定期支出の予定額です。日付をタップすると、その日に予定されている定期支出を確認できます。' },
       { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
       { q: '来月の設定はどうすればいいですか？', a: '新しい月にアプリを開くと、直近の月の手取り給与・先取り・スタート現金などが自動で引き継がれます。金額が変わる項目だけ資金計画で編集してください。手動で引き継ぎたいときは設定タブの「先月の設定をコピー」も使えます。' },
       { q: '今月の引落予定はどう計算される？', a: '支払方法ごとに、前月にその方法で使った金額を今月の引落予定として自動で表示します。カード明細と金額が違うときは、資金計画の「今月の引落予定」から手入力で上書きできます（空欄に戻すと自動に戻ります）。' },
@@ -344,6 +360,7 @@ function AppMain() {
     (config.recurring || []).forEach(r => {
       if (!r.id || !r.title) return;
       if (skipped.includes(r.id)) return;
+      if (!isRecurringDueIn(r, month)) return;
       const recDay = Math.min(Number(r.day) || 1, lastDay);
       if (recDay > todayD) return;
       const key = `${month}_${r.id}`;
@@ -385,6 +402,16 @@ function AppMain() {
       } catch (e) { console.error(e); }
     })();
   }, [user, mLoadedMonth, mEmpty, month]);
+
+  /* 全期間検索: 検索を始めたら全期間の支出を取得（初回のみ） */
+  useEffect(() => {
+    if (!user || !searchText.trim() || allTx || allTxLoading) return;
+    setAllTxLoading(true);
+    getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc'), limit(2000)))
+      .then(s => setAllTx(s.docs.map(d => ({ id: d.id, ...d.data() }))))
+      .catch(e => { console.error(e); showToast('検索データの取得に失敗しました'); })
+      .finally(() => setAllTxLoading(false));
+  }, [user, searchText, allTx, allTxLoading]);
 
   /* 入力候補: 入力モーダルを初めて開いたときに過去の支出を取得 */
   useEffect(() => {
@@ -456,7 +483,7 @@ function AppMain() {
     const varBudget = lifeBudget - cashAvail;
     const varRemain = varBudget - spCard;
     // 定期支出（固定費）: カード払いのみ予算計算の対象（現金払いは現金残高の軸で管理）
-    const recCard = (config?.recurring || []).filter(r => (r.method || CASH) !== CASH);
+    const recCard = (config?.recurring || []).filter(r => (r.method || CASH) !== CASH && isRecurringDueIn(r, month));
     const recTotalAll = recCard.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const recordedIds = new Set(norm.filter(t => t.recurringId).map(t => t.recurringId));
     const pendingFixed = recCard.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
@@ -502,13 +529,15 @@ function AppMain() {
     return { items, total: S.spent };
   }, [S.spent, S.cats]);
 
-  const filteredTx = useMemo(() => txList.filter(t => {
+  const isSearching = searchText.trim() !== '';
+  const searchPool = isSearching ? (allTx || txList) : txList;
+  const filteredTx = useMemo(() => searchPool.filter(t => {
     const ms = searchText === '' || String(t.title || '').includes(searchText);
     const mc = filter.cat === 'ALL' || t.category === filter.cat;
     const mm = filter.method === 'ALL' || t.paymentMethod === filter.method;
     const msp = filter.spendType === 'ALL' || getSpendType(t) === filter.spendType;
     return ms && mc && mm && msp;
-  }), [txList, searchText, filter]);
+  }), [searchPool, searchText, filter]);
 
   // 履歴を日付ごとにグループ化（新しい日付順）
   const logGroups = useMemo(() => {
@@ -539,6 +568,25 @@ function AppMain() {
     return m;
   }, [txList]);
   const dayMax = useMemo(() => Math.max(1, ...Object.values(dayMap).map(v => v.total)), [dayMap]);
+
+  // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
+  const plannedByDay = useMemo(() => {
+    const recorded = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
+    const [y, m] = month.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    const out = {};
+    (config.recurring || []).forEach(r => {
+      if (!r.id || !r.title) return;
+      if (recorded.has(r.id)) return;
+      if ((monthly.skippedRecurring || []).includes(r.id)) return;
+      if (!isRecurringDueIn(r, month)) return;
+      const d = Math.min(Number(r.day) || 1, lastDay);
+      if (!out[d]) out[d] = { total: 0, items: [] };
+      out[d].total += Number(r.amount) || 0;
+      out[d].items.push(r);
+    });
+    return out;
+  }, [txList, config.recurring, monthly.skippedRecurring, month]);
 
   // 月を切り替えたら、今月なら今日を・それ以外は未選択に
   useEffect(() => {
@@ -660,7 +708,14 @@ function AppMain() {
         await setDoc(cRef, { ...config, templates: list }, { merge: true });
       } else if (type === 'recurring') {
         const list = [...(config.recurring || [])];
-        const item = { ...data, amount: toNumber(data.amount), day: Math.min(31, Math.max(1, toNumber(data.day) || 1)), id: data.id || `rec_${Date.now()}` };
+        const freq = data.freq === 'yearly' ? 'yearly' : 'monthly';
+        const item = {
+          ...data, amount: toNumber(data.amount),
+          day: Math.min(31, Math.max(1, toNumber(data.day) || 1)),
+          freq,
+          month: freq === 'yearly' ? Math.min(12, Math.max(1, toNumber(data.month) || 1)) : null,
+          id: data.id || `rec_${Date.now()}`
+        };
         if (index === -1) list.unshift(item); else list[index] = item;
         await setDoc(cRef, { ...config, recurring: list }, { merge: true });
       } else if (type === 'payment') {
@@ -742,7 +797,7 @@ function AppMain() {
     if (!user) return;
     const recCard = (config.recurring || []);
     const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
-    const pending = recCard.filter(r => r.id && r.title && !recordedIds.has(r.id));
+    const pending = recCard.filter(r => r.id && r.title && !recordedIds.has(r.id) && isRecurringDueIn(r, month));
     if (!pending.length) return showToast('未記録の定期支出はありません');
     const total = pending.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const ok = await confirm({ title: `${pending.length}件の定期支出を記録しますか？`, message: `${formatMonthJP(month)} のログに合計 ¥${total.toLocaleString()} を追加します。`, confirmLabel: '記録する' });
@@ -1012,6 +1067,11 @@ function AppMain() {
                 </div>
               </div>
 
+              {isSearching && (
+                <p className="flex-none px-5 pb-1 text-[11px] text-[#636366]">
+                  {allTxLoading ? '全期間から検索中...' : `全期間から ${filteredTx.length}件`}
+                </p>
+              )}
               <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   filteredTx.length === 0 ? (
@@ -1025,7 +1085,7 @@ function AppMain() {
                         return (
                           <div key={g.key}>
                             <Label trailing={`¥${g.total.toLocaleString()}`}>
-                              {isTodayG ? '今日' : `${gm}月${gd}日`}（{WEEKDAYS[dow]}）
+                              {isTodayG ? '今日' : `${g.key.slice(0, 7) === month ? '' : `${gy}年`}${gm}月${gd}日`}（{WEEKDAYS[dow]}）
                             </Label>
                             <Card>
                               {g.items.map((t, idx) => {
@@ -1069,6 +1129,7 @@ function AppMain() {
                         {calDays.map((day, i) => {
                           if (!day) return <div key={i} className="h-[52px]" />;
                           const amt = dayMap[day]?.total || 0;
+                          const planned = plannedByDay[day]?.total || 0;
                           const dow = i % 7;
                           const dStr = `${month}-${String(day).padStart(2, '0')}`;
                           const isToday = dStr === getTodayString();
@@ -1082,7 +1143,9 @@ function AppMain() {
                               className={`h-[52px] flex flex-col items-center justify-center gap-0.5 rounded-[10px] transition-colors ${isSel ? 'ring-1 ring-white/50' : ''} ${isFuture ? 'opacity-40' : ''}`}
                               style={{ backgroundColor: amt > 0 ? `rgba(10,132,255,${0.08 + level * 0.32})` : 'transparent' }}>
                               <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[13px] font-medium ${isToday ? 'bg-[#0A84FF]' : ''} ${numColor}`}>{day}</span>
-                              <span className="text-[11px] leading-none tabular-nums text-[#EBEBF5]/70 h-3">{amt > 0 ? fmtCompact(amt) : ''}</span>
+                              <span className={`text-[11px] leading-none tabular-nums h-3 ${amt > 0 ? 'text-[#EBEBF5]/70' : 'text-[#7C7C80]'}`}>
+                                {amt > 0 ? fmtCompact(amt) : planned > 0 ? `・${fmtCompact(planned)}` : ''}
+                              </span>
                             </button>
                           );
                         })}
@@ -1116,6 +1179,18 @@ function AppMain() {
                                 </div>
                               );
                             })}
+                            {(plannedByDay[selDay]?.items || []).map(r => (
+                              <div key={`p_${r.id}`}>
+                                <div className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[48px]">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[14px] text-[#98989D] truncate">{r.title}</p>
+                                    <p className="text-[11px] text-[#636366] truncate flex items-center gap-1"><Repeat size={10} />定期支出の予定 · {r.method}</p>
+                                  </div>
+                                  <span className="text-[14px] text-[#98989D] tabular-nums shrink-0 whitespace-nowrap">¥{Number(r.amount || 0).toLocaleString()}</span>
+                                </div>
+                                <Separator />
+                              </div>
+                            ))}
                             <AddRow label="この日に支出を追加" onClick={() => openWithDate(dStr)} />
                           </Card>
                         </div>
@@ -1544,7 +1619,7 @@ function AppMain() {
                   {(config?.recurring || []).map((r, i) => (
                     <div key={r.id || i}>
                       <SettingsRow onClick={() => openEdit('recurring', r, i)}
-                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#636366] truncate">毎月{r.day}日 · {r.category} · {r.method}</span></div>}
+                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#636366] truncate">{(r.freq || 'monthly') === 'yearly' ? `毎年${r.month}月${r.day}日` : `毎月${r.day}日`} · {r.category} · {r.method}</span></div>}
                         right={`¥${Number(r.amount || 0).toLocaleString()}`} />
                       <Separator />
                     </div>
@@ -1552,7 +1627,7 @@ function AppMain() {
                   {(monthly.fixedCosts || []).length > 0 && (
                     <><SettingsRow onClick={migrateFixed} left={<div className="flex items-center gap-3"><CopyCheck size={15} className="text-[#0A84FF] shrink-0" /><span className="text-[#0A84FF]">旧・固定費リストから一括移行</span></div>} right={`${(monthly.fixedCosts || []).length}件`} /><Separator /></>
                   )}
-                  <AddRow label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1 }, -1)} />
+                  <AddRow label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1, freq: 'monthly', month: mn }, -1)} />
                 </Card>
               )}
               {settingTab === 'payment' && (

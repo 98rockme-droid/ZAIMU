@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* アプリの背景色（アプリ本体の #1C1C1E と揃える）
+   画面上端やスクロールで引っ張ったときの余白もこの色で塗られる */
+:root {
+  background-color: #1c1c1e;
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background-color: #1c1c1e;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  background-color: #1c1c1e;
+  min-height: 100vh;
+}
+
+/* 横スクロールのバーを隠す（チップの横並びで使用） */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
