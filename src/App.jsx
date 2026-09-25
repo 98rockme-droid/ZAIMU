@@ -853,10 +853,9 @@ function AppMain() {
         const item = { id: data.id || `acc_${Date.now()}`, name: (data.name || '').trim() };
         if (!item.name) return showToast('口座名を入力してください');
         if (index === -1) list.push(item); else list[index] = { ...list[index], ...item };
+        // 口座名（共通設定）と、表示中の月の月初残高（月データ）をまとめて保存する
         await setDoc(cRef, { ...config, accounts: list }, { merge: true });
-      } else if (type === 'accountBalance') {
-        if (!data.accountId) return showToast('口座が特定できませんでした');
-        await setDoc(mRef, { accountBalances: { ...(monthly.accountBalances || {}), [data.accountId]: toNumber(data.value) } }, { merge: true });
+        await setDoc(mRef, { accountBalances: { ...(monthly.accountBalances || {}), [item.id]: toNumber(data.value) } }, { merge: true });
       } else if (type === 'methodAccount') {
         await setDoc(cRef, { ...config, methodAccounts: { ...(config.methodAccounts || {}), [data.method]: data.accountId || '' } }, { merge: true });
       } else if (type === 'accountRole') {
@@ -1838,17 +1837,14 @@ function AppMain() {
                       {accountStats.rows.map(a => (
                         <div key={a.id}>
                           <SettingsRow
-                            onClick={() => openEdit('accountBalance', { accountId: a.id, value: a.start || '' }, 0)}
-                            left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{a.name}</span><span className="text-[11px] text-[#636366] truncate">月初残高 · タップで入力</span></div>}
-                            right={`¥${a.start.toLocaleString()}`} />
+                            onClick={() => openEdit('account', { id: a.id, name: a.name, value: a.start || '', monthLabel: formatMonthJP(month) }, (config.accounts || []).findIndex(x => x.id === a.id))}
+                            left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{a.name}</span><span className="text-[11px] text-[#636366] truncate">{formatMonthJP(month)}の月初残高</span></div>}
+                            right={`¥${a.start.toLocaleString()}`} showChevron />
                           <Separator />
                         </div>
                       ))}
-                      <AddRow label="口座を追加" onClick={() => openEdit('account', { id: '', name: '' }, -1)} />
+                      <AddRow label="口座を追加" onClick={() => openEdit('account', { id: '', name: '', value: '', monthLabel: formatMonthJP(month) }, -1)} />
                     </Card>
-                    {accountStats.rows.length > 0 && (
-                      <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">口座名を変更・削除するときは、下の「登録した口座」から開いてください</p>
-                    )}
                   </div>
 
                   {accountStats.rows.length > 0 && (
@@ -1916,17 +1912,6 @@ function AppMain() {
                         </p>
                       </div>
 
-                      <div>
-                        <Label>登録した口座</Label>
-                        <Card>
-                          {(config.accounts || []).map((a, i, arr) => (
-                            <div key={a.id}>
-                              <SettingsRow onClick={() => openEdit('account', a, i)} left={a.name} showChevron />
-                              {i < arr.length - 1 && <Separator />}
-                            </div>
-                          ))}
-                        </Card>
-                      </div>
                     </>
                   )}
                 </div>
@@ -2290,14 +2275,14 @@ function AppMain() {
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title={isNew ? `${name}を追加` : name} onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-3.5">
-            {['salary', 'cashBudget', 'cashTopup', 'accountBalance'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+            {['salary', 'cashBudget', 'cashTopup'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
-            {editingItem.type === 'account' && <EditFormAccount editingItem={editingItem} setEditingItem={setEditingItem} />}
+            {editingItem.type === 'account' && <EditFormAccount editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {['methodAccount', 'accountRole'].includes(editingItem.type) && (
               <EditFormAccountPicker editingItem={editingItem} setEditingItem={setEditingItem} accounts={config.accounts || []}
                 note={editingItem.type === 'methodAccount' ? 'この支払方法の引落が、選んだ口座から出ていくものとして計算します' : undefined} />

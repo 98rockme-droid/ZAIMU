@@ -476,14 +476,22 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
   </div>
 );
 
-export const EditFormAccount = ({ editingItem, setEditingItem }) => (
+export const EditFormAccount = ({ editingItem, setEditingItem, openCalculator }) => (
   <div className="space-y-3.5">
     <div>
       <FieldLabel>口座名</FieldLabel>
       <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
         placeholder="例: みずほ銀行" className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
     </div>
-    <p className="text-[11px] text-[#636366] ml-1 leading-relaxed">残高は月ごとに管理します。追加したあと「口座」の一覧から月初残高を入力してください</p>
+    <div>
+      <FieldLabel>{editingItem.data.monthLabel ? `${editingItem.data.monthLabel}の月初残高` : '月初残高'}</FieldLabel>
+      <AmountInputSimple
+        value={editingItem.data.value ? Number(editingItem.data.value).toLocaleString() : ''}
+        onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setEditingItem({ ...editingItem, data: { ...editingItem.data, value: v } }); }}
+        openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, value: String(val) } })))}
+      />
+      <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">残高は月ごとに管理します。ここで入れるのは表示中の月の残高です</p>
+    </div>
   </div>
 );
 
