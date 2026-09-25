@@ -267,14 +267,15 @@ const AmountInputSimple = ({ value, onChange, openCalculator }) => (
 );
 
 export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
-  const labelMap = { salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'おろした金額', savings: '今月の積立額' };
+  const labelMap = { salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'おろした金額', accountBalance: '月初残高', savings: '今月の積立額' };
   return (
     <div>
       <FieldLabel>{labelMap[editingItem.type] || '金額'}</FieldLabel>
       <AmountInputSimple
         value={String(editingItem.data.value ?? '')}
-        onChange={e => setEditingItem({ ...editingItem, data: { value: e.target.value } })}
-        openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { value: String(val) } })))}
+        // data には accountId など金額以外の情報も入るため、既存の値を保ったまま更新する
+        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, value: e.target.value } })}
+        openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, value: String(val) } })))}
       />
     </div>
   );

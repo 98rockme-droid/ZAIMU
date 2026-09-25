@@ -855,6 +855,7 @@ function AppMain() {
         if (index === -1) list.push(item); else list[index] = { ...list[index], ...item };
         await setDoc(cRef, { ...config, accounts: list }, { merge: true });
       } else if (type === 'accountBalance') {
+        if (!data.accountId) return showToast('口座が特定できませんでした');
         await setDoc(mRef, { accountBalances: { ...(monthly.accountBalances || {}), [data.accountId]: toNumber(data.value) } }, { merge: true });
       } else if (type === 'methodAccount') {
         await setDoc(cRef, { ...config, methodAccounts: { ...(config.methodAccounts || {}), [data.method]: data.accountId || '' } }, { merge: true });
