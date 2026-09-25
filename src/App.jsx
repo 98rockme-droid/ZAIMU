@@ -240,11 +240,7 @@ function AppMain() {
   const [mEmpty, setMEmpty] = useState(false);
   const inheritRef = useRef(new Set());
   const [config, setConfig] = useState(normalizeConfig({}));
-  const [savingsTotal, setSavingsTotal] = useState(0);
-  const [savingsWithdrawn, setSavingsWithdrawn] = useState(0);
-  const [withdrawnByBucket, setWithdrawnByBucket] = useState({});
-  const [savingsBreakdown, setSavingsBreakdown] = useState({});
-  const [cumSavingsExpanded, setCumSavingsExpanded] = useState(false);
+  const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'ALL' });
   const [copyOpen, setCopyOpen] = useState(false);
@@ -257,11 +253,11 @@ function AppMain() {
   const catNames = useMemo(() => (config?.categories || []).map(c => c.name), [config?.categories]);
   const methods = useMemo(() => config?.paymentMethods?.length ? config.paymentMethods : [CASH], [config?.paymentMethods]);
   const buckets = useMemo(() => getSavingsBuckets(monthly), [monthly]);
-  // 貯金取り崩し時に選べるバケット候補（積立実績のある名前 + 今月の設定名）
+  // 貯金からの支出で選べる項目（過去と今月の設定名）
   const bucketOptions = useMemo(() => {
-    const set = new Set([...Object.keys(savingsBreakdown), ...buckets.map(b => b.name)]);
+    const set = new Set([...pastSavingsBucketNames, ...buckets.map(b => b.name)]);
     return [...set].filter(Boolean);
-  }, [savingsBreakdown, buckets]);
+  }, [pastSavingsBucketNames, buckets]);
 
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
@@ -280,13 +276,12 @@ function AppMain() {
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
       { q: 'ATMで現金をおろしたら？', a: 'ホームの現金残高をタップして記録します。銀行から財布への移動だけならカード予算は変わりません。今月のカード予算を現金に回したいときだけ、入力時に「カード予算から現金へ回す」を選んでください。以前のATM記録は従来の計算を保ちます。' },
-      { q: '先取り設定の累計', a: '月ごとに設定した先取り額の合計から、「貯金から」と記録した支出を引いた計算上の額です。口座への実際の振替・月初残高とは連動しないため、銀行残高とは一致しません。', formula: '先取り設定の合計 − 貯金からの支出合計' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る予算のシミュレーションです。銀行から現金をおろしただけでは増えません。`, formula: '実質あと使える（カード） + 予算として確保した現金の残り' },
       { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
     ]},
     { category: '支出の記録', items: [
       { q: '「支出の種類」とは？', a: '通常か特別費かの分類です。冠婚葬祭や家電の買い替えなど臨時の支出を特別費にしておくと、分析タブで普段の支出と分けて確認できます。どちらも充当元が今月の予算なら、今月の残額から引かれます。' },
-      { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の残額から引かれ、「貯金」を選ぶと貯金の残額から引かれて今月の予算には影響しません。' },
+      { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の残額から引かれ、「貯金」を選ぶと今月の予算には計上されません。貯金の実残高を自動で更新する記録ではありません。' },
       { q: '現金で払った場合はどうなる？', a: '充当元が今月の予算で支払方法が現金のときは、現金残高から引かれます。今月の予算は月初のスタート現金を先に差し引いてあるので、予算の残額から二重に引くことはありません。' },
       { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
       { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
@@ -375,44 +370,21 @@ function AppMain() {
       s => setConfig(normalizeConfig(s.exists() ? s.data() : {})), console.error);
   }, [user]);
 
-  /* 先取り累計（積立合計） */
+  /* 貯金からの支出で選べる過去の先取り項目名 */
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     getDocs(query(collection(db, 'users', user.uid, 'months'), where(documentId(), '<=', month), orderBy(documentId(), 'asc')))
       .then(s => {
         if (cancelled) return;
-        let total = 0; const bd = {};
+        const names = new Set();
         s.forEach(d => {
-          const md = normalizeMonthly(d.data()); total += getSavingsTotal(md);
-          getSavingsBuckets(md).forEach(b => { const n = b.name || '未設定'; bd[n] = (bd[n] || 0) + (Number(b.amount) || 0); });
+          getSavingsBuckets(normalizeMonthly(d.data())).forEach(b => { if (b.name) names.add(b.name); });
         });
-        setSavingsTotal(total); setSavingsBreakdown(bd);
+        setPastSavingsBucketNames([...names]);
       }).catch(console.error);
     return () => { cancelled = true; };
   }, [user, month, monthly.savingsBuckets, monthly.savings]);
-
-  /* 貯金取り崩し累計（表示中の月末までの fromSavings 支出合計） */
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const end = new Date(`${month}-01T00:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 1);
-    const endIso = end.toISOString();
-    getDocs(query(collection(db, 'users', user.uid, 'transactions'), where('fromSavings', '==', true)))
-      .then(s => {
-        if (cancelled) return;
-        let total = 0; const byBucket = {};
-        s.docs.map(d => d.data()).filter(t => t.date && t.date < endIso).forEach(t => {
-          const amt = Number(t.amount) || 0;
-          total += amt;
-          const b = t.savingsBucket || '指定なし';
-          byBucket[b] = (byBucket[b] || 0) + amt;
-        });
-        setSavingsWithdrawn(total);
-        setWithdrawnByBucket(byBucket);
-      }).catch(console.error);
-    return () => { cancelled = true; };
-  }, [user, month, txList]);
 
   useEffect(() => setMemoText(monthly?.memo || ''), [monthly?.memo]);
 
@@ -557,7 +529,7 @@ function AppMain() {
     // 充当元ごとに引き当て先を分ける（同じ1円が2つの残額から引かれないようにする）
     //   予算×カード → 今月の予算の残額から引く
     //   予算×現金   → 現金残高から引く（予算からは月初に現金を差し引いてあるため二重に引かない）
-    //   貯金        → 該当する貯金の残額から引く（予算・現金残高には影響しない）
+    //   貯金        → 今月の予算からは引かない（貯金の実残高は別途口座で確認する）
     //   未設定      → どこからも引かない（旧データの数字を変えないため）
     const budgetTx = txList.filter(t => getSource(t) === 'budget');
     const budgetTxPrev = prevTxList.filter(t => getSource(t) === 'budget');
@@ -1065,7 +1037,6 @@ function AppMain() {
   ];
   const menuTitle = MENU.find(m => m.id === settingTab)?.label || '設定';
   const today = getTodayLocal();
-  const savingsBalance = savingsTotal - savingsWithdrawn;
 
   // 理想ペース（自由に使える枠を日割り）
   const curMonthStr = getMonthString(new Date());
@@ -1234,25 +1205,6 @@ function AppMain() {
                         </ExpandableRow>
                       </>
                     )}
-                    <Separator />
-                    <ExpandableRow
-                      label="先取り設定の累計"
-                      value={`¥${Number(savingsBalance || 0).toLocaleString()}`}
-                      expanded={cumSavingsExpanded}
-                      onToggle={() => setCumSavingsExpanded(v => !v)}
-                    >
-                      {Object.keys(savingsBreakdown).map(name => {
-                        const balance = (savingsBreakdown[name] || 0) - (withdrawnByBucket[name] || 0);
-                        return <SubRow key={name} label={name} value={`¥${balance.toLocaleString()}`} danger={balance < 0} />;
-                      })}
-                      {(withdrawnByBucket['指定なし'] || 0) > 0 && (
-                        <SubRow label="取り崩し（指定なし）" value={`−¥${withdrawnByBucket['指定なし'].toLocaleString()}`} />
-                      )}
-                      {savingsWithdrawn > 0 && (
-                        <p className="pl-3 pt-1 text-[11px] text-[#636366] tabular-nums">積立 ¥{savingsTotal.toLocaleString()} − 取り崩し ¥{savingsWithdrawn.toLocaleString()}</p>
-                      )}
-                      <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">月ごとの設定を合算した額で、実際の振替や口座残高とは連動していません。</p>
-                    </ExpandableRow>
                   </Card>
                 </div>
               </div>
@@ -1683,7 +1635,7 @@ function AppMain() {
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSavings.toLocaleString()}</span>
-                    <span className="text-[13px] text-[#636366]">先取り累計から差し引き済み</span>
+                    <span className="text-[13px] text-[#636366]">今月の予算には計上しません</span>
                   </div>
                 </Card>
               )}
@@ -2201,7 +2153,7 @@ function AppMain() {
                 {inSource === 'savings' && (
                   <div className="mt-2 space-y-2">
                     <p className="ml-1 text-[11px] text-[#4A7BA6] flex items-center gap-1.5">
-                      <PiggyBank size={12} /> 今月の予算ではなく、貯金の残額から引かれます
+                      <PiggyBank size={12} /> 今月の予算には計上しません。貯金の実残高とは自動連動しません
                     </p>
                     {bucketOptions.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
