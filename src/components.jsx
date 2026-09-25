@@ -269,7 +269,7 @@ const AmountInputSimple = ({ value, onChange, openCalculator }) => (
 export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator }) => {
   const labelMap = { salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'おろした金額', accountBalance: '月初残高', savings: '今月の積立額' };
   return (
-    <div>
+    <div className="space-y-4">
       <FieldLabel>{labelMap[editingItem.type] || '金額'}</FieldLabel>
       <AmountInputSimple
         value={String(editingItem.data.value ?? '')}
@@ -277,6 +277,14 @@ export const EditFormSalaryLike = ({ editingItem, setEditingItem, openCalculator
         onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, value: e.target.value } })}
         openCalculator={() => openCalculator(editingItem.data.value ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, value: String(val) } })))}
       />
+      {editingItem.type === 'cashTopup' && (
+        <label className="flex items-start gap-3 rounded-[14px] bg-[#2C2C2E] p-4 text-[14px] text-white">
+          <input type="checkbox" checked={editingItem.data.shiftCardBudget === true}
+            onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, shiftCardBudget: e.target.checked } })}
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[#0A84FF]" />
+          <span>カード予算から現金へ回す<span className="block mt-1 text-[12px] leading-relaxed text-[#98989D]">選ぶとカードで使える額も減ります。銀行から財布に移すだけなら選ばないでください。</span></span>
+        </label>
+      )}
     </div>
   );
 };
