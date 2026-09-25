@@ -22,7 +22,7 @@ import {
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
   EditFormAccount, EditFormAccountPicker
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -100,7 +100,9 @@ const normalizeMonthly = (data) => {
     savingsBuckets: d.savingsBuckets || [], memo: d.memo || '',
     skippedRecurring: d.skippedRecurring || [],
     cashTopups: d.cashTopups || [],
-    accountBalances: d.accountBalances || {}
+    accountBalances: d.accountBalances || {},
+    salaryConfirmed: d.salaryConfirmed,   // false のときは先月の額で仮置き中
+    inheritedFrom: d.inheritedFrom || ''
   };
 };
 const normalizeConfig = data => ({
@@ -111,6 +113,7 @@ const normalizeConfig = data => ({
   // 口座（銀行）— 残高は月ごとに monthly.accountBalances で持つ
   accounts: data?.accounts || [],
   methodAccounts: data?.methodAccounts || {},   // 支払方法 → 引落口座
+  methodTimings: data?.methodTimings || {},     // 支払方法 → 'next'(翌月払い) / 'same'(当月払い)
   salaryAccountId: data?.salaryAccountId || '', // 給与の入金先
   savingsAccountId: data?.savingsAccountId || '', // 先取りの移動先
   cashAccountId: data?.cashAccountId || ''      // ATMでおろす元の口座
@@ -273,6 +276,8 @@ function AppMain() {
       { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金と、ATM記録で明示的にカード予算から現金へ回した額を引いた上限です。単に銀行から現金をおろすだけならカード予算は減りません。', formula: '先取り後の残り − 月初のスタート現金 − カード予算から現金へ回した額' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
       { q: '現金残高', a: '手元にあるはずの現金です。タップすると内訳の確認と、ATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与や引落が月の後半まで分からないときは、給与は先月の額、カードの引落は先月の利用額から見込みで計算し、実額が分かったら資金計画で上書きできます。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月の引落（翌月払い分） − 今月使った分 − 固定費予定' },
+      { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
       { q: 'ATMで現金をおろしたら？', a: 'ホームの現金残高をタップして記録します。銀行から財布への移動だけならカード予算は変わりません。今月のカード予算を現金に回したいときだけ、入力時に「カード予算から現金へ回す」を選んでください。以前のATM記録は従来の計算を保ちます。' },
@@ -433,7 +438,7 @@ function AppMain() {
           salary: d.salary || 0, cashBudget: d.cashBudget || 0,
           catBudgets: d.catBudgets || {}, cardDueDates: d.cardDueDates || {},
           savings: d.savings || 0, savingsBuckets: d.savingsBuckets || [],
-          inheritedFrom: src.id
+          inheritedFrom: src.id, salaryConfirmed: false
         }, { merge: true });
         showToast(`${formatMonthJP(src.id)}の設定を引き継ぎました`);
       } catch (e) { console.error(e); }
@@ -641,18 +646,65 @@ function AppMain() {
 
   // 今月の引落予定（支払方法ごと）: 前月の利用額から自動、手入力があればそちら
   const billRows = useMemo(() => {
-    const prevByMethod = prevTxList.reduce((a, t) => {
+    const byMethod = list => list.reduce((a, t) => {
       const m = t.paymentMethod || CASH;
       if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
       return a;
     }, {});
+    const prevByMethod = byMethod(prevTxList);
+    const curByMethod = byMethod(txList);
     return methods.filter(m => m !== CASH).map(m => {
+      const timing = methodTimingOf(m, config.methodTimings);
       const manual = Number(monthly.cardBills?.[m]) || 0;
-      const auto = prevByMethod[m] || 0;
-      return { m, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
+      // 当月払い（口座振替など）は今月使った分、翌月払い（カード）は先月使った分が今月の引落
+      const auto = timing === 'same' ? (curByMethod[m] || 0) : (prevByMethod[m] || 0);
+      return { m, timing, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
     });
-  }, [prevTxList, methods, monthly.cardBills, monthly.cardDueDates]);
+  }, [prevTxList, txList, methods, config.methodTimings, monthly.cardBills, monthly.cardDueDates]);
   const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
+
+  // 残高ベースの「今月あと使える」
+  // 貯金用以外の口座（生活用）と財布の月初残高がすべて入っている月だけ使う。
+  // 1つでも未入力なら null を返し、従来の給与ベースの計算を使う（過去の月の数字を変えない）。
+  const balanceMode = useMemo(() => {
+    const living = (config.accounts || []).filter(a => a.id !== config.savingsAccountId);
+    if (!living.length) return null;
+    const bal = monthly.accountBalances || {};
+    const missing = living.filter(a => !(a.id in bal));
+    if (missing.length) return { active: false, missing };
+    const livingIds = new Set(living.map(a => a.id));
+    const sum = list => list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const bankStart = living.reduce((s, a) => s + (Number(bal[a.id]) || 0), 0);
+    const walletStart = Number(monthly.cashBudget) || 0;
+    const salary = Number(monthly.salary) || 0;
+    const savings = getSavingsTotal(monthly);
+    // 翌月払いで、生活用の口座から引き落とされる分（紐付けなしは生活用とみなす）
+    const deferredRows = billRows.filter(r => {
+      const acc = (config.methodAccounts || {})[r.m];
+      return r.timing === 'next' && (!acc || livingIds.has(acc));
+    });
+    const deferredBills = deferredRows.reduce((s, r) => s + r.shown, 0);
+    // 貯金用の口座からATMでおろした現金は、生活のお金に加わる
+    const atmAcc = config.cashAccountId || config.salaryAccountId;
+    const atmTotal = (monthly.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const cashFromSavings = atmAcc && !livingIds.has(atmAcc) ? atmTotal : 0;
+    const budgetTx = txList.filter(t => getSource(t) === 'budget');
+    const spentBudget = sum(budgetTx);
+    const due = (config.recurring || []).filter(r => isRecurringDueIn(r, month) && !(monthly.skippedRecurring || []).includes(r.id));
+    const recordedIds = new Set(budgetTx.filter(t => t.recurringId).map(t => t.recurringId));
+    const fixedPlanned = due.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const pendingFixed = due.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const fixedRecorded = sum(budgetTx.filter(t => t.recurringId));
+    const res = spendableFromBalance({ bankStart, walletStart, salary, savings, deferredBills, spentBudget, fixedPlanned, fixedRecorded, pendingFixed, cashFromSavings });
+    return {
+      active: true, ...res, living: living.map(a => ({ ...a, start: Number(bal[a.id]) || 0 })),
+      bankStart, walletStart, salary, savings, deferredBills, spentBudget, pendingFixed, cashFromSavings,
+      // 見込みで計算している部分（実額が分かったら上書きしてもらう）
+      salaryProvisional: monthly.salaryConfirmed === false,
+      billsProvisional: deferredRows.some(r => r.manual === 0 && r.auto > 0)
+    };
+  }, [config.accounts, config.savingsAccountId, config.methodAccounts, config.cashAccountId, config.salaryAccountId, config.recurring, monthly, billRows, txList, month]);
+  const BM = balanceMode?.active ? balanceMode : null;
 
   // 口座ごとの今月の見込み（月初残高 ＋ 入金 − 出ていくお金）
   const accountStats = useMemo(() => {
@@ -821,7 +873,7 @@ function AppMain() {
       const cRef = doc(db, 'users', user.uid, 'settings', 'config');
       if (['salary', 'cashBudget'].includes(type)) {
         const fm = { salary: 'salary', cashBudget: 'cashBudget' };
-        await setDoc(mRef, { [fm[type]]: toNumber(data.value) }, { merge: true });
+        await setDoc(mRef, { [fm[type]]: toNumber(data.value), ...(type === 'salary' ? { salaryConfirmed: true } : {}) }, { merge: true });
       } else if (type === 'account') {
         const list = [...(config.accounts || [])];
         const item = { id: data.id || `acc_${Date.now()}`, name: (data.name || '').trim() };
@@ -831,7 +883,11 @@ function AppMain() {
         await setDoc(cRef, { ...config, accounts: list }, { merge: true });
         await setDoc(mRef, { accountBalances: { ...(monthly.accountBalances || {}), [item.id]: toNumber(data.value) } }, { merge: true });
       } else if (type === 'methodAccount') {
-        await setDoc(cRef, { ...config, methodAccounts: { ...(config.methodAccounts || {}), [data.method]: data.accountId || '' } }, { merge: true });
+        await setDoc(cRef, {
+          ...config,
+          methodAccounts: { ...(config.methodAccounts || {}), [data.method]: data.accountId || '' },
+          methodTimings: { ...(config.methodTimings || {}), [data.method]: data.timing === 'same' ? 'same' : 'next' }
+        }, { merge: true });
       } else if (type === 'accountRole') {
         await setDoc(cRef, { ...config, [data.role]: data.accountId || '' }, { merge: true });
       } else if (type === 'cashTopup') {
@@ -923,7 +979,8 @@ function AppMain() {
         await setDoc(doc(db, 'users', user.uid, 'months', month), {
           salary: d.salary || 0, budget: d.budget || 0, cashBudget: d.cashBudget || 0,
           catBudgets: d.catBudgets || {},
-          cardDueDates: d.cardDueDates || {}, savings: d.savings || 0, savingsBuckets: d.savingsBuckets || []
+          cardDueDates: d.cardDueDates || {}, savings: d.savings || 0, savingsBuckets: d.savingsBuckets || [],
+          salaryConfirmed: false
         }, { merge: true });
         showToast('コピーしました'); setCopyOpen(false);
       } else showToast('データがありません');
@@ -1043,8 +1100,12 @@ function AppMain() {
   const isCurrentMonth = month === curMonthStr;
   const daysInViewMonth = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).getDate(); })();
   const idealPct = isCurrentMonth ? Math.min(100, (today.d / daysInViewMonth) * 100) : (month < curMonthStr ? 100 : 0);
-  const idealSpend = Math.round(S.freeBudget * idealPct / 100);
-  const paceDiff = S.freeSpent - idealSpend;
+  // 残高ベースの月はそちらの数字でペースを出す
+  const H = BM
+    ? { remain: BM.freeRemain, base: BM.pool, used: BM.spentBudget + BM.pendingFixed, freeBudget: BM.freeBudget, freeSpent: BM.freeSpent }
+    : { remain: S.freeRemain, base: S.varBudget, used: S.spCard + S.pendingFixed, freeBudget: S.freeBudget, freeSpent: S.freeSpent };
+  const idealSpend = Math.round(H.freeBudget * idealPct / 100);
+  const paceDiff = H.freeSpent - idealSpend;
   const showPaceMarker = isCurrentMonth && idealPct > 2 && idealPct < 98;
 
   return (
@@ -1101,23 +1162,30 @@ function AppMain() {
                   <Card>
                     {/* メイン数字 + 進捗バー */}
                     <div className="px-5 pt-5 pb-4">
-                      <p className="text-[11px] text-[#98989D] mb-1">実質あと使える（カード）</p>
-                      <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${S.freeRemain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
-                        ¥{S.freeRemain.toLocaleString()}
+                      <p className="text-[11px] text-[#98989D] mb-1">{BM ? '今月あと使える' : '実質あと使える（カード）'}</p>
+                      <p className={`text-[36px] font-semibold tracking-tight leading-none mt-1.5 ${H.remain < 0 ? 'text-[#FF453A]' : 'text-white'}`}>
+                        ¥{H.remain.toLocaleString()}
                       </p>
                       <div className="mt-3.5 relative">
                         <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all duration-700 ${S.freeRemain < 0 ? 'bg-[#FF453A]' : 'bg-white/60'}`}
-                            style={{ width: `${S.varBudget > 0 ? Math.min(100, ((S.spCard + S.pendingFixed) / S.varBudget) * 100) : 0}%` }} />
+                          <div className={`h-full rounded-full transition-all duration-700 ${H.remain < 0 ? 'bg-[#FF453A]' : 'bg-white/60'}`}
+                            style={{ width: `${H.base > 0 ? Math.min(100, (H.used / H.base) * 100) : 0}%` }} />
                         </div>
                         {showPaceMarker && (
                           <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
                         )}
                       </div>
                       <p className="mt-2.5 text-[11px] text-[#636366] tabular-nums">
-                        予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}
+                        {BM
+                          ? <>使えるお金 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
+                          : <>予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}</>}
                       </p>
-                      {isCurrentMonth && S.freeBudget > 0 && (
+                      {BM && (BM.salaryProvisional || BM.billsProvisional) && (
+                        <p className="mt-1.5 text-[11px] text-[#98989D] leading-relaxed">
+                          見込みで計算中：{[BM.salaryProvisional && `給与は${monthly.inheritedFrom ? formatMonthJP(monthly.inheritedFrom) : '先月'}の額`, BM.billsProvisional && '引落は先月の利用額から'].filter(Boolean).join('・')}。実額がわかったら資金計画で上書きしてください
+                        </p>
+                      )}
+                      {isCurrentMonth && H.freeBudget > 0 && (
                         <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.08] gap-3">
                           <span className="text-[11px] text-[#98989D] truncate">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
                           <span className={`text-[11px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
@@ -1129,25 +1197,56 @@ function AppMain() {
 
                     <Separator />
 
-                    {/* 予算の計算フロー（折りたたみ） */}
-                    <ExpandableRow
-                      label="今月の予算（カード）"
-                      value={`¥${S.varBudget.toLocaleString()}`}
-                      accent
-                      expanded={budgetExpanded}
-                      onToggle={() => setBudgetExpanded(v => !v)}
-                    >
-                      <SubRow label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
-                      <SubRow label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} />
-                      {buckets.map(b => (
-                        <div key={b.id} className="flex items-center justify-between pl-7 gap-3">
-                          <span className="text-[11px] text-[#545458] truncate">{b.name}</span>
-                          <span className="text-[11px] text-[#636366] tabular-nums shrink-0">¥{Number(b.amount || 0).toLocaleString()}</span>
-                        </div>
-                      ))}
-                      <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
-                      {S.cashBudgetShiftTotal > 0 && <SubRow label="カード予算から現金へ" value={`−¥${S.cashBudgetShiftTotal.toLocaleString()}`} />}
-                    </ExpandableRow>
+                    {BM ? (
+                      /* 残高ベース: 使えるお金の内訳（折りたたみ） */
+                      <ExpandableRow
+                        label="使えるお金"
+                        value={`¥${BM.pool.toLocaleString()}`}
+                        accent
+                        expanded={budgetExpanded}
+                        onToggle={() => setBudgetExpanded(v => !v)}
+                      >
+                        {BM.living.map(a => <SubRow key={a.id} label={`${a.name}（月初）`} value={`¥${a.start.toLocaleString()}`} />)}
+                        <SubRow label="財布（月初）" value={`¥${BM.walletStart.toLocaleString()}`} />
+                        <SubRow label={`給与${BM.salaryProvisional ? '（仮）' : ''}`} value={`＋¥${BM.salary.toLocaleString()}`} />
+                        {BM.cashFromSavings > 0 && <SubRow label="貯金口座からおろした現金" value={`＋¥${BM.cashFromSavings.toLocaleString()}`} />}
+                        <SubRow label="先取り（貯金へ）" value={`−¥${BM.savings.toLocaleString()}`} />
+                        <SubRow label={`今月の引落・翌月払い分${BM.billsProvisional ? '（見込み）' : ''}`} value={`−¥${BM.deferredBills.toLocaleString()}`} />
+                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">口座振替は当月払いなので、使った分として差し引いています。ATMで口座から財布へ移しても合計は変わりません</p>
+                      </ExpandableRow>
+                    ) : (
+                      <>
+                        {/* 給与ベース: 予算の計算フロー（折りたたみ） */}
+                        <ExpandableRow
+                          label="今月の予算（カード）"
+                          value={`¥${S.varBudget.toLocaleString()}`}
+                          accent
+                          expanded={budgetExpanded}
+                          onToggle={() => setBudgetExpanded(v => !v)}
+                        >
+                          <SubRow label="手取り給与" value={`¥${Number(monthly.salary || 0).toLocaleString()}`} />
+                          <SubRow label="先取り合計" value={`−¥${S.savTotal.toLocaleString()}`} />
+                          {buckets.map(b => (
+                            <div key={b.id} className="flex items-center justify-between pl-7 gap-3">
+                              <span className="text-[11px] text-[#545458] truncate">{b.name}</span>
+                              <span className="text-[11px] text-[#636366] tabular-nums shrink-0">¥{Number(b.amount || 0).toLocaleString()}</span>
+                            </div>
+                          ))}
+                          <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
+                          {S.cashBudgetShiftTotal > 0 && <SubRow label="カード予算から現金へ" value={`−¥${S.cashBudgetShiftTotal.toLocaleString()}`} />}
+                        </ExpandableRow>
+                        {balanceMode && !balanceMode.active && isCurrentMonth && (
+                          <>
+                            <Separator />
+                            <button type="button" onClick={() => { setActiveTab('settings'); setSettingTab('accounts'); }}
+                              className="w-full px-4 py-3 min-h-[44px] text-left active:bg-white/[0.04] transition-colors">
+                              <p className="text-[13px] text-[#0A84FF]">口座の月初残高を入れると、口座に余っているお金も含めて計算します</p>
+                              <p className="mt-0.5 text-[11px] text-[#636366]">未入力：{balanceMode.missing.map(a => a.name).join('・')}</p>
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </Card>
                 </div>
 
@@ -1176,8 +1275,12 @@ function AppMain() {
                         <span className="text-[13px] text-[#0A84FF]">ATMで現金をおろした</span>
                       </button>
                     </ExpandableRow>
-                    <Separator />
-                    <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
+                    {!BM && (
+                      <>
+                        <Separator />
+                        <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
+                      </>
+                    )}
                     {accountStats.rows.length > 0 && (
                       <>
                         <Separator />
@@ -1548,13 +1651,27 @@ function AppMain() {
               <div>
                 <Label>予算の進捗</Label>
                 <Card>
-                  <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
-                  <Separator />
-                  <Row label="使った分（予算×カード）" value={`¥${S.spCard.toLocaleString()}`} />
-                  <Separator />
-                  <Row label="固定費予定（未記録）" value={`−¥${S.pendingFixed.toLocaleString()}`} muted />
-                  <Separator />
-                  <Row label="実質あと使える" value={`¥${S.freeRemain.toLocaleString()}`} danger={S.freeRemain < 0} accent={S.freeRemain >= 0} />
+                  {BM ? (
+                    <>
+                      <Row label="使えるお金（口座＋財布）" value={`¥${BM.pool.toLocaleString()}`} />
+                      <Separator />
+                      <Row label="使った分（カード・現金など）" value={`¥${BM.spentBudget.toLocaleString()}`} />
+                      <Separator />
+                      <Row label="固定費予定（未記録）" value={`−¥${BM.pendingFixed.toLocaleString()}`} muted />
+                      <Separator />
+                      <Row label="今月あと使える" value={`¥${BM.freeRemain.toLocaleString()}`} danger={BM.freeRemain < 0} accent={BM.freeRemain >= 0} />
+                    </>
+                  ) : (
+                    <>
+                      <Row label="今月の予算（カード）" value={`¥${S.varBudget.toLocaleString()}`} />
+                      <Separator />
+                      <Row label="使った分（予算×カード）" value={`¥${S.spCard.toLocaleString()}`} />
+                      <Separator />
+                      <Row label="固定費予定（未記録）" value={`−¥${S.pendingFixed.toLocaleString()}`} muted />
+                      <Separator />
+                      <Row label="実質あと使える" value={`¥${S.freeRemain.toLocaleString()}`} danger={S.freeRemain < 0} accent={S.freeRemain >= 0} />
+                    </>
+                  )}
                 </Card>
               </div>
               <div>
@@ -1839,8 +1956,8 @@ function AppMain() {
                           {methods.filter(m => m !== CASH).map((m, i, arr) => (
                             <div key={m}>
                               <SettingsRow
-                                onClick={() => openEdit('methodAccount', { method: m, accountId: (config.methodAccounts || {})[m] || '', label: `${m} の引落口座` }, 0)}
-                                left={m}
+                                onClick={() => openEdit('methodAccount', { method: m, accountId: (config.methodAccounts || {})[m] || '', timing: methodTimingOf(m, config.methodTimings), label: `${m} の引落口座` }, 0)}
+                                left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{m}</span><span className="text-[11px] text-[#636366] truncate">{methodTimingOf(m, config.methodTimings) === 'same' ? '当月払い（使った月に引き落とし）' : '翌月払い（使った翌月に引き落とし）'}</span></div>}
                                 right={(config.accounts || []).find(a => a.id === (config.methodAccounts || {})[m])?.name || '未設定'} />
                               {i < arr.length - 1 && <Separator />}
                             </div>
@@ -2220,7 +2337,7 @@ function AppMain() {
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'account' && <EditFormAccount editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {['methodAccount', 'accountRole'].includes(editingItem.type) && (
-              <EditFormAccountPicker editingItem={editingItem} setEditingItem={setEditingItem} accounts={config.accounts || []}
+              <EditFormAccountPicker editingItem={editingItem} setEditingItem={setEditingItem} accounts={config.accounts || []} showTiming={editingItem.type === 'methodAccount'}
                 note={editingItem.type === 'methodAccount' ? 'この支払方法の引落が、選んだ口座から出ていくものとして計算します' : undefined} />
             )}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}

@@ -504,8 +504,22 @@ export const EditFormAccount = ({ editingItem, setEditingItem, openCalculator })
 );
 
 // 口座を選ぶだけのフォーム（引落口座・給与の入金先などで使用）
-export const EditFormAccountPicker = ({ editingItem, setEditingItem, accounts, note }) => (
+export const EditFormAccountPicker = ({ editingItem, setEditingItem, accounts, note, showTiming = false }) => (
   <div className="space-y-3.5">
+    {showTiming && (
+      <div>
+        <FieldLabel>引き落としのタイミング</FieldLabel>
+        <div className="flex gap-2">
+          {[['next', '翌月払い'], ['same', '当月払い']].map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setEditingItem({ ...editingItem, data: { ...editingItem.data, timing: v } })}
+              className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${(editingItem.data.timing || 'next') === v ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">クレジットカードは翌月払い、口座振替やデビットは当月払いです</p>
+      </div>
+    )}
     <div>
       <FieldLabel>{editingItem.data.label || '口座'}</FieldLabel>
       <div className="space-y-2">
