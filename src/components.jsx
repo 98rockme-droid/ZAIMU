@@ -475,6 +475,36 @@ export const EditFormRecurring = ({ editingItem, setEditingItem, openCalculator,
   </div>
 );
 
+export const EditFormAccount = ({ editingItem, setEditingItem }) => (
+  <div className="space-y-3.5">
+    <div>
+      <FieldLabel>口座名</FieldLabel>
+      <input value={editingItem.data.name || ''} onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, name: e.target.value } })}
+        placeholder="例: みずほ銀行" className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
+    </div>
+    <p className="text-[11px] text-[#636366] ml-1 leading-relaxed">残高は月ごとに管理します。追加したあと「口座」の一覧から月初残高を入力してください</p>
+  </div>
+);
+
+// 口座を選ぶだけのフォーム（引落口座・給与の入金先などで使用）
+export const EditFormAccountPicker = ({ editingItem, setEditingItem, accounts, note }) => (
+  <div className="space-y-3.5">
+    <div>
+      <FieldLabel>{editingItem.data.label || '口座'}</FieldLabel>
+      <div className="space-y-2">
+        {[{ id: '', name: '未設定' }, ...accounts].map(a => (
+          <button key={a.id || '__none'} type="button"
+            onClick={() => setEditingItem({ ...editingItem, data: { ...editingItem.data, accountId: a.id } })}
+            className={`w-full h-11 rounded-[14px] px-4 text-[14px] text-left transition-colors ${editingItem.data.accountId === a.id ? 'bg-[#0A84FF] text-white font-medium' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+            {a.name}
+          </button>
+        ))}
+      </div>
+    </div>
+    {note && <p className="text-[11px] text-[#636366] ml-1 leading-relaxed">{note}</p>}
+  </div>
+);
+
 export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>

@@ -19,7 +19,8 @@ import {
   ExpandableRow, SubRow, EmptyState, AddRow,
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
-  EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring
+  EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
+  EditFormAccount, EditFormAccountPicker
 } from './components.jsx';
 
 const firebaseConfig = {
@@ -97,14 +98,21 @@ const normalizeMonthly = (data) => {
     catBudgets: d.catBudgets || {}, cardDueDates: dues, savings: d.savings || 0,
     savingsBuckets: d.savingsBuckets || [], memo: d.memo || '',
     skippedRecurring: d.skippedRecurring || [],
-    cashTopups: d.cashTopups || []
+    cashTopups: d.cashTopups || [],
+    accountBalances: d.accountBalances || {}
   };
 };
 const normalizeConfig = data => ({
   categories: data?.categories || [{ name: '食費' }],
   paymentMethods: data?.paymentMethods || [CASH],
   templates: data?.templates || [],
-  recurring: data?.recurring || []
+  recurring: data?.recurring || [],
+  // 口座（銀行）— 残高は月ごとに monthly.accountBalances で持つ
+  accounts: data?.accounts || [],
+  methodAccounts: data?.methodAccounts || {},   // 支払方法 → 引落口座
+  salaryAccountId: data?.salaryAccountId || '', // 給与の入金先
+  savingsAccountId: data?.savingsAccountId || '', // 先取りの移動先
+  cashAccountId: data?.cashAccountId || ''      // ATMでおろす元の口座
 });
 
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
@@ -213,6 +221,7 @@ function AppMain() {
   const [faqQ, setFaqQ] = useState('');
   const [budgetExpanded, setBudgetExpanded] = useState(false);
   const [cashExpanded, setCashExpanded] = useState(false);
+  const [accountsExpanded, setAccountsExpanded] = useState(false);
   const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
   const [allTx, setAllTx] = useState(null); // 全期間検索用
   const [allTxLoading, setAllTxLoading] = useState(false);
@@ -267,6 +276,8 @@ function AppMain() {
       { q: '今月の予算（カード）', a: '先取り後の残りから、今月使う現金（スタート現金＋ATMでおろした分）を引いた、カードで使える予算の上限です。固定費もこの中から実支出として記録されます。', formula: '先取り後の残り − 月初のスタート現金 − ATMでおろした現金' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
       { q: '現金残高', a: '手元にあるはずの現金です。タップすると内訳の確認と、ATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
+      { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
       { q: 'ATMで現金をおろしたら？', a: 'ホームの現金残高をタップし「ATMで現金をおろした」から金額を記録してください。現金残高に加算され、その分カードで使える予算から差し引かれます。記録した行をタップすると修正・削除できます。' },
       { q: '先取り累計', a: 'これまで積み上げた先取りの累計額から、貯金からの支払いを差し引いた現在高です。', formula: '先取りの積立合計 − 貯金からの支払い合計' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る金額のシミュレーションです。実質あと使える額と現金残高の合計です。`, formula: '実質あと使える（カード） + 現金残高' },
@@ -654,6 +665,42 @@ function AppMain() {
   }, [txList]);
   const dayMax = useMemo(() => Math.max(1, ...Object.values(dayMap).map(v => v.total)), [dayMap]);
 
+  // 今月の引落予定（支払方法ごと）: 前月の利用額から自動、手入力があればそちら
+  const billRows = useMemo(() => {
+    const prevByMethod = prevTxList.reduce((a, t) => {
+      const m = t.paymentMethod || CASH;
+      if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
+      return a;
+    }, {});
+    return methods.filter(m => m !== CASH).map(m => {
+      const manual = Number(monthly.cardBills?.[m]) || 0;
+      const auto = prevByMethod[m] || 0;
+      return { m, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
+    });
+  }, [prevTxList, methods, monthly.cardBills, monthly.cardDueDates]);
+  const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
+
+  // 口座ごとの今月の見込み（月初残高 ＋ 入金 − 出ていくお金）
+  const accountStats = useMemo(() => {
+    const accounts = config.accounts || [];
+    const salary = Number(monthly?.salary) || 0;
+    const savTotal = getSavingsTotal(monthly);
+    const atmTotal = (monthly?.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const rows = accounts.map(a => {
+      const start = Number(monthly.accountBalances?.[a.id]) || 0;
+      const bills = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.shown, 0);
+      const inSalary = config.salaryAccountId === a.id ? salary : 0;
+      const inSavings = config.savingsAccountId === a.id ? savTotal : 0;   // 先取りの受け取り
+      const outSavings = config.salaryAccountId === a.id && config.savingsAccountId && config.savingsAccountId !== a.id ? savTotal : 0;
+      const outAtm = (config.cashAccountId || config.salaryAccountId) === a.id ? atmTotal : 0;
+      return {
+        ...a, start, bills, inSalary, inSavings, outSavings, outAtm,
+        projected: start + inSalary + inSavings - bills - outSavings - outAtm
+      };
+    });
+    return { rows, total: rows.reduce((s, r) => s + r.projected, 0) };
+  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, monthly, billRows]);
+
   // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
   const plannedByDay = useMemo(() => {
     const recorded = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
@@ -801,6 +848,18 @@ function AppMain() {
       if (['salary', 'cashBudget'].includes(type)) {
         const fm = { salary: 'salary', cashBudget: 'cashBudget' };
         await setDoc(mRef, { [fm[type]]: toNumber(data.value) }, { merge: true });
+      } else if (type === 'account') {
+        const list = [...(config.accounts || [])];
+        const item = { id: data.id || `acc_${Date.now()}`, name: (data.name || '').trim() };
+        if (!item.name) return showToast('口座名を入力してください');
+        if (index === -1) list.push(item); else list[index] = { ...list[index], ...item };
+        await setDoc(cRef, { ...config, accounts: list }, { merge: true });
+      } else if (type === 'accountBalance') {
+        await setDoc(mRef, { accountBalances: { ...(monthly.accountBalances || {}), [data.accountId]: toNumber(data.value) } }, { merge: true });
+      } else if (type === 'methodAccount') {
+        await setDoc(cRef, { ...config, methodAccounts: { ...(config.methodAccounts || {}), [data.method]: data.accountId || '' } }, { merge: true });
+      } else if (type === 'accountRole') {
+        await setDoc(cRef, { ...config, [data.role]: data.accountId || '' }, { merge: true });
       } else if (type === 'cashTopup') {
         const amt = toNumber(data.value);
         if (amt <= 0) return showToast('金額を入力してください');
@@ -855,7 +914,15 @@ function AppMain() {
     const mRef = doc(db, 'users', user.uid, 'months', month);
     const cRef = doc(db, 'users', user.uid, 'settings', 'config');
     try {
-      if (type === 'cashTopup') await setDoc(mRef, { cashTopups: (monthly.cashTopups || []).filter((_, i) => i !== index) }, { merge: true });
+      if (type === 'account') {
+        const acc = (config.accounts || [])[index];
+        const methodAccounts = { ...(config.methodAccounts || {}) };
+        Object.keys(methodAccounts).forEach(k => { if (methodAccounts[k] === acc?.id) methodAccounts[k] = ''; });
+        const roles = {};
+        ['salaryAccountId', 'savingsAccountId', 'cashAccountId'].forEach(r => { if (config[r] === acc?.id) roles[r] = ''; });
+        await setDoc(cRef, { ...config, accounts: (config.accounts || []).filter((_, i) => i !== index), methodAccounts, ...roles }, { merge: true });
+      }
+      else if (type === 'cashTopup') await setDoc(mRef, { cashTopups: (monthly.cashTopups || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'template') await setDoc(cRef, { ...config, templates: (config.templates || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'recurring') await setDoc(cRef, { ...config, recurring: (config.recurring || []).filter((_, i) => i !== index) }, { merge: true });
@@ -987,6 +1054,7 @@ function AppMain() {
 
   const MENU = [
     { id: 'budget', label: '資金計画', icon: <Landmark size={17} /> },
+    { id: 'accounts', label: '口座', icon: <Wallet size={17} /> },
     { id: 'category', label: 'カテゴリ予算', icon: <Tags size={17} /> },
     { id: 'template', label: 'テンプレート', icon: <Zap size={17} /> },
     { id: 'recurring', label: '定期支出', icon: <Repeat size={17} /> },
@@ -1137,6 +1205,23 @@ function AppMain() {
                     </ExpandableRow>
                     <Separator />
                     <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
+                    {accountStats.rows.length > 0 && (
+                      <>
+                        <Separator />
+                        <ExpandableRow
+                          label="現金＋口座の合計（見込み）"
+                          value={`¥${(S.cashRemain + accountStats.total).toLocaleString()}`}
+                          expanded={accountsExpanded}
+                          onToggle={() => setAccountsExpanded(v => !v)}
+                        >
+                          <SubRow label="現金残高" value={`¥${S.cashRemain.toLocaleString()}`} danger={S.cashRemain < 0} />
+                          {accountStats.rows.map(a => (
+                            <SubRow key={a.id} label={a.name} value={`¥${a.projected.toLocaleString()}`} danger={a.projected < 0} />
+                          ))}
+                          <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">口座は今月の引落・ATM出金を差し引いた月末の見込みです</p>
+                        </ExpandableRow>
+                      </>
+                    )}
                     <Separator />
                     <ExpandableRow
                       label="先取り累計"
@@ -1719,18 +1804,8 @@ function AppMain() {
                   </div>
                   <div>
                     {(() => {
-                      // 前月にその支払方法で使った額 = 今月の引落予定（手入力があればそちらを優先）
-                      const prevByMethod = prevTxList.reduce((a, t) => {
-                        const m = t.paymentMethod || CASH;
-                        if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
-                        return a;
-                      }, {});
-                      const rows = methods.filter(m => m !== CASH).map(m => {
-                        const manual = Number(monthly.cardBills?.[m]) || 0;
-                        const auto = prevByMethod[m] || 0;
-                        return { m, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
-                      });
-                      const total = rows.reduce((s, r) => s + r.shown, 0);
+                      const rows = billRows;
+                      const total = billTotal;
                       return (
                         <>
                           <Label trailing={`合計 ¥${total.toLocaleString()}`}>今月の引落予定</Label>
@@ -1749,6 +1824,110 @@ function AppMain() {
                       );
                     })()}
                   </div>
+                </div>
+              )}
+              {settingTab === 'accounts' && (
+                <div className="space-y-5">
+                  <div>
+                    <Label trailing={accountStats.rows.length ? `見込み合計 ¥${accountStats.total.toLocaleString()}` : ''}>口座と月初残高</Label>
+                    <Card>
+                      {accountStats.rows.length === 0 && (
+                        <><EmptyState>銀行口座を登録すると、給与の入金・カードの引落・ATMでの出金を差し引いた月末の見込み残高を計算します</EmptyState><Separator /></>
+                      )}
+                      {accountStats.rows.map(a => (
+                        <div key={a.id}>
+                          <SettingsRow
+                            onClick={() => openEdit('accountBalance', { accountId: a.id, value: a.start || '' }, 0)}
+                            left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{a.name}</span><span className="text-[11px] text-[#636366] truncate">月初残高 · タップで入力</span></div>}
+                            right={`¥${a.start.toLocaleString()}`} />
+                          <Separator />
+                        </div>
+                      ))}
+                      <AddRow label="口座を追加" onClick={() => openEdit('account', { id: '', name: '' }, -1)} />
+                    </Card>
+                    {accountStats.rows.length > 0 && (
+                      <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">口座名を変更・削除するときは、下の「登録した口座」から開いてください</p>
+                    )}
+                  </div>
+
+                  {accountStats.rows.length > 0 && (
+                    <>
+                      <div>
+                        <Label>口座の役割</Label>
+                        <Card>
+                          {[
+                            { role: 'salaryAccountId', label: '給与の入金先', note: '手取り給与が入る口座' },
+                            { role: 'savingsAccountId', label: '先取りの移動先', note: '毎月の先取りを移す口座' },
+                            { role: 'cashAccountId', label: 'ATMでおろす口座', note: '未設定なら給与の入金先を使います' },
+                          ].map((r, i, arr) => (
+                            <div key={r.role}>
+                              <SettingsRow
+                                onClick={() => openEdit('accountRole', { role: r.role, accountId: config[r.role] || '', label: r.label }, 0)}
+                                left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.label}</span><span className="text-[11px] text-[#636366] truncate">{r.note}</span></div>}
+                                right={(config.accounts || []).find(a => a.id === config[r.role])?.name || '未設定'} />
+                              {i < arr.length - 1 && <Separator />}
+                            </div>
+                          ))}
+                        </Card>
+                      </div>
+
+                      <div>
+                        <Label>支払方法の引落口座</Label>
+                        <Card>
+                          {methods.filter(m => m !== CASH).map((m, i, arr) => (
+                            <div key={m}>
+                              <SettingsRow
+                                onClick={() => openEdit('methodAccount', { method: m, accountId: (config.methodAccounts || {})[m] || '', label: `${m} の引落口座` }, 0)}
+                                left={m}
+                                right={(config.accounts || []).find(a => a.id === (config.methodAccounts || {})[m])?.name || '未設定'} />
+                              {i < arr.length - 1 && <Separator />}
+                            </div>
+                          ))}
+                        </Card>
+                      </div>
+
+                      <div>
+                        <Label>今月の見込み</Label>
+                        <Card>
+                          {accountStats.rows.map(a => (
+                            <div key={a.id}>
+                              <div className="px-4 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-[14px] text-[#EBEBF5]/80 truncate">{a.name}</span>
+                                  <span className={`text-[14px] font-medium tabular-nums shrink-0 ${a.projected < 0 ? 'text-[#FF453A]' : 'text-white'}`}>¥{a.projected.toLocaleString()}</span>
+                                </div>
+                                <p className="mt-1 text-[11px] text-[#636366] tabular-nums leading-relaxed">
+                                  月初 ¥{a.start.toLocaleString()}
+                                  {a.inSalary > 0 && ` ＋給与 ¥${a.inSalary.toLocaleString()}`}
+                                  {a.inSavings > 0 && ` ＋先取り ¥${a.inSavings.toLocaleString()}`}
+                                  {a.bills > 0 && ` −引落 ¥${a.bills.toLocaleString()}`}
+                                  {a.outSavings > 0 && ` −先取り ¥${a.outSavings.toLocaleString()}`}
+                                  {a.outAtm > 0 && ` −ATM ¥${a.outAtm.toLocaleString()}`}
+                                </p>
+                              </div>
+                              <Separator />
+                            </div>
+                          ))}
+                          <Row label="口座の合計（見込み）" value={`¥${accountStats.total.toLocaleString()}`} accent />
+                        </Card>
+                        <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">
+                          カードは使った月の翌月に引き落とされるため、この見込みは今月出ていく金額で計算しています。今月の予算の残額とは別の数字です
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label>登録した口座</Label>
+                        <Card>
+                          {(config.accounts || []).map((a, i, arr) => (
+                            <div key={a.id}>
+                              <SettingsRow onClick={() => openEdit('account', a, i)} left={a.name} showChevron />
+                              {i < arr.length - 1 && <Separator />}
+                            </div>
+                          ))}
+                        </Card>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
               {settingTab === 'category' && (
@@ -2100,7 +2279,7 @@ function AppMain() {
       {/* 設定編集モーダル */}
       {editingItem && (() => {
         const TYPE_LABELS = {
-          salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ',
+          salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ', account: '口座', accountBalance: '月初残高', methodAccount: '引落口座', accountRole: '口座の役割',
           bill: '引落予定', savingsBucket: '先取り項目', category: 'カテゴリ',
           template: 'テンプレート', recurring: '定期支出', payment: '支払方法'
         };
@@ -2110,16 +2289,21 @@ function AppMain() {
         <Modal onClose={() => setEditingItem(null)} zIndex="z-[70]">
           <ModalHeader title={isNew ? `${name}を追加` : name} onClose={() => setEditingItem(null)} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-3.5">
-            {['salary', 'cashBudget', 'cashTopup'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+            {['salary', 'cashBudget', 'cashTopup', 'accountBalance'].includes(editingItem.type) && <EditFormSalaryLike editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
+            {editingItem.type === 'account' && <EditFormAccount editingItem={editingItem} setEditingItem={setEditingItem} />}
+            {['methodAccount', 'accountRole'].includes(editingItem.type) && (
+              <EditFormAccountPicker editingItem={editingItem} setEditingItem={setEditingItem} accounts={config.accounts || []}
+                note={editingItem.type === 'methodAccount' ? 'この支払方法の引落が、選んだ口座から出ていくものとして計算します' : undefined} />
+            )}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
-              {!isNew && !['salary', 'cashBudget', 'bill', 'memo'].includes(editingItem.type) && (
+              {!isNew && !['salary', 'cashBudget', 'bill', 'memo', 'accountBalance', 'methodAccount', 'accountRole'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
               <PrimaryButton onClick={saveSettings} disabled={isSaving}>{isSaving ? '保存中...' : isNew ? '追加する' : '保存する'}</PrimaryButton>
