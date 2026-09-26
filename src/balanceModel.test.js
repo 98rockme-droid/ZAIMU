@@ -42,39 +42,47 @@ test('口座振替は当月払い、カードは翌月払い、設定があれ�
 });
 
 test('生活口座に余っているお金も使えるお金に含まれる', () => {
-  const base = { walletStart: 10000, salary: 400000, savings: 120000, deferredBills: 150000, spentBudget: 0, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0 };
+  const base = { walletStart: 10000, salary: 400000, savings: 120000, spentBudget: 0, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0 };
   const a = spendableFromBalance({ ...base, bankStart: 100000 });
   const b = spendableFromBalance({ ...base, bankStart: 300000 });
   assert.equal(b.freeRemain - a.freeRemain, 200000);
 });
 
-test('口座振替は今月の支出として1回だけ引かれる（引落予定には入れない）', () => {
-  // 家賃8万を口座振替で今月記録済み。翌月払いの引落は先月のカード分15万だけ
+test('収支がぴったり0の月は、口座に余っているお金だけが残る（カードを二重に引かない）', () => {
+  // 給与40万・先取り10万・カード20万・口座振替5万・現金5万 → 収支0。口座の余りは3万
   const r = spendableFromBalance({
-    bankStart: 300000, walletStart: 0, salary: 400000, savings: 120000,
-    deferredBills: 150000, spentBudget: 80000, fixedPlanned: 80000, fixedRecorded: 80000, pendingFixed: 0
+    bankStart: 30000, walletStart: 0, salary: 400000, savings: 100000,
+    spentBudget: 200000 + 50000 + 50000, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0
   });
-  assert.equal(r.freeRemain, 300000 + 400000 - 120000 - 150000 - 80000);
+  assert.equal(r.freeRemain, 30000);
 });
 
-test('先月のカードと今月のカードは別の月として1回ずつ引かれる', () => {
-  // 先月使った15万は今月の引落、今月使った5万は来月の引落予定として確定
+test('月をまたいでも余りが引き継がれる（翌月の月初残高と整合する）', () => {
+  const S = 400000, P = 100000, card = 200000, F = 50000, K = 50000;
+  const bankStart = 30000;
+  // 実際のお金の動き: 今月は先月のカード分が引き落とされる（定常状態では同額）
+  const nextBankStart = bankStart + S - P - card - F - K;
+  const thisMonth = spendableFromBalance({ bankStart, walletStart: 0, salary: S, savings: P, spentBudget: card + F + K, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0 });
+  assert.equal(thisMonth.freeRemain, nextBankStart);
+});
+
+test('口座振替は今月の支出として1回だけ引かれる', () => {
   const r = spendableFromBalance({
-    bankStart: 200000, walletStart: 0, salary: 400000, savings: 100000,
-    deferredBills: 150000, spentBudget: 50000, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0
+    bankStart: 300000, walletStart: 0, salary: 400000, savings: 120000,
+    spentBudget: 80000, fixedPlanned: 80000, fixedRecorded: 80000, pendingFixed: 0
   });
-  assert.equal(r.freeRemain, 300000);
+  assert.equal(r.freeRemain, 300000 + 400000 - 120000 - 80000);
 });
 
 test('ATMで生活口座から財布へ移しても使えるお金は変わらない', () => {
-  const common = { salary: 0, savings: 0, deferredBills: 0, spentBudget: 0, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0 };
+  const common = { salary: 0, savings: 0, spentBudget: 0, fixedPlanned: 0, fixedRecorded: 0, pendingFixed: 0 };
   const before = spendableFromBalance({ ...common, bankStart: 100000, walletStart: 10000 });
   const after = spendableFromBalance({ ...common, bankStart: 70000, walletStart: 40000 });
   assert.equal(before.freeRemain, after.freeRemain);
 });
 
 test('未記録の固定費は予定として差し引き、記録されたら二重に引かない', () => {
-  const common = { bankStart: 300000, walletStart: 0, salary: 0, savings: 0, deferredBills: 0, fixedPlanned: 80000 };
+  const common = { bankStart: 300000, walletStart: 0, salary: 0, savings: 0, fixedPlanned: 80000 };
   const before = spendableFromBalance({ ...common, spentBudget: 0, fixedRecorded: 0, pendingFixed: 80000 });
   const after = spendableFromBalance({ ...common, spentBudget: 80000, fixedRecorded: 80000, pendingFixed: 0 });
   assert.equal(before.freeRemain, 220000);

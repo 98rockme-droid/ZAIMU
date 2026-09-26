@@ -39,17 +39,21 @@ export function methodTimingOf(method, timings = {}) {
 }
 
 // 残高ベースの「今月あと使える」。
-// 生活用の口座（貯金用以外）と財布の月初残高を起点に、今月入るお金と出ていくお金を差し引く。
-//   deferredBills: 翌月払いの支払方法で「先月使った分」＝今月の引き落とし
-//   spentBudget:   今月、予算から使った分（カード・口座振替・現金すべて）
-//                  カードは来月引き落とされるが、使った時点で確定した支出として差し引く
-//   当月払い（口座振替）は spentBudget にだけ入り、deferredBills には入らない（二重に引かない）
-//   ATMは口座→財布の移動なので、生活用の口座からおろす限り合計は変わらない
+// 生活用の口座（貯金用以外）と財布の月初残高を起点に、今月入るお金と今月使うお金を差し引く。
+//   spentBudget: 今月、予算から使った分（カード・口座振替・現金すべて）
+//
+// 先月カードで使った分（今月引き落とされる額）は差し引かない。
+// それは先月の「使った分」として先月の画面で計算済みで、今月の給与で支払われる。
+// ここで引くと、1つの給与に対してカード2ヶ月分を引くことになり二重計上になる。
+// （収支がぴったり0の月でも、カード1ヶ月分の赤字が常に出てしまう）
+// 今月カードで使った分は来月の給与で払うが、今月の支出として今月に1回だけ数える。
+//
+// ATMは口座→財布の移動なので、生活用の口座からおろす限り合計は変わらない
 export function spendableFromBalance({
-  bankStart, walletStart, salary, savings, deferredBills,
+  bankStart, walletStart, salary, savings,
   spentBudget, fixedPlanned, fixedRecorded, pendingFixed, cashFromSavings = 0
 }) {
-  const pool = bankStart + walletStart + salary + cashFromSavings - savings - deferredBills;
+  const pool = bankStart + walletStart + salary + cashFromSavings - savings;
   return {
     pool,
     freeBudget: pool - fixedPlanned,          // 固定費を除いた自由に使える額（ペース計算用）

@@ -276,7 +276,7 @@ function AppMain() {
       { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金と、ATM記録で明示的にカード予算から現金へ回した額を引いた上限です。単に銀行から現金をおろすだけならカード予算は減りません。', formula: '先取り後の残り − 月初のスタート現金 − カード予算から現金へ回した額' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
       { q: '現金残高', a: '手元にあるはずの現金です。タップすると内訳の確認と、ATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
-      { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与や引落が月の後半まで分からないときは、給与は先月の額、カードの引落は先月の利用額から見込みで計算し、実額が分かったら資金計画で上書きできます。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月の引落（翌月払い分） − 今月使った分 − 固定費予定' },
+      { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与が月の後半まで分からないときは先月の額で仮計算し、振り込まれたら資金計画で上書きできます。今月引き落とされる先月のカード分は、先月の使った分として計算済みなので差し引きません。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月使った分 − 固定費予定' },
       { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
@@ -678,12 +678,6 @@ function AppMain() {
     const walletStart = Number(monthly.cashBudget) || 0;
     const salary = Number(monthly.salary) || 0;
     const savings = getSavingsTotal(monthly);
-    // 翌月払いで、生活用の口座から引き落とされる分（紐付けなしは生活用とみなす）
-    const deferredRows = billRows.filter(r => {
-      const acc = (config.methodAccounts || {})[r.m];
-      return r.timing === 'next' && (!acc || livingIds.has(acc));
-    });
-    const deferredBills = deferredRows.reduce((s, r) => s + r.shown, 0);
     // 貯金用の口座からATMでおろした現金は、生活のお金に加わる
     const atmAcc = config.cashAccountId || config.salaryAccountId;
     const atmTotal = (monthly.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
@@ -695,15 +689,14 @@ function AppMain() {
     const fixedPlanned = due.reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const pendingFixed = due.filter(r => !recordedIds.has(r.id)).reduce((s, r) => s + (Number(r.amount) || 0), 0);
     const fixedRecorded = sum(budgetTx.filter(t => t.recurringId));
-    const res = spendableFromBalance({ bankStart, walletStart, salary, savings, deferredBills, spentBudget, fixedPlanned, fixedRecorded, pendingFixed, cashFromSavings });
+    const res = spendableFromBalance({ bankStart, walletStart, salary, savings, spentBudget, fixedPlanned, fixedRecorded, pendingFixed, cashFromSavings });
     return {
       active: true, ...res, living: living.map(a => ({ ...a, start: Number(bal[a.id]) || 0 })),
-      bankStart, walletStart, salary, savings, deferredBills, spentBudget, pendingFixed, cashFromSavings,
+      bankStart, walletStart, salary, savings, spentBudget, pendingFixed, cashFromSavings,
       // 見込みで計算している部分（実額が分かったら上書きしてもらう）
-      salaryProvisional: monthly.salaryConfirmed === false,
-      billsProvisional: deferredRows.some(r => r.manual === 0 && r.auto > 0)
+      salaryProvisional: monthly.salaryConfirmed === false
     };
-  }, [config.accounts, config.savingsAccountId, config.methodAccounts, config.cashAccountId, config.salaryAccountId, config.recurring, monthly, billRows, txList, month]);
+  }, [config.accounts, config.savingsAccountId, config.cashAccountId, config.salaryAccountId, config.recurring, monthly, txList, month]);
   const BM = balanceMode?.active ? balanceMode : null;
 
   // 口座ごとの今月の見込み（月初残高 ＋ 入金 − 出ていくお金）
@@ -1180,9 +1173,9 @@ function AppMain() {
                           ? <>使えるお金 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
                           : <>予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}</>}
                       </p>
-                      {BM && (BM.salaryProvisional || BM.billsProvisional) && (
+                      {BM?.salaryProvisional && (
                         <p className="mt-1.5 text-[11px] text-[#98989D] leading-relaxed">
-                          見込みで計算中：{[BM.salaryProvisional && `給与は${monthly.inheritedFrom ? formatMonthJP(monthly.inheritedFrom) : '先月'}の額`, BM.billsProvisional && '引落は先月の利用額から'].filter(Boolean).join('・')}。実額がわかったら資金計画で上書きしてください
+                          給与は{monthly.inheritedFrom ? formatMonthJP(monthly.inheritedFrom) : '先月'}の額で仮計算中です。振り込まれたら資金計画で実額に直してください
                         </p>
                       )}
                       {isCurrentMonth && H.freeBudget > 0 && (
@@ -1211,8 +1204,7 @@ function AppMain() {
                         <SubRow label={`給与${BM.salaryProvisional ? '（仮）' : ''}`} value={`＋¥${BM.salary.toLocaleString()}`} />
                         {BM.cashFromSavings > 0 && <SubRow label="貯金口座からおろした現金" value={`＋¥${BM.cashFromSavings.toLocaleString()}`} />}
                         <SubRow label="先取り（貯金へ）" value={`−¥${BM.savings.toLocaleString()}`} />
-                        <SubRow label={`今月の引落・翌月払い分${BM.billsProvisional ? '（見込み）' : ''}`} value={`−¥${BM.deferredBills.toLocaleString()}`} />
-                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">口座振替は当月払いなので、使った分として差し引いています。ATMで口座から財布へ移しても合計は変わりません</p>
+                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">今月引き落とされる先月のカード分は、先月の「使った分」として計算済みなので、ここでは引きません。口座からの引落は「現金＋口座の合計」で確認できます</p>
                       </ExpandableRow>
                     ) : (
                       <>
