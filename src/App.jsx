@@ -1932,6 +1932,34 @@ function AppMain() {
                   {accountStats.rows.length > 0 && (
                     <>
                       <div>
+                        <Label>月末の見込み（計算の内訳）</Label>
+                        <Card>
+                          {accountStats.rows.map((a, idx, arr) => (
+                            <div key={a.id}>
+                              <div className="px-4 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-[14px] text-[#EBEBF5]/80 truncate">{a.name}{a.id === config.savingsAccountId ? '（貯金）' : ''}</span>
+                                  <span className={`text-[14px] font-medium tabular-nums shrink-0 ${a.projected < 0 ? 'text-[#FF453A]' : 'text-white'}`}>¥{a.projected.toLocaleString()}</span>
+                                </div>
+                                <p className="mt-1 text-[11px] text-[#636366] tabular-nums leading-relaxed">
+                                  月初 ¥{a.start.toLocaleString()}
+                                  {a.inSalary > 0 && ` ＋給与 ¥${a.inSalary.toLocaleString()}`}
+                                  {a.inSavings > 0 && ` ＋先取り ¥${a.inSavings.toLocaleString()}`}
+                                  {a.bills > 0 && ` −引落 ¥${a.bills.toLocaleString()}`}
+                                  {a.outSavings > 0 && ` −先取り ¥${a.outSavings.toLocaleString()}`}
+                                  {a.outAtm > 0 && ` −ATM ¥${a.outAtm.toLocaleString()}`}
+                                </p>
+                              </div>
+                              {idx < arr.length - 1 && <Separator />}
+                            </div>
+                          ))}
+                        </Card>
+                        <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">
+                          登録済みの給与・引落・先取り・ATMからの試算です。記録していない入出金は含まないため、銀行の実際の残高とずれることがあります
+                        </p>
+                      </div>
+
+                      <div>
                         <Label>口座の役割</Label>
                         <Card>
                           {[
