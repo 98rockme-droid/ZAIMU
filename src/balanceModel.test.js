@@ -33,7 +33,7 @@ test('same or missing savings transfer role never creates money', () => {
   assert.equal(forecastAccount({ ...common, salaryAccountId: '', savingsAccountId: 'salary' }).projected, 10000);
 });
 
-import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod } from './balanceModel.js';
+import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod, walletMoveTotal } from './balanceModel.js';
 
 test('口座振替は当月払い、カードは翌月払い、設定があれば設定を優先', () => {
   assert.equal(methodTimingOf('口座振替'), 'same');
@@ -147,4 +147,22 @@ test('当月払いで貯金から払った分は、その月に貯金用の口�
   const r = billForMethod({ timing: 'same', cur: { living: 95000, savings: 78000 }, pending: 22280 });
   assert.equal(r.savingsPortion, 78000);
   assert.equal(r.fromLinked, 95000 + 22280);
+});
+
+test('ATM（口座→財布）は財布が増え、口座が減り、予算には影響しない', () => {
+  const moves = [{ from: 'smbc', to: 'wallet', amount: 10000 }];
+  assert.equal(walletMoveTotal(moves), 10000);
+  const smbc = forecastAccount({ accountId: 'smbc', start: 100000, salary: 0, savings: 0, bills: 0, atm: 0, salaryAccountId: 'smbc', savingsAccountId: 'smtb', transfers: moves });
+  assert.equal(smbc.projected, 90000);
+  // 財布は生活用として扱うので、生活用の口座→財布は予算に影響しない
+  assert.equal(transferEffectOnLiving(moves, new Set(['smbc', 'wallet'])), 0);
+});
+
+test('貯金用の口座から財布へおろすと、使えるお金が増える', () => {
+  const moves = [{ from: 'smtb', to: 'wallet', amount: 20000 }];
+  assert.equal(transferEffectOnLiving(moves, new Set(['smbc', 'wallet'])), 20000);
+});
+
+test('財布から口座へ入金すると財布が減る', () => {
+  assert.equal(walletMoveTotal([{ from: 'wallet', to: 'smbc', amount: 3000 }]), -3000);
 });

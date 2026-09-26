@@ -106,3 +106,16 @@ export function billForMethod({ timing, manual = 0, cur = { living: 0, savings: 
   const shown = manual > 0 ? manual : auto;
   return { auto, shown, savingsPortion, fromLinked: Math.max(0, shown - savingsPortion) };
 }
+
+// 単発の振替（ATMでおろす＝口座→財布 など）のうち、財布の増減。
+//   moves: [{ from, to, amount }]  from / to は口座IDか 'wallet'
+export function walletMoveTotal(moves = []) {
+  let net = 0;
+  for (const m of moves) {
+    const amount = Number(m.amount) || 0;
+    if (!m.from || !m.to || m.from === m.to || amount <= 0) continue;
+    if (m.to === 'wallet') net += amount;
+    if (m.from === 'wallet') net -= amount;
+  }
+  return net;
+}

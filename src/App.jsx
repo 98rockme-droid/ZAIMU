@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil, PiggyBank, Repeat
+  HelpCircle, Pencil, PiggyBank, Repeat, ArrowLeftRight
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
@@ -22,7 +22,7 @@ import {
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
   EditFormAccount, EditFormAccountPicker, EditFormTransfer
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -74,14 +74,12 @@ const getKind = t => t?.kind || (t?.isSpecial ? 'special' : (t?.fromSavings ? nu
 const getSource = t => t?.source || (t?.fromSavings ? 'savings' : (t?.isSpecial ? null : 'budget'));
 const KIND_LABELS = { normal: '通常', special: '特別費' };
 const SOURCE_LABELS = { budget: '今月の予算', savings: '貯金' };
-const KINDS = [{ value: 'normal', label: '通常' }, { value: 'special', label: '特別費' }];
 // 履歴などに出すタグ（通常×予算は当たり前なので出さない）
 const txTags = t => {
   const out = [];
-  if (getKind(t) === 'special') out.push({ text: '特別費', cls: 'text-[#98989D] font-medium' });
   const src = getSource(t);
   if (src === 'savings') out.push({ text: `貯金から${t.savingsBucket ? `（${t.savingsBucket}）` : ''}`, cls: 'text-[#4A7BA6] font-medium' });
-  if (getKind(t) === null || src === null) out.push({ text: '未設定', cls: 'text-[#FF453A] font-medium' });
+  if (src === null) out.push({ text: '未設定', cls: 'text-[#FF453A] font-medium' });
   return out;
 };
 const SOURCES = [{ value: 'budget', label: '今月の予算' }, { value: 'savings', label: '貯金' }];
@@ -101,6 +99,7 @@ const normalizeMonthly = (data) => {
     skippedRecurring: d.skippedRecurring || [],
     cashTopups: d.cashTopups || [],
     accountBalances: d.accountBalances || {},
+    moves: d.moves || [],   // 単発の振替（ATM含む）[{ id, date, from, to, amount, memo }]
     salaryConfirmed: d.salaryConfirmed,   // false のときは先月の額で仮置き中
     inheritedFrom: d.inheritedFrom || ''
   };
@@ -213,11 +212,14 @@ function AppMain() {
   const [inTitle, setInTitle] = useState('');
   const [inCat, setInCat] = useState('');
   const [inMethod, setInMethod] = useState('');
-  const [inKind, setInKind] = useState('normal');
   const [inSource, setInSource] = useState('budget');
   const [inSavingsBucket, setInSavingsBucket] = useState('');
   const [txFormKey, setTxFormKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  // 入力モーダルのモード（支出 / 振替）と、振替の入力値
+  const [txMode, setTxMode] = useState('expense');
+  const [editingMove, setEditingMove] = useState(null);
+  const [mv, setMv] = useState({ from: '', to: 'wallet', amount: '', date: '', memo: '' });
   const touchRef = useRef(null);
 
   const [editingTx, setEditingTx] = useState(null);
@@ -245,7 +247,7 @@ function AppMain() {
   const [config, setConfig] = useState(normalizeConfig({}));
   const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'ALL' });
+  const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', source: 'ALL' });
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
   const [memoText, setMemoText] = useState('');
@@ -265,7 +267,7 @@ function AppMain() {
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
-      { q: '月初のスタート現金', a: '毎月1日時点で財布にある現金です。ホームの「資産」の財布の計算元になります。月の途中でATMからおろした分は、ホームの資産の「財布」をタップして記録できます。' },
+      { q: '月初のスタート現金', a: '毎月1日時点で財布にある現金です。ホームの「資産」の財布の計算元になります。月の途中でATMからおろした分は、＋ボタンの「振替・ATM」から記録できます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
@@ -275,23 +277,22 @@ function AppMain() {
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。', formula: '手取り給与 − 先取り合計' },
       { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金と、ATM記録で明示的にカード予算から現金へ回した額を引いた上限です。単に銀行から現金をおろすだけならカード予算は減りません。', formula: '先取り後の残り − 月初のスタート現金 − カード予算から現金へ回した額' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
-      { q: '財布', a: '手元にあるはずの現金です。ホームの「資産」にある財布をタップすると、内訳の確認とATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: '財布', a: '手元にあるはずの現金です。ホームの「資産」にある財布をタップすると内訳を確認でき、ATMの記録をタップすると編集できます。', formula: '月初のスタート現金 + ATMなどで財布に入れた現金 − 現金支出' },
       { q: '「今月の予算」と「資産」の違いは？', a: '今月の予算は「今月あといくら使っていいか」という計画の数字です。資産は「お金が今どこにいくらあるか」という実物の数字で、財布と各口座の月末の見込みを表示します。今月カードで使った分は来月引き落とされるため、予算からはすでに引かれていても、口座にはまだ残っています。そのため2つの数字は一致しません。' },
       { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与が月の後半まで分からないときは先月の額で仮計算し、振り込まれたら資金計画で上書きできます。今月引き落とされる先月のカード分は、先月の使った分として計算済みなので差し引きません。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月使った分 − 固定費予定' },
-      { q: '口座から口座へお金を移しているときは？', a: '設定タブの「口座」→「毎月の振替」に登録してください。例えば楽天カードの引落用に毎月三井住友から楽天銀行へ移しているなら、振替元を三井住友、振替先を楽天銀行にします。口座の見込みに反映され、生活用の口座どうしなら「今月あと使える」には影響しません。' },
+      { q: '口座から口座へお金を移しているときは？', a: '毎月決まっている振替は、設定タブの「口座」→「毎月の振替」に登録してください（例: 楽天カードの引落用に三井住友から楽天銀行へ移す）。1回だけの振替は、＋ボタンの「振替・ATM」から記録できます。どちらも口座の見込みに反映され、生活用の口座どうしなら「今月あと使える」には影響しません。' },
       { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
-      { q: 'ATMで現金をおろしたら？', a: 'ホームの資産の「財布」をタップして記録します。銀行から財布への移動だけならカード予算は変わりません。今月のカード予算を現金に回したいときだけ、入力時に「カード予算から現金へ回す」を選んでください。以前のATM記録は従来の計算を保ちます。' },
+      { q: 'ATMで現金をおろしたら？', a: '＋ボタンを押して「振替・ATM」に切り替え、振替元をおろした口座、振替先を財布にして記録します。口座から財布へお金の置き場所が変わるだけなので、「今月あと使える」は変わりません。記録は履歴にも表示され、タップすると金額・日付・口座を編集したり削除したりできます。' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る予算のシミュレーションです。銀行から現金をおろしただけでは増えません。`, formula: '実質あと使える（カード） + 予算として確保した現金の残り' },
-      { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
+      { q: '今日までの目安とは？', a: '固定費以外で使ってよいお金（今月の予算から固定費の合計を除いた分）を、月の日数で均等に使った場合に、今日までに使っていてよい金額です。ホームでは「今日までに使った額」と並べて表示し、目安より少なければ「余裕」、多ければ「オーバー」と表示します。進捗バーも同じ基準で、縦線が今日の位置です。', formula: '（今月の予算 − 固定費の合計） × 経過日数 ÷ 月の日数' }
     ]},
     { category: '支出の記録', items: [
-      { q: '「支出の種類」とは？', a: '通常か特別費かの分類です。冠婚葬祭や家電の買い替えなど臨時の支出を特別費にしておくと、分析タブで普段の支出と分けて確認できます。どちらも充当元が今月の予算なら、今月の残額から引かれます。' },
       { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の予算から引かれます。「貯金」を選ぶと今月の予算には影響せず、資産の見込みでは支払方法に関係なく貯金用の口座から出たものとして計算します（カードで払って、あとで貯金から補填する場合も同じ扱いです）。' },
       { q: '現金で払った場合はどうなる？', a: '口座の月初残高を入れた月は、充当元が今月の予算なら、カードと同じく今月の予算から引かれ、同時に財布の現金も減ります（月初残高が未入力の月は、予算から月初のスタート現金を先に差し引く従来の計算です）。予算は「計画」、財布は「実物」の数字なので、両方で減っても二重に数えているわけではありません。' },
       { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
-      { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
+      { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて充当元を選べば分類できます。' }
     ]},
     { category: '操作', items: [
       { q: '定期支出とは？', a: 'サブスクや家賃など決まった支出を登録しておくと、指定日を迎えたタイミングで自動的にログへ記録されます。周期は「毎月」と「毎年」から選べるので、年会費のような年1回の支出も登録できます。記録された支出は「定期」バッジ付きで表示され、通常の支出と同じように編集・削除できます。' },
@@ -531,7 +532,8 @@ function AppMain() {
     const cashBudget = Number(monthly?.cashBudget) || 0;
     // ATMは現金の移動。カード予算からの配分変更は個々の記録で選ぶ。
     const { cash: cashTopupTotal, cardToCash: cashBudgetShiftTotal } = cashTopupTotals(monthly?.cashTopups);
-    const cashAvail = cashBudget + cashTopupTotal;
+    // 財布に入った現金: 旧ATM記録 ＋ 振替で財布に入った分（財布から出た分は引く）
+    const cashAvail = cashBudget + cashTopupTotal + walletMoveTotal(monthly?.moves);
     const sum = list => list.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     // 充当元ごとに引き当て先を分ける（同じ1円が2つの残額から引かれないようにする）
     //   予算×カード → 今月の予算の残額から引く
@@ -611,12 +613,23 @@ function AppMain() {
     const ms = searchText === '' || String(t.title || '').includes(searchText);
     const mc = filter.cat === 'ALL' || t.category === filter.cat;
     const mm = filter.method === 'ALL' || t.paymentMethod === filter.method;
-    const mk = filter.kind === 'ALL' || (filter.kind === 'UNSET' ? getKind(t) === null : getKind(t) === filter.kind);
     const msr = filter.source === 'ALL' || (filter.source === 'UNSET' ? getSource(t) === null : getSource(t) === filter.source);
-    return ms && mc && mm && mk && msr;
+    return ms && mc && mm && msr;
   }), [searchPool, searchText, filter]);
 
   // 履歴を日付ごとにグループ化（新しい日付順）
+  // 表示中の月の振替（ATM含む）。旧形式のATM記録も「口座→財布」の振替として並べる
+  const moveItems = useMemo(() => {
+    const legacyFrom = config.cashAccountId || config.salaryAccountId || '';
+    const legacy = (monthly.cashTopups || []).map(c => ({
+      id: c.id, date: c.date, from: legacyFrom, to: 'wallet', amount: Number(c.amount) || 0, memo: '',
+      _legacy: true, _original: c, _month: month
+    }));
+    const moves = (monthly.moves || []).map(m => ({ ...m, amount: Number(m.amount) || 0, _original: m, _month: month }));
+    return [...legacy, ...moves];
+  }, [monthly.cashTopups, monthly.moves, config.cashAccountId, config.salaryAccountId, month]);
+  const placeName = useCallback(id => id === 'wallet' ? '財布' : ((config.accounts || []).find(a => a.id === id)?.name || '未設定'), [config.accounts]);
+
   const logGroups = useMemo(() => {
     const groups = [];
     const idx = {};
@@ -627,8 +640,18 @@ function AppMain() {
       g.total += Number(t.amount) || 0;
       g.items.push(t);
     });
+    const noFilter = !searchText.trim() && filter.cat === 'ALL' && filter.method === 'ALL' && filter.source === 'ALL';
+    if (noFilter) {
+      moveItems.forEach(m => {
+        const key = m.date;
+        if (!key) return;
+        if (idx[key] === undefined) { idx[key] = groups.length; groups.push({ key, total: 0, items: [] }); }
+        groups[idx[key]].items.push({ ...m, _move: true });
+      });
+      groups.sort((a, b) => (a.key < b.key ? 1 : -1));
+    }
     return groups;
-  }, [filteredTx]);
+  }, [filteredTx, moveItems, searchText, filter]);
 
   // カレンダー用: 日ごとの支出（全種別）と明細
   const dayMap = useMemo(() => {
@@ -704,7 +727,7 @@ function AppMain() {
     const atmTotal = (monthly.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
     const cashFromSavings = atmAcc && !livingIds.has(atmAcc) ? atmTotal : 0;
     // 振替: 生活用どうしは0、貯金用→生活用は増える、生活用→貯金用は減る
-    const transferEffect = transferEffectOnLiving(config.transfers || [], livingIds);
+    const transferEffect = transferEffectOnLiving([...(config.transfers || []), ...(monthly.moves || [])], new Set([...livingIds, 'wallet']));
     const budgetTx = txList.filter(t => getSource(t) === 'budget');
     const spentBudget = sum(budgetTx);
     const due = (config.recurring || []).filter(r => isRecurringDueIn(r, month) && !(monthly.skippedRecurring || []).includes(r.id));
@@ -739,7 +762,7 @@ function AppMain() {
       const forecast = forecastAccount({
         accountId: a.id, start, salary, savings: savTotal, bills, atm: atmTotal,
         salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,
-        cashAccountId: config.cashAccountId, savingsSpent, transfers: config.transfers || []
+        cashAccountId: config.cashAccountId, savingsSpent, transfers: [...(config.transfers || []), ...(monthly.moves || [])]
       });
       return {
         ...a, start, bills, ...forecast
@@ -787,7 +810,6 @@ function AppMain() {
     setInTitle('');
     setInCat(catNames[0] || '食費');
     setInMethod(methods[0] || CASH);
-    setInKind('normal');
     setInSource('budget');
     setInSavingsBucket('');
     setTxFormKey(k => k + 1);
@@ -796,7 +818,7 @@ function AppMain() {
   // 分析 → 指定カテゴリで絞り込んだ履歴へ移動
   const jumpToCat = name => {
     setSearchText('');
-    setFilter({ cat: name, method: 'ALL', kind: 'ALL', source: 'budget' });
+    setFilter({ cat: name, method: 'ALL', source: 'budget' });
     setLogView('list');
     setActiveTab('log');
   };
@@ -809,7 +831,6 @@ function AppMain() {
     setInTitle(t.title || '');
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
-    setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
@@ -823,30 +844,90 @@ function AppMain() {
     setInTitle(t.title || '');
     setInCat(t.category || catNames[0] || '食費');
     setInMethod(t.paymentMethod || CASH);
-    setInKind(getKind(t));   // 旧データで未記録なら null（未選択のまま表示）
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
 
-  const openNew = () => { setEditingTx(null); resetInputs(); setIsTxOpen(true); };
+  const openNew = () => { setEditingTx(null); setEditingMove(null); setTxMode('expense'); resetInputs(); setIsTxOpen(true); };
+  // 振替の初期値（ATMでおろすのが一番多いので「口座→財布」）
+  const defaultMove = () => ({ from: config.cashAccountId || config.salaryAccountId || (config.accounts || [])[0]?.id || '', to: 'wallet', amount: '', date: getTodayString(), memo: '' });
+  const switchTxMode = mode => { setTxMode(mode); if (mode === 'move' && !editingMove) setMv(defaultMove()); };
+  const openMove = item => {
+    setEditingTx(null);
+    setEditingMove(item);
+    setMv({ from: item.from || '', to: item.to || 'wallet', amount: String(item.amount || ''), date: item.date || getTodayString(), memo: item.memo || '' });
+    setTxMode('move');
+    setTxFormKey(k => k + 1);
+    setIsTxOpen(true);
+  };
   const openWithDate = d => { setEditingTx(null); resetInputs(d); setIsTxOpen(true); };
-  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); }, []);
+  const closeTx = useCallback(() => { setIsTxOpen(false); setEditingTx(null); setEditingMove(null); setTxMode('expense'); }, []);
   const applyTpl = t => { setInAmount(String(t.amount)); setInTitle(t.title); setInCat(t.category); setInMethod(t.method); };
+
+  // 振替の保存: 日付の月のデータに保存。編集時は元の記録を消してから追加（月が変わっても対応）
+  const submitMove = async e => {
+    e.preventDefault(); if (!user || isSaving) return;
+    const amount = toNumber(mv.amount);
+    if (!mv.from || !mv.to) return showToast('振替元と振替先を選んでください');
+    if (mv.from === mv.to) return showToast('振替元と振替先が同じです');
+    if (amount <= 0) return showToast('金額を入力してください');
+    if (!mv.date) return showToast('日付を選んでください');
+    const item = {
+      id: editingMove && !editingMove._legacy ? editingMove.id : `mv_${Date.now()}`,
+      date: mv.date, from: mv.from, to: mv.to, amount, memo: (mv.memo || '').trim()
+    };
+    const monthRef = m => doc(db, 'users', user.uid, 'months', m);
+    setIsSaving(true);
+    try {
+      const batch = writeBatch(db);
+      if (editingMove) {
+        batch.set(monthRef(editingMove._month), editingMove._legacy
+          ? { cashTopups: arrayRemove(editingMove._original) }
+          : { moves: arrayRemove(editingMove._original) }, { merge: true });
+      }
+      batch.set(monthRef(item.date.slice(0, 7)), { moves: arrayUnion(item) }, { merge: true });
+      await batch.commit();
+      showToast(editingMove ? '更新しました' : '振替を記録しました');
+      closeTx();
+    } catch (err) { console.error(err); showToast('エラー'); }
+    finally { setIsSaving(false); }
+  };
+
+  const deleteMove = async () => {
+    if (!user || !editingMove) return;
+    const target = editingMove;
+    const monthRef = doc(db, 'users', user.uid, 'months', target._month);
+    const field = target._legacy ? 'cashTopups' : 'moves';
+    try {
+      await setDoc(monthRef, { [field]: arrayRemove(target._original) }, { merge: true });
+      closeTx();
+      showToast('削除しました', {
+        label: '元に戻す',
+        onClick: async () => {
+          hideToast();
+          try { await setDoc(monthRef, { [field]: arrayUnion(target._original) }, { merge: true }); showToast('元に戻しました'); }
+          catch (err) { console.error(err); showToast('復元できませんでした'); }
+        }
+      });
+    } catch (err) { console.error(err); showToast('エラー'); }
+  };
 
   const submitTx = async e => {
     e.preventDefault(); if (!user) return;
     if (isSaving) return; // 二重送信の防止
     const amount = toNumber(inAmount);
     if (!inDate || !amount || !inTitle) return showToast('入力内容を確認してください');
-    if (!inKind || !inSource) return showToast(!inKind ? '支出の種類を選んでください' : '充当元を選んでください');
+    if (!inSource) return showToast('充当元を選んでください');
+    // 支出の種類（特別費）は廃止。既存データの値は保持し、新規は通常にする
+    const keepKind = editingTx ? (getKind(editingTx) || 'normal') : 'normal';
     const payload = {
       date: toISODateSafe(inDate), amount, title: inTitle, category: inCat, paymentMethod: inMethod,
-      kind: inKind, source: inSource,
+      kind: keepKind, source: inSource,
       savingsBucket: inSource === 'savings' ? (inSavingsBucket || null) : null,
       // 旧項目も併記（貯金の集計クエリと、古い版のアプリとの互換のため）
-      isSpecial: inKind === 'special',
+      isSpecial: keepKind === 'special',
       fromSavings: inSource === 'savings',
       updatedAt: serverTimestamp()
     };
@@ -1073,11 +1154,10 @@ function AppMain() {
     if (!ok) return;
     try {
       const s = await getDocs(query(collection(db, 'users', user.uid, 'transactions'), orderBy('date', 'desc')));
-      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '支出の種類', '充当元', '貯金の積立先']];
+      const rows = [['日付', 'タイトル', 'カテゴリ', '金額', '支払方法', '充当元', '貯金の積立先']];
       s.forEach(d => {
         const v = d.data();
         rows.push([isoToLocalYMD(v.date), v.title, v.category, v.amount, v.paymentMethod,
-          KIND_LABELS[getKind(v)] || '未設定',
           SOURCE_LABELS[getSource(v)] || '未設定',
           getSource(v) === 'savings' ? (v.savingsBucket || '指定なし') : '']);
       });
@@ -1201,7 +1281,7 @@ function AppMain() {
                       <div className="mt-3.5 relative">
                         <div className="h-1 bg-white/[0.08] rounded-full overflow-hidden">
                           <div className={`h-full rounded-full transition-all duration-700 ${H.remain < 0 ? 'bg-[#FF453A]' : 'bg-white/60'}`}
-                            style={{ width: `${H.base > 0 ? Math.min(100, (H.used / H.base) * 100) : 0}%` }} />
+                            style={{ width: `${H.freeBudget > 0 ? Math.min(100, Math.max(0, H.freeSpent) / H.freeBudget * 100) : 0}%` }} />
                         </div>
                         {showPaceMarker && (
                           <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
@@ -1218,11 +1298,20 @@ function AppMain() {
                         </p>
                       )}
                       {isCurrentMonth && H.freeBudget > 0 && (
-                        <div className="flex items-center justify-between mt-3.5 pt-3 border-t border-white/[0.08] gap-3">
-                          <span className="text-[11px] text-[#98989D] truncate">今日までの目安 ¥{idealSpend.toLocaleString()}</span>
-                          <span className={`text-[11px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
-                            {paceDiff <= 0 ? `−¥${Math.abs(paceDiff).toLocaleString()}` : `+¥${paceDiff.toLocaleString()}`}
-                          </span>
+                        <div className="mt-3.5 pt-3 border-t border-white/[0.08]">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-[13px] text-[#98989D] shrink-0">今日までに使った</span>
+                            <span className="text-[14px] font-medium text-white tabular-nums whitespace-nowrap">
+                              ¥{Math.max(0, H.freeSpent).toLocaleString()}
+                              <span className="text-[13px] font-normal text-[#636366]"> / 目安 ¥{idealSpend.toLocaleString()}</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3 mt-1">
+                            <span className="text-[11px] text-[#636366] truncate">固定費を除く · {today.d}日時点</span>
+                            <span className={`text-[13px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
+                              {paceDiff <= 0 ? `¥${Math.abs(paceDiff).toLocaleString()} 余裕` : `¥${paceDiff.toLocaleString()} オーバー`}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1301,19 +1390,17 @@ function AppMain() {
                       onToggle={() => setCashExpanded(v => !v)}
                     >
                       <SubRow label="月初のスタート現金" value={`¥${S.cashBudget.toLocaleString()}`} />
-                      {(monthly.cashTopups || []).map((c, i) => (
-                        <button key={c.id || i} type="button" onClick={() => openEdit('cashTopup', { value: c.amount, shiftCardBudget: c.shiftCardBudget !== false }, i)}
-                          className="w-full flex items-center justify-between pl-3 gap-3 min-h-[32px] text-left active:opacity-60">
-                          <span className="text-[13px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした{!BM && c.shiftCardBudget !== false ? ' · 予算移動あり' : ''}</span>
-                          <span className="text-[13px] text-[#7C7C80] tabular-nums shrink-0">+¥{Number(c.amount || 0).toLocaleString()}</span>
+                      {moveItems.filter(m => m.to === 'wallet' || m.from === 'wallet').map(m => (
+                        <button key={m.id} type="button" onClick={() => openMove(m)}
+                          className="w-full flex items-center justify-between pl-3 gap-3 min-h-[36px] text-left active:opacity-60">
+                          <span className="text-[13px] text-[#636366] truncate">
+                            {formatDateShort(`${m.date}T12:00:00Z`)} {m.to === 'wallet' ? `${placeName(m.from)}からおろした` : `${placeName(m.to)}へ入金`}
+                          </span>
+                          <span className="text-[13px] text-[#7C7C80] tabular-nums shrink-0">{m.to === 'wallet' ? '+' : '−'}¥{Number(m.amount || 0).toLocaleString()}</span>
                         </button>
                       ))}
                       <SubRow label="今月の現金支出" value={`−¥${S.spCash.toLocaleString()}`} />
-                      <button type="button" onClick={() => openEdit('cashTopup', { value: '', shiftCardBudget: false }, -1)}
-                        className="w-full flex items-center gap-2 pl-3 min-h-[44px] text-left active:opacity-60">
-                        <Plus size={14} className="text-[#0A84FF] shrink-0" />
-                        <span className="text-[13px] text-[#0A84FF]">ATMで現金をおろした</span>
-                      </button>
+                      <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">ATMでおろしたときは、＋ボタンの「振替・ATM」から記録できます</p>
                     </ExpandableRow>
                     {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
                     {accountStats.rows.map(a => (
@@ -1383,7 +1470,6 @@ function AppMain() {
                 </div>
                 <div className="flex gap-2">
                   {[
-                    { key: 'kind', val: filter.kind, all: '全種類', opts: KINDS },
                     { key: 'source', val: filter.source, all: '全充当元', opts: SOURCES },
                   ].map(({ key, val, all, opts }) => (
                     <div key={key} className="flex-1 relative">
@@ -1396,7 +1482,7 @@ function AppMain() {
                       <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
                     </div>
                   ))}
-                  <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'ALL' }); }}
+                  <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', source: 'ALL' }); }}
                     aria-label="絞り込みをクリア"
                     className="w-11 h-11 bg-[#2C2C2E] rounded-[14px] flex items-center justify-center text-[#636366] shrink-0">
                     <X size={14} />
@@ -1411,7 +1497,7 @@ function AppMain() {
               )}
               <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
-                  filteredTx.length === 0 ? (
+                  logGroups.length === 0 ? (
                     <Card><EmptyState>履歴がありません</EmptyState></Card>
                   ) : (
                     <div className="space-y-4">
@@ -1426,6 +1512,23 @@ function AppMain() {
                             </Label>
                             <Card>
                               {g.items.map((t, idx) => {
+                                if (t._move) {
+                                  // 振替（ATM含む）: 支出ではないので金額はグレー、日別合計にも含めない
+                                  return (
+                                    <div key={`mv_${t.id}`}>
+                                      <button type="button" onClick={() => openMove(t)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[52px] active:bg-white/[0.04] transition-colors text-left">
+                                        <ArrowLeftRight size={15} className="text-[#636366] shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[14px] text-[#EBEBF5]/80 truncate leading-snug">{placeName(t.from)} → {placeName(t.to)}</p>
+                                          <p className="text-[11px] text-[#636366] truncate mt-0.5">{t.to === 'wallet' && t.from !== 'wallet' ? 'ATM' : '振替'}{t.memo ? ` · ${t.memo}` : ''}</p>
+                                        </div>
+                                        <span className="text-[16px] text-[#98989D] tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
+                                      </button>
+                                      {idx < g.items.length - 1 && <Separator />}
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <div key={t.id}>
                                     <button type="button" onClick={() => setViewingTx(t)}
@@ -1756,19 +1859,10 @@ function AppMain() {
                   </Card>
                 </div>
               )}
-              {S.spSpecial > 0 && (
-                <Card className="p-5">
-                  <p className="text-[11px] text-[#98989D] mb-2">特別費（別枠）</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[22px] font-semibold text-white tabular-nums">¥{S.spSpecial.toLocaleString()}</span>
-                    <span className="text-[13px] text-[#636366]">先月 ¥{S.spSpecialPrev.toLocaleString()}</span>
-                  </div>
-                </Card>
-              )}
               {S.spUnsetCount > 0 && (
                 <Card>
                   <button type="button"
-                    onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', kind: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
+                    onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
                     className="w-full px-5 py-4 text-left active:bg-white/[0.04] transition-colors">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-[#FF453A]">充当元が未設定の支出</p>
@@ -2240,7 +2334,6 @@ function AppMain() {
                 ['内容', viewingTx.title],
                 ['日付', formatFullDateJP(viewingTx.date)],
                 ['支払方法', viewingTx.paymentMethod],
-                ['支出の種類', KIND_LABELS[getKind(viewingTx)] || '未設定'],
                 ['充当元', getSource(viewingTx) === 'savings'
                   ? `貯金${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : '（指定なし）'}`
                   : SOURCE_LABELS[getSource(viewingTx)] || '未設定']
@@ -2310,8 +2403,75 @@ function AppMain() {
       {/* 支出入力モーダル */}
       {isTxOpen && (
         <Modal onClose={closeTx}>
-          <ModalHeader title={editingTx ? '支出を編集' : '支出を入力'} onClose={closeTx} />
+          <ModalHeader title={txMode === 'move' ? (editingMove ? '振替を編集' : '振替を記録') : (editingTx ? '支出を編集' : '支出を入力')} onClose={closeTx} />
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8">
+            {/* 支出 / 振替 の切り替え（新規のときだけ） */}
+            {!editingTx && !editingMove && (
+              <div className="flex p-1 mb-4 bg-[#2C2C2E] rounded-[14px]">
+                {[['expense', '支出'], ['move', '振替・ATM']].map(([v, l]) => (
+                  <button key={v} type="button" onClick={() => switchTxMode(v)}
+                    className={`flex-1 h-10 rounded-[11px] text-[14px] font-medium transition-colors ${txMode === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+            {txMode === 'move' ? (
+              <form onSubmit={submitMove} className="space-y-3.5 w-full min-w-0">
+                {[['from', '振替元（お金が出る）'], ['to', '振替先（お金が入る）']].map(([key, label]) => (
+                  <div key={key}>
+                    <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">{label}</label>
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
+                      {[{ id: 'wallet', name: '財布' }, ...(config.accounts || [])].map(a => (
+                        <button key={a.id} type="button" onClick={() => setMv(p => ({ ...p, [key]: a.id }))}
+                          className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${mv[key] === a.id ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                          {a.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {mv.from && mv.to && mv.from !== 'wallet' && mv.to === 'wallet' && (
+                  <p className="ml-1 -mt-1 text-[11px] text-[#636366]">ATMでおろした記録になります</p>
+                )}
+                <div>
+                  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">金額</label>
+                  <div className="flex gap-1.5 items-center w-full min-w-0">
+                    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+                      <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
+                      <input key={`mv-amount-${txFormKey}`} type="text" inputMode="decimal"
+                        value={mv.amount ? Number(mv.amount).toLocaleString() : ''}
+                        onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setMv(p => ({ ...p, amount: v })); }}
+                        className="flex-1 min-w-0 w-full bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums" />
+                    </div>
+                    <button type="button" aria-label="計算機" onClick={() => openCalc(mv.amount, val => setMv(p => ({ ...p, amount: String(val) })))}
+                      className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
+                      <Calculator size={20} />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
+                  <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
+                    <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
+                      <span className="text-[16px] text-white">{mv.date ? mv.date.split('-').join('/') : '日付を選択'}</span>
+                    </div>
+                    <input type="date" value={mv.date} onChange={e => setMv(p => ({ ...p, date: e.target.value }))} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">メモ（任意）</label>
+                  <input value={mv.memo} onChange={e => setMv(p => ({ ...p, memo: e.target.value }))}
+                    placeholder="例: 10月用の現金"
+                    className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
+                </div>
+                <p className="ml-1 text-[11px] text-[#636366] leading-relaxed">お金の置き場所が変わるだけなので、生活用の口座と財布のあいだの振替は「今月あと使える」に影響しません</p>
+                <div className="flex gap-2 pt-2">
+                  {editingMove && <DangerIconButton onClick={deleteMove}><Trash2 size={16} /></DangerIconButton>}
+                  <PrimaryButton type="submit" disabled={isSaving}>{isSaving ? '保存中...' : editingMove ? '保存する' : '記録する'}</PrimaryButton>
+                </div>
+              </form>
+            ) : (
             <form onSubmit={submitTx} className="space-y-3.5 w-full min-w-0">
               {/* テンプレート（ショートカットなので最上部） */}
               {!editingTx && config.templates.length > 0 && (
@@ -2415,18 +2575,6 @@ function AppMain() {
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支出の種類</label>
-                <div className="flex gap-2">
-                  {KINDS.map(({ value, label }) => (
-                    <button key={value} type="button" onClick={() => setInKind(value)}
-                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inKind === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {!inKind && <p className="mt-1.5 ml-1 text-[11px] text-[#FF453A]">旧データのため未設定です。選んで保存すると分類できます</p>}
-              </div>
-              <div>
                 <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">充当元</label>
                 <div className="flex gap-2">
                   {SOURCES.map(({ value, label }) => (
@@ -2464,6 +2612,7 @@ function AppMain() {
                 <PrimaryButton type="submit" disabled={isSaving}>{isSaving ? '保存中...' : editingTx ? '保存する' : '追加する'}</PrimaryButton>
               </div>
             </form>
+            )}
           </div>
         </Modal>
       )}
