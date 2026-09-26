@@ -207,7 +207,6 @@ function AppMain() {
   const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
-  const [viewingTx, setViewingTx] = useState(null);
   const [isTxOpen, setIsTxOpen] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [calcInit, setCalcInit] = useState(0);
@@ -227,6 +226,7 @@ function AppMain() {
   // 入力モーダルのモード（支出 / 振替）と、振替の入力値
   const [txMode, setTxMode] = useState('expense');
   const [editingMove, setEditingMove] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false); // 日付・支払方法・充当元の開閉
   const [mv, setMv] = useState({ from: '', to: 'wallet', amount: '', date: '', memo: '' });
   const touchRef = useRef(null);
 
@@ -310,6 +310,9 @@ function AppMain() {
       { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
       { q: '来月の設定はどうすればいいですか？', a: '新しい月にアプリを開くと、直近の月の手取り給与・先取り・スタート現金などが自動で引き継がれます。金額が変わる項目だけ資金計画で編集してください。手動で引き継ぎたいときは設定タブの「先月の設定をコピー」も使えます。' },
       { q: '今月の引落予定はどう計算される？', a: '支払方法ごとに、前月にその方法で使った金額を今月の引落予定として自動で表示します。カード明細と金額が違うときは、資金計画の「今月の引落予定」から手入力で上書きできます（空欄に戻すと自動に戻ります）。' },
+      { q: '日付や支払方法を変えたいときは？', a: '入力画面の「今日 · 三井住友 · 予算から」のような行をタップすると、日付・支払方法・充当元を変更できます。' },
+      { q: '入力画面に出る候補は？', a: '内容が空のときはテンプレートとよく使う内容、入力を始めると一致する過去の内容が表示されます。タップするとカテゴリや支払方法などもまとめて入力されます。' },
+      { q: '支出を編集・複製したい', a: '履歴で支出をタップすると編集画面が開きます。下のボタンから削除や、同じ内容での新規入力（複製）ができます。' },
       { q: '支出を間違えて削除したら？', a: '削除した直後に表示される「元に戻す」をタップすると、そのまま復元できます（数秒間表示されます）。' },
       { q: 'データのバックアップはできますか？', a: '設定タブの「JSONバックアップ」で取引・月別設定・共通設定を書き出せます。アプリ内への一括復元機能はありません。取引だけを表計算ソフトで見る場合はCSVを書き出してください。' }
     ]}
@@ -845,7 +848,11 @@ function AppMain() {
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
     setTxFormKey(k => k + 1);
+    setEditingMove(null);
+    setTxMode('expense');
+    setDetailsOpen(false);
     setIsTxOpen(true);
+    showToast('同じ内容で新しい支出を入力できます');
   };
 
   const startEdit = t => {
@@ -857,11 +864,14 @@ function AppMain() {
     setInMethod(t.paymentMethod || CASH);
     setInSource(getSource(t));
     setInSavingsBucket(t.savingsBucket || '');
+    setEditingMove(null);
+    setTxMode('expense');
+    setDetailsOpen(getSource(t) === null); // 旧データで充当元が未設定なら最初から開いておく
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
 
-  const openNew = () => { setEditingTx(null); setEditingMove(null); setTxMode('expense'); resetInputs(); setIsTxOpen(true); };
+  const openNew = () => { setEditingTx(null); setEditingMove(null); setTxMode('expense'); setDetailsOpen(false); resetInputs(); setIsTxOpen(true); };
   // 振替の初期値（ATMでおろすのが一番多いので「口座→財布」）
   const defaultMove = () => ({ from: config.cashAccountId || config.salaryAccountId || (config.accounts || [])[0]?.id || '', to: 'wallet', amount: '', date: getTodayString(), memo: '' });
   const switchTxMode = mode => { setTxMode(mode); if (mode === 'move' && !editingMove) setMv(defaultMove()); };
@@ -923,6 +933,41 @@ function AppMain() {
         }
       });
     } catch (err) { console.error(err); showToast('エラー'); }
+  };
+
+  // 支出の削除（定期支出はその月だけスキップ扱い）。「元に戻す」で取引とスキップ設定をまとめて復元する
+  const deleteTx = async tx => {
+    if (!user || !tx?.id) return;
+    const isRec = !!tx.recurringId;
+    const ok = await confirm({
+      title: 'この支出を削除しますか？',
+      message: isRec ? '定期支出の今月分はスキップされます（来月から自動記録が再開されます）。' : undefined,
+      confirmLabel: '削除する', danger: true
+    });
+    if (!ok) return;
+    try {
+      const { id: delId, ...delData } = tx;
+      // 日付がISO文字列でもTimestampでも安全に「その支出の月」を求める
+      const delMonth = tx.date ? isoToLocalYMD(tx.date).slice(0, 7) : month;
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'users', user.uid, 'transactions', delId));
+      if (isRec) batch.set(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayUnion(tx.recurringId) }, { merge: true });
+      await batch.commit();
+      closeTx();
+      showToast('削除しました', {
+        label: '元に戻す',
+        onClick: async () => {
+          hideToast();
+          try {
+            const restore = writeBatch(db);
+            restore.set(doc(db, 'users', user.uid, 'transactions', delId), delData);
+            if (isRec) restore.set(doc(db, 'users', user.uid, 'months', delMonth), { skippedRecurring: arrayRemove(delData.recurringId) }, { merge: true });
+            await restore.commit();
+            showToast('元に戻しました');
+          } catch (e) { console.error(e); showToast('復元できませんでした'); }
+        }
+      });
+    } catch (e) { console.error(e); showToast('エラー'); }
   };
 
   const submitTx = async e => {
@@ -1537,7 +1582,7 @@ function AppMain() {
                                 }
                                 return (
                                   <div key={t.id}>
-                                    <button type="button" onClick={() => setViewingTx(t)}
+                                    <button type="button" onClick={() => startEdit(t)}
                                       className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[52px] active:bg-white/[0.04] transition-colors text-left">
                                       <div className="flex-1 min-w-0">
                                         <p className="text-[14px] text-white truncate leading-snug">{t.title}</p>
@@ -1610,7 +1655,7 @@ function AppMain() {
                               const tags = [t.category, t.paymentMethod, ...txTags(t).map(g => g.text), t.recurringId && '定期'].filter(Boolean).join(' · ');
                               return (
                                 <div key={t.id}>
-                                  <button type="button" onClick={() => setViewingTx(t)}
+                                  <button type="button" onClick={() => startEdit(t)}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[48px] active:bg-white/[0.04] transition-colors text-left">
                                     <div className="flex-1 min-w-0">
                                       <p className="text-[14px] text-white truncate">{t.title}</p>
@@ -2327,75 +2372,6 @@ function AppMain() {
       </div>
 
       {/* 支出詳細モーダル */}
-      {viewingTx && (
-        <Modal onClose={() => setViewingTx(null)} zIndex="z-[60]">
-          <ModalHeader title="支出の詳細" onClose={() => setViewingTx(null)} />
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-4 pb-8 space-y-4">
-            <div className="flex flex-col items-center gap-2 py-2">
-              <span className="text-[13px] text-[#98989D] px-3 py-1 rounded-[10px] bg-white/[0.06]">{viewingTx.category}</span>
-              <p className="text-[28px] font-semibold text-white tracking-tight tabular-nums">¥{Number(viewingTx.amount).toLocaleString()}</p>
-            </div>
-            <Card>
-              {[
-                ['内容', viewingTx.title],
-                ['日付', formatFullDateJP(viewingTx.date)],
-                ['支払方法', viewingTx.paymentMethod],
-                ['充当元', getSource(viewingTx) === 'savings'
-                  ? `貯金${viewingTx.savingsBucket ? `（${viewingTx.savingsBucket}）` : '（指定なし）'}`
-                  : SOURCE_LABELS[getSource(viewingTx)] || '未設定']
-              ].map(([l, v], idx, arr) => (
-                <div key={l}>
-                  <div className="px-4 py-3 flex justify-between gap-4">
-                    <span className="text-[13px] text-[#98989D]">{l}</span>
-                    <span className="text-[13px] text-white">{v}</span>
-                  </div>
-                  {idx < arr.length - 1 && <Separator />}
-                </div>
-              ))}
-            </Card>
-            <div className="flex gap-2">
-              <DangerIconButton onClick={async () => {
-                const isRec = !!viewingTx.recurringId;
-                const ok = await confirm({
-                  title: 'この支出を削除しますか？',
-                  message: isRec ? '定期支出の今月分はスキップされます（来月から自動記録が再開されます）。' : undefined,
-                  confirmLabel: '削除する', danger: true
-                });
-                if (!ok) return;
-                try {
-                  const { id: delId, ...delData } = viewingTx;
-                  // 日付がISO文字列でもTimestampでも安全に「その支出の月」を求める
-                  const delMonth = viewingTx.date ? isoToLocalYMD(viewingTx.date).slice(0, 7) : month;
-                  const batch = writeBatch(db);
-                  batch.delete(doc(db, 'users', user.uid, 'transactions', delId));
-                   if (isRec) batch.set(doc(db, 'users', user.uid, 'months', delMonth),
-                    { skippedRecurring: arrayUnion(viewingTx.recurringId) }, { merge: true });
-                  await batch.commit();
-                  setViewingTx(null);
-                  showToast('削除しました', {
-                    label: '元に戻す',
-                    onClick: async () => {
-                      hideToast();
-                      try {
-                        const restore = writeBatch(db);
-                        restore.set(doc(db, 'users', user.uid, 'transactions', delId), delData);
-                         if (isRec) restore.set(doc(db, 'users', user.uid, 'months', delMonth),
-                          { skippedRecurring: arrayRemove(delData.recurringId) }, { merge: true });
-                        await restore.commit();
-                        showToast('元に戻しました');
-                      } catch (e) { console.error(e); showToast('復元できませんでした'); }
-                    }
-                  });
-                } catch (e) { console.error(e); showToast('エラー'); }
-              }}><Trash2 size={17} /></DangerIconButton>
-              <PrimaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); startEdit(tx); }}><Pencil size={14} /> 編集する</PrimaryButton>
-            </div>
-            <SecondaryButton onClick={() => { const tx = viewingTx; setViewingTx(null); duplicateTx(tx); }}>
-              <CopyCheck size={14} /> 同じ内容で今日の支出を登録
-            </SecondaryButton>
-          </div>
-        </Modal>
-      )}
 
       {/* 計算機モーダル */}
       {showCalc && (
@@ -2451,7 +2427,7 @@ function AppMain() {
               </div>
             )}
             {txMode === 'move' ? (
-              <form onSubmit={submitMove} className="space-y-3.5 w-full min-w-0">
+              <form id="mv-form" onSubmit={submitMove} className="space-y-3.5 w-full min-w-0">
                 {[['from', '振替元（お金が出る）'], ['to', '振替先（お金が入る）']].map(([key, label]) => (
                   <div key={key}>
                     <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">{label}</label>
@@ -2465,9 +2441,6 @@ function AppMain() {
                     </div>
                   </div>
                 ))}
-                {mv.from && mv.to && mv.from !== 'wallet' && mv.to === 'wallet' && (
-                  <p className="ml-1 -mt-1 text-[11px] text-[#636366]">ATMでおろした記録になります</p>
-                )}
                 <div>
                   <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">金額</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
@@ -2499,153 +2472,169 @@ function AppMain() {
                     placeholder="例: 10月用の現金"
                     className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
                 </div>
-                <p className="ml-1 text-[11px] text-[#636366] leading-relaxed">お金の置き場所が変わるだけなので、生活用の口座と財布のあいだの振替は「今月あと使える」に影響しません</p>
-                <div className="flex gap-2 pt-2">
-                  {editingMove && <DangerIconButton onClick={deleteMove}><Trash2 size={16} /></DangerIconButton>}
-                  <PrimaryButton type="submit" disabled={isSaving}>{isSaving ? '保存中...' : editingMove ? '保存する' : '記録する'}</PrimaryButton>
-                </div>
               </form>
             ) : (
-            <form onSubmit={submitTx} className="space-y-3.5 w-full min-w-0">
-              {/* テンプレート（ショートカットなので最上部） */}
-              {!editingTx && config.templates.length > 0 && (
-                <div>
-                  <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">テンプレート</label>
-                  <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                    {config.templates.map((t, i) => (
-                      <button key={i} type="button" onClick={() => applyTpl(t)} className="shrink-0 h-11 px-3.5 bg-[#0A84FF]/10 border border-[#0A84FF]/25 rounded-[14px] text-[13px] text-[#0A84FF] flex items-center gap-1.5 active:bg-[#0A84FF]/20 transition-colors">
-                        <Zap size={12} /> {t.title}
-                      </button>
-                    ))}
-                  </div>
+            <form id="tx-form" onSubmit={submitTx} className="space-y-4 w-full min-w-0">
+              {/* 金額（主役） */}
+              <div className="flex gap-1.5 items-center w-full min-w-0">
+                <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-16 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+                  <span className="text-[20px] text-[#98989D] shrink-0">¥</span>
+                  <input
+                    key={`amount-${txFormKey}`}
+                    type="text" inputMode="decimal" placeholder="0" aria-label="金額"
+                    value={inAmount ? Number(inAmount).toLocaleString() : ''}
+                    onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
+                    className="flex-1 min-w-0 w-full bg-transparent text-[28px] font-semibold text-white outline-none tabular-nums placeholder-[#48484A]"
+                    required
+                  />
                 </div>
-              )}
-              <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">金額</label>
-                <div className="flex gap-1.5 items-center w-full min-w-0">
-                  <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-                    <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
-                    <input
-                      key={`amount-${txFormKey}`}
-                      type="text" inputMode="decimal"
-                      value={inAmount ? Number(inAmount).toLocaleString() : ''}
-                      onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
-                      className="flex-1 min-w-0 w-full bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums"
-                      required
-                    />
-                  </div>
-                  <button type="button" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
-                    className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
-                    <Calculator size={20} />
-                  </button>
-                </div>
+                <button type="button" aria-label="計算機" onClick={() => openCalc(inAmount, val => setInAmount(String(val)))}
+                  className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
+                  <Calculator size={20} />
+                </button>
               </div>
+
+              {/* 内容 ＋ よく使う・候補（テンプレートと入力履歴をひとつに） */}
               <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">内容</label>
                 <input
                   key={`title-${txFormKey}`}
                   value={inTitle}
                   onChange={e => setInTitle(e.target.value)}
-                  placeholder="例: スーパーでお買い物"
+                  placeholder="内容（例: スーパーでお買い物）" aria-label="内容"
                   className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors"
                   required
                 />
                 {!editingTx && (() => {
                   const q = inTitle.trim().toLowerCase();
-                  if (!q) return null;
-                  const sugg = titleIndex
-                    .filter(x => x.title.toLowerCase().includes(q) && x.title !== inTitle.trim())
-                    .sort((a, b) => (b.title.toLowerCase().startsWith(q) - a.title.toLowerCase().startsWith(q)) || (b.count - a.count))
-                    .slice(0, 5);
-                  if (!sugg.length) return null;
+                  let chips;
+                  if (!q) {
+                    // 空のとき: テンプレート → よく使う内容（入力履歴の回数順）
+                    const tplTitles = new Set(config.templates.map(t => t.title));
+                    const frequent = [...titleIndex].filter(x => !tplTitles.has(x.title)).sort((a, b) => b.count - a.count).slice(0, Math.max(0, 8 - config.templates.length));
+                    chips = [
+                      ...config.templates.map(t => ({ key: `tpl_${t.title}`, title: t.title, amount: Number(t.amount) || 0, category: t.category, tpl: t })),
+                      ...frequent.map(x => ({ key: `h_${x.title}`, ...x }))
+                    ];
+                  } else {
+                    // 入力中: 前方一致 → よく使う順
+                    chips = titleIndex
+                      .filter(x => x.title.toLowerCase().includes(q) && x.title !== inTitle.trim())
+                      .sort((a, b) => (b.title.toLowerCase().startsWith(q) - a.title.toLowerCase().startsWith(q)) || (b.count - a.count))
+                      .slice(0, 6).map(x => ({ key: `h_${x.title}`, ...x }));
+                  }
+                  if (!chips.length) return null;
                   return (
                     <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5 mt-2">
-                      {sugg.map(x => (
-                        <button key={x.title} type="button"
+                      {chips.map(c => (
+                        <button key={c.key} type="button"
                           onClick={() => {
-                            setInTitle(x.title);
-                            if (catNames.includes(x.category)) setInCat(x.category);
-                            if (methods.includes(x.paymentMethod)) setInMethod(x.paymentMethod);
-                            if (!inAmount) setInAmount(String(x.amount));
+                            if (c.tpl) return applyTpl(c.tpl);
+                            setInTitle(c.title);
+                            if (catNames.includes(c.category)) setInCat(c.category);
+                            if (methods.includes(c.paymentMethod)) setInMethod(c.paymentMethod);
+                            if (!inAmount) setInAmount(String(c.amount));
                           }}
                           className="shrink-0 h-11 px-3.5 rounded-[14px] bg-[#2C2C2E] flex flex-col justify-center text-left active:bg-[#3A3A3C] transition-colors">
-                          <span className="text-[13px] text-white leading-tight whitespace-nowrap">{x.title}</span>
-                          <span className="text-[11px] text-[#636366] leading-tight whitespace-nowrap tabular-nums">{x.category} · ¥{x.amount.toLocaleString()}</span>
+                          <span className="text-[13px] text-white leading-tight whitespace-nowrap flex items-center gap-1">{c.tpl && <Zap size={11} className="text-[#0A84FF]" />}{c.title}</span>
+                          <span className="text-[11px] text-[#636366] leading-tight whitespace-nowrap tabular-nums">¥{Number(c.amount || 0).toLocaleString()}</span>
                         </button>
                       ))}
                     </div>
                   );
                 })()}
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">カテゴリ</label>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                  {catNames.map(c => (
-                    <button key={c} type="button" onClick={() => setInCat(c)}
-                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inCat === c ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                      {c}
-                    </button>
-                  ))}
-                </div>
+
+              {/* カテゴリ */}
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
+                {catNames.map(c => (
+                  <button key={c} type="button" onClick={() => setInCat(c)}
+                    className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inCat === c ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                    {c}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支払方法</label>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                  {methods.map(m => (
-                    <button key={m} type="button" onClick={() => setInMethod(m)}
-                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
-                <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
-                  <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
-                    <span className="text-[16px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
-                  </div>
-                  <input type="date" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
-                </div>
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">充当元</label>
-                <div className="flex gap-2">
-                  {SOURCES.map(({ value, label }) => (
-                    <button key={value} type="button" onClick={() => setInSource(value)}
-                      className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSource === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {!inSource && <p className="mt-1.5 ml-1 text-[11px] text-[#FF453A]">旧データのため未設定です。選んで保存すると分類できます</p>}
-                {inSource === 'budget' && (
-                  <p className="mt-1.5 ml-1 text-[11px] text-[#636366]">
-                    {inMethod === CASH ? '現金残高から引かれます（予算は月初に現金を差し引き済み）' : '今月の予算の残額から引かれます'}
-                  </p>
-                )}
-                {inSource === 'savings' && (
-                  <div className="mt-2 space-y-2">
-                    <p className="ml-1 text-[11px] text-[#4A7BA6] flex items-center gap-1.5">
-                      <PiggyBank size={12} /> 今月の予算には計上しません。貯金の実残高とは自動連動しません
-                    </p>
-                    {bucketOptions.length > 0 && (
+
+              {/* 日付・支払方法・充当元（ふだんは変えないので1行にまとめる） */}
+              <div className="space-y-3">
+                <button type="button" onClick={() => setDetailsOpen(v => !v)} aria-expanded={detailsOpen}
+                  className="w-full h-11 px-4 flex items-center justify-between gap-3 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-left">
+                  <span className="text-[14px] text-white truncate">
+                    {inDate === getTodayString() ? '今日' : (inDate ? `${Number(inDate.slice(5, 7))}/${Number(inDate.slice(8, 10))}` : '日付未設定')}
+                    <span className="text-[#636366]"> · </span>{inMethod}
+                    <span className="text-[#636366]"> · </span>
+                    {inSource === 'budget' ? '予算から'
+                      : inSource === 'savings' ? `貯金${inSavingsBucket ? `（${inSavingsBucket}）` : ''}から`
+                      : <span className="text-[#FF453A]">充当元が未設定</span>}
+                  </span>
+                  <ChevronDown size={14} className={`text-[#636366] shrink-0 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {detailsOpen && (
+                  <>
+                    <div>
+                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支払方法</label>
                       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                        {['', ...bucketOptions].map(name => (
-                          <button key={name || '__none'} type="button" onClick={() => setInSavingsBucket(name)}
-                            className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                            {name || '指定なし'}
+                        {methods.map(m => (
+                          <button key={m} type="button" onClick={() => setInMethod(m)}
+                            className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                            {m}
                           </button>
                         ))}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
+                      <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
+                        <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
+                          <span className="text-[16px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
+                        </div>
+                        <input type="date" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">充当元</label>
+                      <div className="flex gap-2">
+                        {SOURCES.map(({ value, label }) => (
+                          <button key={value} type="button" onClick={() => setInSource(value)}
+                            className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSource === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {inSource === 'savings' && bucketOptions.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5 mt-2">
+                          {['', ...bucketOptions].map(name => (
+                            <button key={name || '__none'} type="button" onClick={() => setInSavingsBucket(name)}
+                              className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                              {name || '指定なし'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-              <div className="pt-2">
-                <PrimaryButton type="submit" disabled={isSaving}>{isSaving ? '保存中...' : editingTx ? '保存する' : '追加する'}</PrimaryButton>
-              </div>
             </form>
+            )}
+          </div>
+          {/* 保存ボタンは画面下に固定（スクロールしなくても押せる） */}
+          <div className="flex-none px-5 pt-3 pb-3 border-t border-white/[0.06] flex gap-2">
+            {txMode === 'move' ? (
+              <>
+                {editingMove && <DangerIconButton onClick={deleteMove}><Trash2 size={17} /></DangerIconButton>}
+                <PrimaryButton type="submit" form="mv-form" disabled={isSaving}>{isSaving ? '保存中...' : editingMove ? '保存する' : '記録する'}</PrimaryButton>
+              </>
+            ) : (
+              <>
+                {editingTx && <DangerIconButton onClick={() => deleteTx(editingTx)}><Trash2 size={17} /></DangerIconButton>}
+                {editingTx && (
+                  <button type="button" onClick={() => duplicateTx(editingTx)}
+                    className="h-12 px-4 rounded-[14px] bg-[#2C2C2E] text-[14px] font-medium text-[#EBEBF5]/80 shrink-0 active:bg-[#3A3A3C] transition-colors">
+                    複製
+                  </button>
+                )}
+                <PrimaryButton type="submit" form="tx-form" disabled={isSaving}>{isSaving ? '保存中...' : editingTx ? '保存する' : '追加する'}</PrimaryButton>
+              </>
             )}
           </div>
         </Modal>
