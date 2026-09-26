@@ -653,14 +653,25 @@ function AppMain() {
     }, {});
     const prevByMethod = byMethod(prevTxList);
     const curByMethod = byMethod(txList);
+    // 今月まだ記録されていない定期支出（月末までに確実に出ていく分）を支払方法ごとに集計
+    const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
+    const skipped = monthly.skippedRecurring || [];
+    const pendingByMethod = (config.recurring || []).reduce((a, r) => {
+      if (!r.id || recordedIds.has(r.id) || skipped.includes(r.id) || !isRecurringDueIn(r, month)) return a;
+      const m = r.method || CASH;
+      a[m] = (a[m] || 0) + (Number(r.amount) || 0);
+      return a;
+    }, {});
     return methods.filter(m => m !== CASH).map(m => {
       const timing = methodTimingOf(m, config.methodTimings);
       const manual = Number(monthly.cardBills?.[m]) || 0;
-      // 当月払い（口座振替など）は今月使った分、翌月払い（カード）は先月使った分が今月の引落
-      const auto = timing === 'same' ? (curByMethod[m] || 0) : (prevByMethod[m] || 0);
-      return { m, timing, manual, auto, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
+      // 当月払い（口座振替など）: 今月使った分 ＋ 今月まだ記録されていない定期支出
+      // 翌月払い（カード）: 先月使った分（今月の定期支出は来月の引落になるので含めない）
+      const pending = timing === 'same' ? (pendingByMethod[m] || 0) : 0;
+      const auto = timing === 'same' ? (curByMethod[m] || 0) + pending : (prevByMethod[m] || 0);
+      return { m, timing, manual, auto, pending, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
     });
-  }, [prevTxList, txList, methods, config.methodTimings, monthly.cardBills, monthly.cardDueDates]);
+  }, [prevTxList, txList, methods, config.methodTimings, config.recurring, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month]);
   const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
 
   // 残高ベースの「今月あと使える」
