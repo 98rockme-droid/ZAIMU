@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil, PiggyBank, Repeat, ArrowLeftRight
+  HelpCircle, Pencil, PiggyBank, Repeat, ArrowLeftRight, Check
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
@@ -127,6 +127,15 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 // 全期間検索の取得上限（新しい順に最大10,000件 = Firestoreの読み取り20回分）
 const SEARCH_PAGE_SIZE = 500;
 const SEARCH_MAX_PAGES = 20;
+// 履歴の絞り込み用のピル。見た目は小さく（高さ32px・13px）、タップ領域は44pxを確保する
+const FilterPill = ({ active, onClick, children, label }) => (
+  <button type="button" onClick={onClick} aria-label={label} className="h-11 flex items-center shrink-0">
+    <span className={`h-8 px-3 rounded-full flex items-center gap-1 text-[13px] font-medium whitespace-nowrap transition-colors ${active ? 'bg-[#0A84FF]/20 text-[#0A84FF]' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+      {children}
+    </span>
+  </button>
+);
+
 // 定期支出がその月に発生するか（毎月 / 毎年その月のみ）
 const isRecurringDueIn = (r, monthStr) => {
   if ((r.freq || 'monthly') === 'yearly') return Number(r.month) === Number(monthStr.split('-')[1]);
@@ -247,7 +256,8 @@ function AppMain() {
   const [config, setConfig] = useState(normalizeConfig({}));
   const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ cat: 'ALL', method: 'ALL', source: 'ALL' });
+  const [filter, setFilter] = useState({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' });
+  const [filterSheet, setFilterSheet] = useState(null); // 'cat' | 'method' | 'source'
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
   const [memoText, setMemoText] = useState('');
@@ -614,7 +624,7 @@ function AppMain() {
     const mc = filter.cat === 'ALL' || t.category === filter.cat;
     const mm = filter.method === 'ALL' || t.paymentMethod === filter.method;
     const msr = filter.source === 'ALL' || (filter.source === 'UNSET' ? getSource(t) === null : getSource(t) === filter.source);
-    return ms && mc && mm && msr;
+    return filter.type !== 'move' && ms && mc && mm && msr;
   }), [searchPool, searchText, filter]);
 
   // 履歴を日付ごとにグループ化（新しい日付順）
@@ -640,9 +650,11 @@ function AppMain() {
       g.total += Number(t.amount) || 0;
       g.items.push(t);
     });
-    const noFilter = !searchText.trim() && filter.cat === 'ALL' && filter.method === 'ALL' && filter.source === 'ALL';
-    if (noFilter) {
-      moveItems.forEach(m => {
+    // 振替はカテゴリ・支払方法・充当元を持たないので、それらで絞り込んでいるときは出さない
+    const q = searchText.trim();
+    const showMoves = filter.type !== 'expense' && filter.cat === 'ALL' && filter.method === 'ALL' && filter.source === 'ALL';
+    if (showMoves) {
+      moveItems.filter(m => !q || `${placeName(m.from)} ${placeName(m.to)} ${m.memo || ''}`.includes(q)).forEach(m => {
         const key = m.date;
         if (!key) return;
         if (idx[key] === undefined) { idx[key] = groups.length; groups.push({ key, total: 0, items: [] }); }
@@ -651,7 +663,7 @@ function AppMain() {
       groups.sort((a, b) => (a.key < b.key ? 1 : -1));
     }
     return groups;
-  }, [filteredTx, moveItems, searchText, filter]);
+  }, [filteredTx, moveItems, searchText, filter, placeName]);
 
   // カレンダー用: 日ごとの支出（全種別）と明細
   const dayMap = useMemo(() => {
@@ -818,7 +830,7 @@ function AppMain() {
   // 分析 → 指定カテゴリで絞り込んだ履歴へ移動
   const jumpToCat = name => {
     setSearchText('');
-    setFilter({ cat: name, method: 'ALL', source: 'budget' });
+    setFilter({ type: 'expense', cat: name, method: 'ALL', source: 'budget' });
     setLogView('list');
     setActiveTab('log');
   };
@@ -1287,6 +1299,15 @@ function AppMain() {
                           <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
                         )}
                       </div>
+                      {showPaceMarker && (
+                        // 縦線＝今日までの目安の位置。端に近いときは文字がはみ出さないよう寄せる
+                        <div className="relative h-3.5 mt-1">
+                          <span className="absolute text-[11px] leading-none text-[#636366] whitespace-nowrap"
+                            style={{ left: `${idealPct}%`, transform: `translateX(${idealPct > 88 ? '-100%' : idealPct < 12 ? '0' : '-50%'})` }}>
+                            目安
+                          </span>
+                        </div>
+                      )}
                       <p className="mt-2.5 text-[11px] text-[#636366] tabular-nums">
                         {BM
                           ? <>予算 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
@@ -1294,7 +1315,7 @@ function AppMain() {
                       </p>
                       {BM?.salaryProvisional && (
                         <p className="mt-1.5 text-[11px] text-[#98989D] leading-relaxed">
-                          給与は{monthly.inheritedFrom ? formatMonthJP(monthly.inheritedFrom) : '先月'}の額で仮計算中です。振り込まれたら資金計画で実額に直してください
+                          給与は{monthly.inheritedFrom ? formatMonthJP(monthly.inheritedFrom) : '先月'}の額で仮計算中
                         </p>
                       )}
                       {isCurrentMonth && H.freeBudget > 0 && (
@@ -1332,7 +1353,6 @@ function AppMain() {
                         <SubRow label={`給与${BM.salaryProvisional ? '（仮）' : ''}`} value={`＋¥${BM.salary.toLocaleString()}`} />
                         {BM.cashFromSavings > 0 && <SubRow label="貯金口座からおろした現金" value={`＋¥${BM.cashFromSavings.toLocaleString()}`} />}
                         <SubRow label="先取り（貯金へ）" value={`−¥${BM.savings.toLocaleString()}`} />
-                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">今月引き落とされる先月のカード分は、先月の「使った分」として計算済みなので、ここでは引きません。口座からの引落は下の「資産」で確認できます</p>
                       </ExpandableRow>
                     ) : (
                       <>
@@ -1400,14 +1420,13 @@ function AppMain() {
                         </button>
                       ))}
                       <SubRow label="今月の現金支出" value={`−¥${S.spCash.toLocaleString()}`} />
-                      <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">ATMでおろしたときは、＋ボタンの「振替・ATM」から記録できます</p>
                     </ExpandableRow>
                     {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
                     {accountStats.rows.map(a => (
                       <div key={a.id}>
                         <Separator />
                         <Row
-                          label={`${a.name}${a.id === config.savingsAccountId ? '（貯金）' : ''}`}
+                          label={a.name}
                           value={`¥${a.projected.toLocaleString()}`}
                           danger={a.projected < 0} />
                       </div>
@@ -1456,38 +1475,35 @@ function AppMain() {
                     ))}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  {[{ key: 'cat', val: filter.cat, opts: catNames }, { key: 'method', val: filter.method, opts: methods }].map(({ key, val, opts }) => (
-                    <div key={key} className="flex-1 relative">
-                      <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
-                        <option value="ALL">すべて</option>
-                        {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                      </select>
-                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
+                {(() => {
+                  // 見た目は小さいピル（高さ32px・13px）にして、タップ領域は44pxを確保する
+                  const isActive = filter.type !== 'ALL' || filter.cat !== 'ALL' || filter.method !== 'ALL' || filter.source !== 'ALL';
+                  const sourceLabel = filter.source === 'UNSET' ? '未設定' : SOURCE_LABELS[filter.source];
+                  return (
+                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-4 px-4">
+                      <div className="h-11 flex items-center shrink-0">
+                        <div className="h-8 p-0.5 bg-[#2C2C2E] rounded-full flex">
+                          {[['ALL', 'すべて'], ['expense', '支出'], ['move', '振替']].map(([v, l]) => (
+                            <button key={v} type="button" onClick={() => setFilter(p => ({ ...p, type: v }))}
+                              className={`h-7 px-3 rounded-full text-[13px] font-medium transition-colors ${filter.type === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {filter.type !== 'move' && (
+                        <>
+                          <FilterPill active={filter.cat !== 'ALL'} onClick={() => setFilterSheet('cat')}>{filter.cat !== 'ALL' ? filter.cat : 'カテゴリ'}<ChevronDown size={12} /></FilterPill>
+                          <FilterPill active={filter.method !== 'ALL'} onClick={() => setFilterSheet('method')}>{filter.method !== 'ALL' ? filter.method : '支払方法'}<ChevronDown size={12} /></FilterPill>
+                          <FilterPill active={filter.source !== 'ALL'} onClick={() => setFilterSheet('source')}>{filter.source !== 'ALL' ? sourceLabel : '充当元'}<ChevronDown size={12} /></FilterPill>
+                        </>
+                      )}
+                      {isActive && (
+                        <FilterPill onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' }); }} label="絞り込みをクリア"><X size={13} /></FilterPill>
+                      )}
                     </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  {[
-                    { key: 'source', val: filter.source, all: '全充当元', opts: SOURCES },
-                  ].map(({ key, val, all, opts }) => (
-                    <div key={key} className="flex-1 relative">
-                      <select value={val} onChange={e => setFilter(p => ({ ...p, [key]: e.target.value }))}
-                        className="w-full h-11 bg-[#2C2C2E] rounded-[14px] pl-3 pr-7 text-[16px] text-white outline-none appearance-none">
-                        <option value="ALL">{all}</option>
-                        {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        <option value="UNSET">未設定</option>
-                      </select>
-                      <ChevronDown size={12} className="absolute right-2.5 top-4 text-[#636366] pointer-events-none" />
-                    </div>
-                  ))}
-                  <button onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', source: 'ALL' }); }}
-                    aria-label="絞り込みをクリア"
-                    className="w-11 h-11 bg-[#2C2C2E] rounded-[14px] flex items-center justify-center text-[#636366] shrink-0">
-                    <X size={14} />
-                  </button>
-                </div>
+                  );
+                })()}
               </div>
 
               {isSearching && (
@@ -1862,7 +1878,7 @@ function AppMain() {
               {S.spUnsetCount > 0 && (
                 <Card>
                   <button type="button"
-                    onClick={() => { setSearchText(''); setFilter({ cat: 'ALL', method: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
+                    onClick={() => { setSearchText(''); setFilter({ type: 'expense', cat: 'ALL', method: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
                     className="w-full px-5 py-4 text-left active:bg-white/[0.04] transition-colors">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-[#FF453A]">充当元が未設定の支出</p>
@@ -2401,6 +2417,34 @@ function AppMain() {
       )}
 
       {/* 支出入力モーダル */}
+      {filterSheet && (() => {
+        const conf = {
+          cat: { title: 'カテゴリ', all: 'すべてのカテゴリ', opts: catNames.map(c => ({ value: c, label: c })) },
+          method: { title: '支払方法', all: 'すべての支払方法', opts: methods.map(m => ({ value: m, label: m })) },
+          source: { title: '充当元', all: 'すべての充当元', opts: [...SOURCES, { value: 'UNSET', label: '未設定' }] },
+        }[filterSheet];
+        const current = filter[filterSheet];
+        const pick = v => { setFilter(p => ({ ...p, [filterSheet]: v })); setFilterSheet(null); };
+        return (
+          <Modal onClose={() => setFilterSheet(null)}>
+            <ModalHeader title={conf.title} onClose={() => setFilterSheet(null)} />
+            <div className="flex-1 overflow-y-auto px-4 pt-3 pb-8">
+              <Card>
+                {[{ value: 'ALL', label: conf.all }, ...conf.opts].map((o, i, arr) => (
+                  <div key={o.value}>
+                    <button type="button" onClick={() => pick(o.value)}
+                      className="w-full flex items-center justify-between px-4 min-h-[44px] text-left active:bg-white/[0.04] transition-colors">
+                      <span className={`text-[14px] ${current === o.value ? 'text-[#0A84FF] font-medium' : 'text-white'}`}>{o.label}</span>
+                      {current === o.value && <Check size={15} className="text-[#0A84FF] shrink-0" />}
+                    </button>
+                    {i < arr.length - 1 && <Separator />}
+                  </div>
+                ))}
+              </Card>
+            </div>
+          </Modal>
+        );
+      })()}
       {isTxOpen && (
         <Modal onClose={closeTx}>
           <ModalHeader title={txMode === 'move' ? (editingMove ? '振替を編集' : '振替を記録') : (editingTx ? '支出を編集' : '支出を入力')} onClose={closeTx} />

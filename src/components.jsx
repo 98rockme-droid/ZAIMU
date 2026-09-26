@@ -111,16 +111,17 @@ export const ExpandableRow = ({ label, value, expanded, onToggle, muted = false,
   <>
     <button type="button" onClick={onToggle}
       className="w-full flex items-center justify-between px-4 py-2.5 min-h-[44px] gap-3 active:bg-white/[0.03] transition-colors text-left">
-      <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#7C7C80]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <span className={`tabular-nums whitespace-nowrap ${
-          danger ? 'text-[#FF453A] text-[14px] font-semibold'
-          : accent ? 'text-[16px] font-bold text-white'
-          : muted ? 'text-[#7C7C80] text-[13px]'
-          : 'text-white text-[14px] font-medium'
-        }`}>{value}</span>
-        <ChevronDown size={13} className={`text-[#636366] transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </div>
+      {/* 開閉の印はラベルの横に置き、金額はほかの行と同じく右端で揃える */}
+      <span className="flex items-center gap-1 min-w-0">
+        <span className={`text-[14px] leading-snug truncate ${muted ? 'text-[#7C7C80]' : 'text-[#EBEBF5]/80'}`}>{label}</span>
+        <ChevronDown size={13} className={`text-[#636366] shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </span>
+      <span className={`tabular-nums shrink-0 whitespace-nowrap ${
+        danger ? 'text-[#FF453A] text-[14px] font-semibold'
+        : accent ? 'text-[16px] font-bold text-white'
+        : muted ? 'text-[#7C7C80] text-[13px]'
+        : 'text-white text-[14px] font-medium'
+      }`}>{value}</span>
     </button>
     {expanded && children && <div className="px-4 pb-3 space-y-2">{children}</div>}
   </>
