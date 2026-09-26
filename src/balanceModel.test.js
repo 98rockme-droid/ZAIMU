@@ -33,7 +33,7 @@ test('same or missing savings transfer role never creates money', () => {
   assert.equal(forecastAccount({ ...common, salaryAccountId: '', savingsAccountId: 'salary' }).projected, 10000);
 });
 
-import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving } from './balanceModel.js';
+import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod } from './balanceModel.js';
 
 test('口座振替は当月払い、カードは翌月払い、設定があれば設定を優先', () => {
   assert.equal(methodTimingOf('口座振替'), 'same');
@@ -123,4 +123,28 @@ test('生活用の口座どうしの振替は予算に影響しない。貯金�
 
 test('同じ口座どうし・金額が0の振替は無視する', () => {
   assert.deepEqual(transferTotals('smbc', [{ from: 'smbc', to: 'smbc', amount: 1000 }, { from: 'smbc', to: 'rakuten', amount: 0 }]), { transferIn: 0, transferOut: 0 });
+});
+
+test('貯金からカードで払った分は、使った月ではなく引落の月に貯金用の口座から出る', () => {
+  // 9月に音楽のチケット10万を貯金からカードで購入 → 9月の引落には入らない
+  const sep = billForMethod({ timing: 'next', cur: { living: 50000, savings: 100000 }, prev: { living: 139796, savings: 0 } });
+  assert.equal(sep.savingsPortion, 0);
+  assert.equal(sep.fromLinked, 139796);
+  // 10月: 9月分の引落15万のうち10万は貯金から補填、三井住友から出るのは5万
+  const oct = billForMethod({ timing: 'next', prev: { living: 50000, savings: 100000 } });
+  assert.equal(oct.shown, 150000);          // 明細の請求額
+  assert.equal(oct.savingsPortion, 100000); // 貯金用の口座から
+  assert.equal(oct.fromLinked, 50000);      // 三井住友から
+});
+
+test('明細の金額を手入力しても、貯金から払った分は引落口座から除く', () => {
+  const r = billForMethod({ timing: 'next', manual: 150300, prev: { living: 50000, savings: 100000 } });
+  assert.equal(r.shown, 150300);
+  assert.equal(r.fromLinked, 50300);
+});
+
+test('当月払いで貯金から払った分は、その月に貯金用の口座から出る', () => {
+  const r = billForMethod({ timing: 'same', cur: { living: 95000, savings: 78000 }, pending: 22280 });
+  assert.equal(r.savingsPortion, 78000);
+  assert.equal(r.fromLinked, 95000 + 22280);
 });

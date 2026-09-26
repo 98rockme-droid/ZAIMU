@@ -22,7 +22,7 @@ import {
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
   EditFormAccount, EditFormAccountPicker, EditFormTransfer
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -651,10 +651,13 @@ function AppMain() {
     // 貯金用の口座が設定されていれば、充当元が貯金の支出は貯金用の口座から出たものとして扱うので、
     // 支払方法ごとの引落からは外す（二重に引かない）
     const routeSavings = !!config.savingsAccountId;
+    // 支払方法ごとに、予算から（living）と貯金から（savings）を分けて集計
     const byMethod = list => list.reduce((a, t) => {
       const m = t.paymentMethod || CASH;
-      if (routeSavings && getSource(t) === 'savings') return a;
-      if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
+      if (m === CASH) return a;
+      if (!a[m]) a[m] = { living: 0, savings: 0 };
+      const key = routeSavings && getSource(t) === 'savings' ? 'savings' : 'living';
+      a[m][key] += Number(t.amount) || 0;
       return a;
     }, {});
     const prevByMethod = byMethod(prevTxList);
@@ -674,8 +677,9 @@ function AppMain() {
       // 当月払い（口座振替など）: 今月使った分 ＋ 今月まだ記録されていない定期支出
       // 翌月払い（カード）: 先月使った分（今月の定期支出は来月の引落になるので含めない）
       const pending = timing === 'same' ? (pendingByMethod[m] || 0) : 0;
-      const auto = timing === 'same' ? (curByMethod[m] || 0) + pending : (prevByMethod[m] || 0);
-      return { m, timing, manual, auto, pending, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
+      const bill = billForMethod({ timing, manual, cur: curByMethod[m], prev: prevByMethod[m], pending });
+      // shown: 明細の請求額 / fromLinked: 引落口座から出る額 / savingsPortion: 貯金用の口座から補填する額
+      return { m, timing, manual, pending, ...bill, due: monthly.cardDueDates?.[m] };
     });
   }, [prevTxList, txList, methods, config.methodTimings, config.recurring, config.savingsAccountId, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month]);
   const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
@@ -724,10 +728,14 @@ function AppMain() {
     const salary = Number(monthly?.salary) || 0;
     const savTotal = getSavingsTotal(monthly);
     const atmTotal = (monthly?.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
-    const savingsSpent = txList.filter(t => getSource(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    // 貯金から払った支出は、お金が実際に出るタイミングで貯金用の口座から引く
+    //   カード（翌月払い）→ 引落の月 / 口座振替など（当月払い）→ その月（billRows の savingsPortion）
+    //   現金 → その月
+    const savingsSpent = billRows.reduce((s, r) => s + (r.savingsPortion || 0), 0)
+      + txList.filter(t => getSource(t) === 'savings' && (t.paymentMethod || CASH) === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const rows = accounts.map(a => {
       const start = Number(monthly.accountBalances?.[a.id]) || 0;
-      const bills = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.shown, 0);
+      const bills = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.fromLinked, 0);
       const forecast = forecastAccount({
         accountId: a.id, start, salary, savings: savTotal, bills, atm: atmTotal,
         salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,

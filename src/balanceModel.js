@@ -92,3 +92,17 @@ export function transferEffectOnLiving(transfers = [], livingIds) {
   }
   return effect;
 }
+
+// 支払方法1つ分の今月の引落を計算する。
+//   cur / prev: 今月・先月にその支払方法で使った額を { living: 予算から, savings: 貯金から } に分けたもの
+//   当月払い（口座振替など）は今月使った分、翌月払い（カード）は先月使った分が今月出ていく。
+//   貯金から払った分（savingsPortion）は、引落のときに貯金用の口座から補填する前提で、
+//   引落口座からは引かず（fromLinked）、貯金用の口座から引く。
+//   manual: 明細の金額を手入力した場合はそれを引落額とし、そこから貯金から払った分を除く
+export function billForMethod({ timing, manual = 0, cur = { living: 0, savings: 0 }, prev = { living: 0, savings: 0 }, pending = 0 }) {
+  const src = timing === 'same' ? cur : prev;
+  const savingsPortion = src.savings;
+  const auto = src.living + src.savings + (timing === 'same' ? pending : 0);
+  const shown = manual > 0 ? manual : auto;
+  return { auto, shown, savingsPortion, fromLinked: Math.max(0, shown - savingsPortion) };
+}
