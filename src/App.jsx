@@ -2028,25 +2028,100 @@ function AppMain() {
                   <AddRow label="テンプレートを追加" onClick={() => openEdit('template', { title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH }, -1)} />
                 </Card>
               )}
-              {settingTab === 'recurring' && (
-                <Card>
-                  {(config?.recurring || []).length === 0 && (
-                    <><EmptyState>サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</EmptyState><Separator /></>
-                  )}
-                  {(config?.recurring || []).map((r, i) => (
-                    <div key={r.id || i}>
-                      <SettingsRow onClick={() => openEdit('recurring', r, i)}
-                        left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.title}</span><span className="text-[11px] text-[#636366] truncate">{(r.freq || 'monthly') === 'yearly' ? `毎年${r.month}月${r.day}日` : `毎月${r.day}日`} · {r.category} · {r.method}</span></div>}
-                        right={`¥${Number(r.amount || 0).toLocaleString()}`} />
-                      <Separator />
+              {settingTab === 'recurring' && (() => {
+                // 並べ替えても編集・削除の対象がずれないよう、元の並び順（idx）を保持しておく
+                const all = (config?.recurring || []).map((r, idx) => ({ r, idx }));
+                const monthlyItems = all.filter(x => (x.r.freq || 'monthly') !== 'yearly')
+                  .sort((a, b) => (Number(a.r.day) || 0) - (Number(b.r.day) || 0) || String(a.r.title).localeCompare(String(b.r.title), 'ja'));
+                const yearlyItems = all.filter(x => x.r.freq === 'yearly')
+                  .sort((a, b) => (Number(a.r.month) || 0) - (Number(b.r.month) || 0) || (Number(a.r.day) || 0) - (Number(b.r.day) || 0));
+                const monthlyTotal = monthlyItems.reduce((s, x) => s + (Number(x.r.amount) || 0), 0);
+                const yearlyTotal = yearlyItems.reduce((s, x) => s + (Number(x.r.amount) || 0), 0);
+                const [vy, vm] = month.split('-').map(Number);
+                const lastDay = new Date(vy, vm, 0).getDate();
+                const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
+                const skipped = monthly.skippedRecurring || [];
+                const isPastMonth = month < getMonthString(new Date());
+
+                // 表示中の月での状況
+                const statusOf = r => {
+                  if (!isRecurringDueIn(r, month)) return { text: `次回 ${r.month}月${r.day}日`, cls: 'text-[#636366]' };
+                  if (skipped.includes(r.id)) return { text: `${vm}月はスキップ`, cls: 'text-[#636366]' };
+                  if (recordedIds.has(r.id)) return { text: '✓ 記録済み', cls: 'text-[#30D158]' };
+                  const d = Math.min(Number(r.day) || 1, lastDay);
+                  if (isPastMonth || (isCurrentMonth && d < today.d)) return { text: '未記録', cls: 'text-[#FF453A]' };
+                  return { text: `${vm}/${d} 予定`, cls: 'text-[#98989D]' };
+                };
+
+                const renderRow = ({ r, idx }, dayLabel) => {
+                  const st = statusOf(r);
+                  return (
+                    <button type="button" onClick={() => openEdit('recurring', r, idx)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[52px] active:bg-white/[0.04] transition-colors text-left">
+                      <span className="w-12 shrink-0 text-[13px] font-medium text-[#98989D] tabular-nums">{dayLabel}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] text-white truncate">{r.title}</p>
+                        <p className="text-[11px] text-[#636366] truncate">{r.category} · {r.method}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[14px] font-medium text-white tabular-nums whitespace-nowrap">¥{Number(r.amount || 0).toLocaleString()}</p>
+                        <p className={`text-[11px] whitespace-nowrap ${st.cls}`}>{st.text}</p>
+                      </div>
+                    </button>
+                  );
+                };
+
+                // 今日の区切り: 表示中が今月のときだけ、今日以前と明日以降の間に入れる
+                const splitAt = isCurrentMonth ? monthlyItems.findIndex(x => Math.min(Number(x.r.day) || 1, lastDay) > today.d) : -1;
+
+                return (
+                  <div className="space-y-5">
+                    <div>
+                      <Label trailing={monthlyItems.length ? `合計 ¥${monthlyTotal.toLocaleString()}` : ''}>毎月</Label>
+                      <Card>
+                        {!all.length && (
+                          <><EmptyState>サブスクや家賃など、毎月決まった支出を登録すると指定日に自動でログへ記録されます</EmptyState><Separator /></>
+                        )}
+                        {monthlyItems.map((x, i) => (
+                          <div key={x.r.id || x.idx}>
+                            {i === splitAt && i > 0 && (
+                              <div className="flex items-center gap-2 px-4 py-1.5">
+                                <div className="flex-1 h-px bg-[#0A84FF]/40" />
+                                <span className="text-[11px] font-medium text-[#0A84FF] tabular-nums">今日 {today.m}/{today.d}</span>
+                                <div className="flex-1 h-px bg-[#0A84FF]/40" />
+                              </div>
+                            )}
+                            {renderRow(x, `${x.r.day}日`)}
+                            <Separator />
+                          </div>
+                        ))}
+                        {(monthly.fixedCosts || []).length > 0 && (
+                          <><SettingsRow onClick={migrateFixed} left={<div className="flex items-center gap-3"><CopyCheck size={15} className="text-[#0A84FF] shrink-0" /><span className="text-[#0A84FF]">旧・固定費リストから一括移行</span></div>} right={`${(monthly.fixedCosts || []).length}件`} /><Separator /></>
+                        )}
+                        <AddRow label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1, freq: 'monthly', month: mn }, -1)} />
+                      </Card>
+                      {monthlyItems.length > 0 && (
+                        <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">{vm}月の状況を表示しています。記録済みの支出を削除すると、その月だけスキップになります</p>
+                      )}
                     </div>
-                  ))}
-                  {(monthly.fixedCosts || []).length > 0 && (
-                    <><SettingsRow onClick={migrateFixed} left={<div className="flex items-center gap-3"><CopyCheck size={15} className="text-[#0A84FF] shrink-0" /><span className="text-[#0A84FF]">旧・固定費リストから一括移行</span></div>} right={`${(monthly.fixedCosts || []).length}件`} /><Separator /></>
-                  )}
-                  <AddRow label="定期支出を追加" onClick={() => openEdit('recurring', { id: '', title: '', amount: '', category: catNames[0] || '食費', method: methods[0] || CASH, day: 1, freq: 'monthly', month: mn }, -1)} />
-                </Card>
-              )}
+
+                    {yearlyItems.length > 0 && (
+                      <div>
+                        <Label trailing={`月あたり ¥${Math.round(yearlyTotal / 12).toLocaleString()}`}>毎年</Label>
+                        <Card>
+                          {yearlyItems.map((x, i) => (
+                            <div key={x.r.id || x.idx}>
+                              {renderRow(x, `${x.r.month}/${x.r.day}`)}
+                              {i < yearlyItems.length - 1 && <Separator />}
+                            </div>
+                          ))}
+                        </Card>
+                        <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">年間合計 ¥{yearlyTotal.toLocaleString()}。記録される月だけ予算から差し引かれます</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {settingTab === 'payment' && (
                 <Card>
                   {methods.map((m, i) => (
