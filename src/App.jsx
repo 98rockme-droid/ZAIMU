@@ -11,7 +11,7 @@ import {
   ChevronLeft, ChevronRight, X, Tags, ArrowLeft, CopyCheck, Calendar,
   BarChart3, TrendingDown, TrendingUp, Search, CalendarDays, AlignJustify,
   Zap, Calculator, LogOut, Lock, User, FileText, Home, ChevronDown,
-  HelpCircle, Pencil, PiggyBank, Repeat, ArrowLeftRight, Check
+  HelpCircle, Pencil, PiggyBank, Repeat, Check
 } from 'lucide-react';
 import {
   ErrorBoundary, Card, Label, Row, Separator, NavButton, Toast, OfflineBanner,
@@ -127,12 +127,11 @@ const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 // 全期間検索の取得上限（新しい順に最大10,000件 = Firestoreの読み取り20回分）
 const SEARCH_PAGE_SIZE = 500;
 const SEARCH_MAX_PAGES = 20;
-// 履歴の絞り込み用のピル。見た目は小さく（高さ32px・13px）、タップ領域は44pxを確保する
-const FilterPill = ({ active, onClick, children, label }) => (
-  <button type="button" onClick={onClick} aria-label={label} className="h-11 flex items-center shrink-0">
-    <span className={`h-8 px-3 rounded-full flex items-center gap-1 text-[13px] font-medium whitespace-nowrap transition-colors ${active ? 'bg-[#0A84FF]/20 text-[#0A84FF]' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
-      {children}
-    </span>
+// 履歴の絞り込み用のボタン。見た目とタップ領域を同じ44pxにそろえる
+const FilterPill = ({ active, onClick, children, label, grow = true }) => (
+  <button type="button" onClick={onClick} aria-label={label}
+    className={`h-11 px-3 rounded-[14px] flex items-center justify-center gap-1 text-[13px] font-medium whitespace-nowrap transition-colors min-w-0 ${grow ? 'flex-1' : 'w-11 shrink-0'} ${active ? 'bg-[#0A84FF]/20 text-[#0A84FF]' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+    {children}
   </button>
 );
 
@@ -1225,9 +1224,12 @@ function AppMain() {
   const daysInViewMonth = (() => { const [y, m] = month.split('-').map(Number); return new Date(y, m, 0).getDate(); })();
   const idealPct = isCurrentMonth ? Math.min(100, (today.d / daysInViewMonth) * 100) : (month < curMonthStr ? 100 : 0);
   // 残高ベースの月はそちらの数字でペースを出す
-  const H = BM
-    ? { remain: BM.freeRemain, base: BM.pool, used: BM.spentBudget + BM.pendingFixed, freeBudget: BM.freeBudget, freeSpent: BM.freeSpent }
-    : { remain: S.freeRemain, base: S.varBudget, used: S.spCard + S.pendingFixed, freeBudget: S.freeBudget, freeSpent: S.freeSpent };
+  const H0 = BM
+    ? { remain: BM.freeRemain, base: BM.pool, freeBudget: BM.freeBudget }
+    : { remain: S.freeRemain, base: S.varBudget, freeBudget: S.freeBudget };
+  // 固定費以外に使った額は「自由に使える額 − あと使える」で求める。
+  // 固定費が予定より多く記録された分も使った扱いになり、バーの残りと「今月あと使える」が必ず一致する
+  const H = { ...H0, freeSpent: H0.freeBudget - H0.remain };
   const idealSpend = Math.round(H.freeBudget * idealPct / 100);
   const paceDiff = H.freeSpent - idealSpend;
   const showPaceMarker = isCurrentMonth && idealPct > 2 && idealPct < 98;
@@ -1299,15 +1301,6 @@ function AppMain() {
                           <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/50 rounded-full" style={{ left: `${idealPct}%` }} />
                         )}
                       </div>
-                      {showPaceMarker && (
-                        // 縦線＝今日までの目安の位置。端に近いときは文字がはみ出さないよう寄せる
-                        <div className="relative h-3.5 mt-1">
-                          <span className="absolute text-[11px] leading-none text-[#636366] whitespace-nowrap"
-                            style={{ left: `${idealPct}%`, transform: `translateX(${idealPct > 88 ? '-100%' : idealPct < 12 ? '0' : '-50%'})` }}>
-                            目安
-                          </span>
-                        </div>
-                      )}
                       <p className="mt-2.5 text-[11px] text-[#636366] tabular-nums">
                         {BM
                           ? <>予算 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
@@ -1319,20 +1312,12 @@ function AppMain() {
                         </p>
                       )}
                       {isCurrentMonth && H.freeBudget > 0 && (
-                        <div className="mt-3.5 pt-3 border-t border-white/[0.08]">
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-[13px] text-[#98989D] shrink-0">今日までに使った</span>
-                            <span className="text-[14px] font-medium text-white tabular-nums whitespace-nowrap">
-                              ¥{Math.max(0, H.freeSpent).toLocaleString()}
-                              <span className="text-[13px] font-normal text-[#636366]"> / 目安 ¥{idealSpend.toLocaleString()}</span>
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 mt-1">
-                            <span className="text-[11px] text-[#636366] truncate">固定費を除く · {today.d}日時点</span>
-                            <span className={`text-[13px] font-medium tabular-nums shrink-0 whitespace-nowrap ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>
-                              {paceDiff <= 0 ? `¥${Math.abs(paceDiff).toLocaleString()} 余裕` : `¥${paceDiff.toLocaleString()} オーバー`}
-                            </span>
-                          </div>
+                        <div className="flex items-baseline justify-between gap-3 mt-3.5 pt-3 border-t border-white/[0.08]">
+                          <span className="text-[13px] text-[#98989D] shrink-0">今日までに使った</span>
+                          <span className="tabular-nums whitespace-nowrap">
+                            <span className={`text-[14px] font-medium ${paceDiff <= 0 ? 'text-[#30D158]' : 'text-[#FF453A]'}`}>¥{Math.max(0, H.freeSpent).toLocaleString()}</span>
+                            <span className="text-[13px] text-[#636366]"> / 目安 ¥{idealSpend.toLocaleString()}</span>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1480,26 +1465,29 @@ function AppMain() {
                   const isActive = filter.type !== 'ALL' || filter.cat !== 'ALL' || filter.method !== 'ALL' || filter.source !== 'ALL';
                   const sourceLabel = filter.source === 'UNSET' ? '未設定' : SOURCE_LABELS[filter.source];
                   return (
-                    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-4 px-4">
-                      <div className="h-11 flex items-center shrink-0">
-                        <div className="h-8 p-0.5 bg-[#2C2C2E] rounded-full flex">
-                          {[['ALL', 'すべて'], ['expense', '支出'], ['move', '振替']].map(([v, l]) => (
-                            <button key={v} type="button" onClick={() => setFilter(p => ({ ...p, type: v }))}
-                              className={`h-7 px-3 rounded-full text-[13px] font-medium transition-colors ${filter.type === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
-                              {l}
-                            </button>
-                          ))}
-                        </div>
+                    // 横スクロールにすると月のスワイプと取り合うので、2段に分ける
+                    <div className="space-y-2">
+                      <div className="h-11 p-1 bg-[#2C2C2E] rounded-[14px] flex">
+                        {[['ALL', 'すべて'], ['expense', '支出'], ['move', '振替']].map(([v, l]) => (
+                          <button key={v} type="button" onClick={() => setFilter(p => ({ ...p, type: v }))}
+                            className={`flex-1 rounded-[10px] text-[13px] font-medium transition-colors ${filter.type === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
+                            {l}
+                          </button>
+                        ))}
                       </div>
-                      {filter.type !== 'move' && (
-                        <>
-                          <FilterPill active={filter.cat !== 'ALL'} onClick={() => setFilterSheet('cat')}>{filter.cat !== 'ALL' ? filter.cat : 'カテゴリ'}<ChevronDown size={12} /></FilterPill>
-                          <FilterPill active={filter.method !== 'ALL'} onClick={() => setFilterSheet('method')}>{filter.method !== 'ALL' ? filter.method : '支払方法'}<ChevronDown size={12} /></FilterPill>
-                          <FilterPill active={filter.source !== 'ALL'} onClick={() => setFilterSheet('source')}>{filter.source !== 'ALL' ? sourceLabel : '充当元'}<ChevronDown size={12} /></FilterPill>
-                        </>
-                      )}
-                      {isActive && (
-                        <FilterPill onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' }); }} label="絞り込みをクリア"><X size={13} /></FilterPill>
+                      {(filter.type !== 'move' || isActive) && (
+                        <div className="flex gap-2">
+                          {filter.type !== 'move' && (
+                            <>
+                              <FilterPill active={filter.cat !== 'ALL'} onClick={() => setFilterSheet('cat')}><span className="truncate">{filter.cat !== 'ALL' ? filter.cat : 'カテゴリ'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                              <FilterPill active={filter.method !== 'ALL'} onClick={() => setFilterSheet('method')}><span className="truncate">{filter.method !== 'ALL' ? filter.method : '支払方法'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                              <FilterPill active={filter.source !== 'ALL'} onClick={() => setFilterSheet('source')}><span className="truncate">{filter.source !== 'ALL' ? sourceLabel : '充当元'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                            </>
+                          )}
+                          {isActive && (
+                            <FilterPill grow={false} onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' }); }} label="絞り込みをクリア"><X size={14} /></FilterPill>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -1534,10 +1522,12 @@ function AppMain() {
                                     <div key={`mv_${t.id}`}>
                                       <button type="button" onClick={() => openMove(t)}
                                         className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[52px] active:bg-white/[0.04] transition-colors text-left">
-                                        <ArrowLeftRight size={15} className="text-[#636366] shrink-0" />
                                         <div className="flex-1 min-w-0">
-                                          <p className="text-[14px] text-[#EBEBF5]/80 truncate leading-snug">{placeName(t.from)} → {placeName(t.to)}</p>
-                                          <p className="text-[11px] text-[#636366] truncate mt-0.5">{t.to === 'wallet' && t.from !== 'wallet' ? 'ATM' : '振替'}{t.memo ? ` · ${t.memo}` : ''}</p>
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="shrink-0 px-1.5 rounded-[5px] border border-white/[0.15] text-[11px] leading-[18px] text-[#98989D]">{t.to === 'wallet' && t.from !== 'wallet' ? 'ATM' : '振替'}</span>
+                                            <p className="text-[14px] text-[#EBEBF5]/80 truncate leading-snug">{placeName(t.from)} → {placeName(t.to)}</p>
+                                          </div>
+                                          {t.memo && <p className="text-[11px] text-[#636366] truncate mt-0.5">{t.memo}</p>}
                                         </div>
                                         <span className="text-[16px] text-[#98989D] tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
                                       </button>
