@@ -226,8 +226,8 @@ function AppMain() {
   // 入力モーダルのモード（支出 / 振替）と、振替の入力値
   const [txMode, setTxMode] = useState('expense');
   const [editingMove, setEditingMove] = useState(null);
-  const [detailsOpen, setDetailsOpen] = useState(false); // 日付・支払方法・充当元の開閉
   const [mv, setMv] = useState({ from: '', to: 'wallet', amount: '', date: '', memo: '' });
+  const [placePicker, setPlacePicker] = useState(null); // 'from' | 'to'
   const touchRef = useRef(null);
 
   const [editingTx, setEditingTx] = useState(null);
@@ -310,7 +310,7 @@ function AppMain() {
       { q: '定期支出を今月だけ止めたい', a: '自動記録されたログを削除すると、その定期支出は今月分だけスキップされます。来月からは通常どおり自動記録が再開されます。' },
       { q: '来月の設定はどうすればいいですか？', a: '新しい月にアプリを開くと、直近の月の手取り給与・先取り・スタート現金などが自動で引き継がれます。金額が変わる項目だけ資金計画で編集してください。手動で引き継ぎたいときは設定タブの「先月の設定をコピー」も使えます。' },
       { q: '今月の引落予定はどう計算される？', a: '支払方法ごとに、前月にその方法で使った金額を今月の引落予定として自動で表示します。カード明細と金額が違うときは、資金計画の「今月の引落予定」から手入力で上書きできます（空欄に戻すと自動に戻ります）。' },
-      { q: '日付や支払方法を変えたいときは？', a: '入力画面の「今日 · 三井住友 · 予算から」のような行をタップすると、日付・支払方法・充当元を変更できます。' },
+      { q: '日付や充当元を変えたいときは？', a: '入力画面の下にある日付のボタンをタップすると日付を変更できます。その横の「予算／貯金」で充当元を切り替えられ、貯金を選ぶと積立先も選べます。' },
       { q: '入力画面に出る候補は？', a: '内容が空のときはテンプレートとよく使う内容、入力を始めると一致する過去の内容が表示されます。タップするとカテゴリや支払方法などもまとめて入力されます。' },
       { q: '支出を編集・複製したい', a: '履歴で支出をタップすると編集画面が開きます。下のボタンから削除や、同じ内容での新規入力（複製）ができます。' },
       { q: '支出を間違えて削除したら？', a: '削除した直後に表示される「元に戻す」をタップすると、そのまま復元できます（数秒間表示されます）。' },
@@ -850,7 +850,6 @@ function AppMain() {
     setTxFormKey(k => k + 1);
     setEditingMove(null);
     setTxMode('expense');
-    setDetailsOpen(false);
     setIsTxOpen(true);
     showToast('同じ内容で新しい支出を入力できます');
   };
@@ -866,12 +865,11 @@ function AppMain() {
     setInSavingsBucket(t.savingsBucket || '');
     setEditingMove(null);
     setTxMode('expense');
-    setDetailsOpen(getSource(t) === null); // 旧データで充当元が未設定なら最初から開いておく
     setTxFormKey(k => k + 1);
     setIsTxOpen(true);
   };
 
-  const openNew = () => { setEditingTx(null); setEditingMove(null); setTxMode('expense'); setDetailsOpen(false); resetInputs(); setIsTxOpen(true); };
+  const openNew = () => { setEditingTx(null); setEditingMove(null); setTxMode('expense'); resetInputs(); setIsTxOpen(true); };
   // 振替の初期値（ATMでおろすのが一番多いので「口座→財布」）
   const defaultMove = () => ({ from: config.cashAccountId || config.salaryAccountId || (config.accounts || [])[0]?.id || '', to: 'wallet', amount: '', date: getTodayString(), memo: '' });
   const switchTxMode = mode => { setTxMode(mode); if (mode === 'move' && !editingMove) setMv(defaultMove()); };
@@ -2383,6 +2381,25 @@ function AppMain() {
       )}
 
       {/* 支出入力モーダル */}
+      {placePicker && (
+        <Modal onClose={() => setPlacePicker(null)} zIndex="z-[70]">
+          <ModalHeader title={placePicker === 'from' ? '振替元' : '振替先'} onClose={() => setPlacePicker(null)} />
+          <div className="flex-1 overflow-y-auto px-4 pt-3 pb-8">
+            <Card>
+              {[{ id: 'wallet', name: '財布' }, ...(config.accounts || [])].map((a, i, arr) => (
+                <div key={a.id}>
+                  <button type="button" onClick={() => { setMv(p => ({ ...p, [placePicker]: a.id })); setPlacePicker(null); }}
+                    className="w-full flex items-center justify-between px-4 min-h-[44px] text-left active:bg-white/[0.04] transition-colors">
+                    <span className={`text-[14px] ${mv[placePicker] === a.id ? 'text-[#0A84FF] font-medium' : 'text-white'}`}>{a.name}</span>
+                    {mv[placePicker] === a.id && <Check size={15} className="text-[#0A84FF] shrink-0" />}
+                  </button>
+                  {i < arr.length - 1 && <Separator />}
+                </div>
+              ))}
+            </Card>
+          </div>
+        </Modal>
+      )}
       {filterSheet && (() => {
         const conf = {
           cat: { title: 'カテゴリ', all: 'すべてのカテゴリ', opts: catNames.map(c => ({ value: c, label: c })) },
@@ -2428,28 +2445,30 @@ function AppMain() {
             )}
             {txMode === 'move' ? (
               <form id="mv-form" onSubmit={submitMove} className="space-y-3.5 w-full min-w-0">
-                {[['from', '振替元（お金が出る）'], ['to', '振替先（お金が入る）']].map(([key, label]) => (
-                  <div key={key}>
-                    <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">{label}</label>
-                    <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                      {[{ id: 'wallet', name: '財布' }, ...(config.accounts || [])].map(a => (
-                        <button key={a.id} type="button" onClick={() => setMv(p => ({ ...p, [key]: a.id }))}
-                          className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${mv[key] === a.id ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                          {a.name}
+                <div className="flex items-end gap-1.5">
+                  {[['from', '振替元'], ['to', '振替先']].map(([key, label], idx) => (
+                    <React.Fragment key={key}>
+                      {idx === 1 && <ChevronRight size={16} className="text-[#636366] shrink-0 mb-3.5" aria-hidden="true" />}
+                      <div className="flex-1 min-w-0">
+                        <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">{label}</label>
+                        <button type="button" onClick={() => setPlacePicker(key)}
+                          className="w-full h-11 px-3.5 flex items-center justify-between gap-2 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-left">
+                          <span className={`text-[14px] truncate ${mv[key] ? 'text-white' : 'text-[#636366]'}`}>{mv[key] ? placeName(mv[key]) : '選択'}</span>
+                          <ChevronDown size={13} className="text-[#636366] shrink-0" />
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      </div>
+                    </React.Fragment>
+                  ))}
+                </div>
                 <div>
                   <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">金額</label>
                   <div className="flex gap-1.5 items-center w-full min-w-0">
-                    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-14 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+                    <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
                       <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
                       <input key={`mv-amount-${txFormKey}`} type="text" inputMode="decimal"
                         value={mv.amount ? Number(mv.amount).toLocaleString() : ''}
                         onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setMv(p => ({ ...p, amount: v })); }}
-                        className="flex-1 min-w-0 w-full bg-transparent text-[22px] font-semibold text-white outline-none tabular-nums" />
+                        className="flex-1 min-w-0 w-full bg-transparent text-[20px] font-semibold text-white outline-none tabular-nums" />
                     </div>
                     <button type="button" aria-label="計算機" onClick={() => openCalc(mv.amount, val => setMv(p => ({ ...p, amount: String(val) })))}
                       className="w-11 h-11 flex items-center justify-center text-[#98989D] active:text-white transition-colors shrink-0">
@@ -2477,14 +2496,14 @@ function AppMain() {
             <form id="tx-form" onSubmit={submitTx} className="space-y-4 w-full min-w-0">
               {/* 金額（主役） */}
               <div className="flex gap-1.5 items-center w-full min-w-0">
-                <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-16 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
-                  <span className="text-[20px] text-[#98989D] shrink-0">¥</span>
+                <div className="flex-1 min-w-0 flex items-center bg-[#2C2C2E] rounded-[14px] h-12 px-4 gap-2 border border-white/[0.06] focus-within:border-white/20 transition-colors">
+                  <span className="text-[16px] text-[#98989D] shrink-0">¥</span>
                   <input
                     key={`amount-${txFormKey}`}
                     type="text" inputMode="decimal" placeholder="0" aria-label="金額"
                     value={inAmount ? Number(inAmount).toLocaleString() : ''}
                     onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) setInAmount(v); }}
-                    className="flex-1 min-w-0 w-full bg-transparent text-[28px] font-semibold text-white outline-none tabular-nums placeholder-[#48484A]"
+                    className="flex-1 min-w-0 w-full bg-transparent text-[20px] font-semibold text-white outline-none tabular-nums placeholder-[#48484A]"
                     required
                   />
                 </div>
@@ -2545,6 +2564,8 @@ function AppMain() {
               </div>
 
               {/* カテゴリ */}
+              <div>
+              <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">カテゴリ</label>
               <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
                 {catNames.map(c => (
                   <button key={c} type="button" onClick={() => setInCat(c)}
@@ -2553,65 +2574,52 @@ function AppMain() {
                   </button>
                 ))}
               </div>
+              </div>
 
-              {/* 日付・支払方法・充当元（ふだんは変えないので1行にまとめる） */}
-              <div className="space-y-3">
-                <button type="button" onClick={() => setDetailsOpen(v => !v)} aria-expanded={detailsOpen}
-                  className="w-full h-11 px-4 flex items-center justify-between gap-3 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] text-left">
-                  <span className="text-[14px] text-white truncate">
-                    {inDate === getTodayString() ? '今日' : (inDate ? `${Number(inDate.slice(5, 7))}/${Number(inDate.slice(8, 10))}` : '日付未設定')}
-                    <span className="text-[#636366]"> · </span>{inMethod}
-                    <span className="text-[#636366]"> · </span>
-                    {inSource === 'budget' ? '予算から'
-                      : inSource === 'savings' ? `貯金${inSavingsBucket ? `（${inSavingsBucket}）` : ''}から`
-                      : <span className="text-[#FF453A]">充当元が未設定</span>}
-                  </span>
-                  <ChevronDown size={14} className={`text-[#636366] shrink-0 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {detailsOpen && (
-                  <>
-                    <div>
-                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支払方法</label>
-                      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
-                        {methods.map(m => (
-                          <button key={m} type="button" onClick={() => setInMethod(m)}
-                            className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                            {m}
-                          </button>
-                        ))}
-                      </div>
+              {/* 支払方法（よく切り替えるので常に表示） */}
+              <div>
+                <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">支払方法</label>
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
+                  {methods.map(m => (
+                    <button key={m} type="button" onClick={() => setInMethod(m)}
+                      className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${inMethod === m ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 日付と充当元を1行に */}
+              <div>
+                <div className="flex gap-2">
+                  <div className="relative flex-1 h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
+                    <div className="absolute inset-0 flex items-center gap-2 px-4 pointer-events-none">
+                      <Calendar size={15} className="text-[#98989D] shrink-0" />
+                      <span className="text-[14px] text-white truncate">
+                        {inDate === getTodayString() ? '今日' : (inDate ? `${Number(inDate.slice(5, 7))}月${Number(inDate.slice(8, 10))}日` : '日付を選択')}
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">日付</label>
-                      <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden">
-                        <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
-                          <span className="text-[16px] text-white">{inDate ? inDate.split('-').join('/') : '日付を選択'}</span>
-                        </div>
-                        <input type="date" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium text-[#98989D] ml-1 block mb-1">充当元</label>
-                      <div className="flex gap-2">
-                        {SOURCES.map(({ value, label }) => (
-                          <button key={value} type="button" onClick={() => setInSource(value)}
-                            className={`flex-1 h-11 rounded-[14px] text-[13px] font-medium transition-colors ${inSource === value ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      {inSource === 'savings' && bucketOptions.length > 0 && (
-                        <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5 mt-2">
-                          {['', ...bucketOptions].map(name => (
-                            <button key={name || '__none'} type="button" onClick={() => setInSavingsBucket(name)}
-                              className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
-                              {name || '指定なし'}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
+                    <input type="date" aria-label="日付" value={inDate} onChange={e => setInDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" required />
+                  </div>
+                  <div className={`flex-1 h-11 p-1 rounded-[14px] flex ${inSource === null ? 'bg-[#FF453A]/15' : 'bg-[#2C2C2E]'}`} role="group" aria-label="充当元">
+                    {[['budget', '予算'], ['savings', '貯金']].map(([v, l]) => (
+                      <button key={v} type="button" onClick={() => setInSource(v)}
+                        className={`flex-1 rounded-[10px] text-[13px] font-medium transition-colors ${inSource === v ? (v === 'savings' ? 'bg-[#4A7BA6] text-white' : 'bg-[#3A3A3C] text-white') : 'text-[#98989D]'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {inSource === null && <p className="mt-1.5 text-right text-[11px] text-[#FF453A]">充当元を選んでください</p>}
+                {inSource === 'savings' && bucketOptions.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5 mt-2">
+                    {['', ...bucketOptions].map(name => (
+                      <button key={name || '__none'} type="button" onClick={() => setInSavingsBucket(name)}
+                        className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${inSavingsBucket === name ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                        {name || '指定なし'}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </form>
