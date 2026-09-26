@@ -225,7 +225,6 @@ function AppMain() {
   const [faqQ, setFaqQ] = useState('');
   const [budgetExpanded, setBudgetExpanded] = useState(false);
   const [cashExpanded, setCashExpanded] = useState(false);
-  const [accountsExpanded, setAccountsExpanded] = useState(false);
   const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
   const [allTx, setAllTx] = useState(null); // 全期間検索用
   const [allTxLoading, setAllTxLoading] = useState(false);
@@ -265,7 +264,7 @@ function AppMain() {
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
       { q: '手取り給与', a: `家計のベース収入です。${mn}月の今月の予算・${nextMn}月の着地予想の起点になります。` },
-      { q: '月初のスタート現金', a: '毎月1日時点の現金実数です。現金残高の計算元になり、今月の予算（カード）からも差し引かれます。月の途中でATMからおろした分は、ホームの現金残高をタップして記録できます。' },
+      { q: '月初のスタート現金', a: '毎月1日時点で財布にある現金です。ホームの「資産」の財布の計算元になります。月の途中でATMからおろした分は、ホームの資産の「財布」をタップして記録できます。' },
       { q: '先取り設定', a: '毎月最初に避けておくお金です。先取り後の残り・今月の予算の計算に使われます。' },
       { q: '定期支出', a: '家賃やサブスクなど毎月決まった支出です。指定日に自動でログに記録され、未記録の分は「固定費予定」として実質あと使える額から差し引かれます。' },
       { q: 'カテゴリ予算', a: '使いすぎ防止枠です。分析タブの比較に使われます。' }
@@ -275,19 +274,20 @@ function AppMain() {
       { q: '先取り後の残り', a: '手取りから先取りを引いた金額です。', formula: '手取り給与 − 先取り合計' },
       { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金と、ATM記録で明示的にカード予算から現金へ回した額を引いた上限です。単に銀行から現金をおろすだけならカード予算は減りません。', formula: '先取り後の残り − 月初のスタート現金 − カード予算から現金へ回した額' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
-      { q: '現金残高', a: '手元にあるはずの現金です。タップすると内訳の確認と、ATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: '財布', a: '手元にあるはずの現金です。ホームの「資産」にある財布をタップすると、内訳の確認とATMでおろした現金の記録ができます。', formula: '月初のスタート現金 + ATMでおろした現金 − 現金支出' },
+      { q: '「今月の予算」と「資産」の違いは？', a: '今月の予算は「今月あといくら使っていいか」という計画の数字です。資産は「お金が今どこにいくらあるか」という実物の数字で、財布と各口座の月末の見込みを表示します。今月カードで使った分は来月引き落とされるため、予算からはすでに引かれていても、口座にはまだ残っています。そのため2つの数字は一致しません。' },
       { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与が月の後半まで分からないときは先月の額で仮計算し、振り込まれたら資金計画で上書きできます。今月引き落とされる先月のカード分は、先月の使った分として計算済みなので差し引きません。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月使った分 − 固定費予定' },
       { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
-      { q: 'ATMで現金をおろしたら？', a: 'ホームの現金残高をタップして記録します。銀行から財布への移動だけならカード予算は変わりません。今月のカード予算を現金に回したいときだけ、入力時に「カード予算から現金へ回す」を選んでください。以前のATM記録は従来の計算を保ちます。' },
+      { q: 'ATMで現金をおろしたら？', a: 'ホームの資産の「財布」をタップして記録します。銀行から財布への移動だけならカード予算は変わりません。今月のカード予算を現金に回したいときだけ、入力時に「カード予算から現金へ回す」を選んでください。以前のATM記録は従来の計算を保ちます。' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る予算のシミュレーションです。銀行から現金をおろしただけでは増えません。`, formula: '実質あと使える（カード） + 予算として確保した現金の残り' },
       { q: '今日までの目安とは？', a: '自由に使える枠（予算から定期支出の総額を除いた分）を月の日数で均等に使った場合、今日までに使っていてよい金額です。進捗バーの小さな縦線はこの位置を示します。', formula: '（今月の予算 − 定期支出の総額） × 経過日数 ÷ 月の日数' }
     ]},
     { category: '支出の記録', items: [
       { q: '「支出の種類」とは？', a: '通常か特別費かの分類です。冠婚葬祭や家電の買い替えなど臨時の支出を特別費にしておくと、分析タブで普段の支出と分けて確認できます。どちらも充当元が今月の予算なら、今月の残額から引かれます。' },
       { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の残額から引かれ、「貯金」を選ぶと今月の予算には計上されません。貯金の実残高を自動で更新する記録ではありません。' },
-      { q: '現金で払った場合はどうなる？', a: '充当元が今月の予算で支払方法が現金のときは、現金残高から引かれます。今月の予算は月初のスタート現金を先に差し引いてあるので、予算の残額から二重に引くことはありません。' },
+      { q: '現金で払った場合はどうなる？', a: '口座の月初残高を入れた月は、充当元が今月の予算なら、カードと同じく今月の予算から引かれ、同時に財布の現金も減ります（月初残高が未入力の月は、予算から月初のスタート現金を先に差し引く従来の計算です）。予算は「計画」、財布は「実物」の数字なので、両方で減っても二重に数えているわけではありません。' },
       { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
       { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
     ]},
@@ -1151,7 +1151,7 @@ function AppMain() {
               )}
               <div className="px-4 pt-4 space-y-5">
                 <div>
-                  <Label>今月</Label>
+                  <Label>今月の予算</Label>
                   <Card>
                     {/* メイン数字 + 進捗バー */}
                     <div className="px-5 pt-5 pb-4">
@@ -1170,7 +1170,7 @@ function AppMain() {
                       </div>
                       <p className="mt-2.5 text-[11px] text-[#636366] tabular-nums">
                         {BM
-                          ? <>使えるお金 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
+                          ? <>予算 ¥{BM.pool.toLocaleString()} − 使った分 ¥{BM.spentBudget.toLocaleString()} − 固定費予定 ¥{BM.pendingFixed.toLocaleString()}</>
                           : <>予算 ¥{S.varBudget.toLocaleString()} − 使用 ¥{S.spCard.toLocaleString()} − 固定費予定 ¥{S.pendingFixed.toLocaleString()}</>}
                       </p>
                       {BM?.salaryProvisional && (
@@ -1191,9 +1191,9 @@ function AppMain() {
                     <Separator />
 
                     {BM ? (
-                      /* 残高ベース: 使えるお金の内訳（折りたたみ） */
+                      /* 残高ベース: 今月の予算の内訳（折りたたみ） */
                       <ExpandableRow
-                        label="使えるお金"
+                        label="今月の予算"
                         value={`¥${BM.pool.toLocaleString()}`}
                         accent
                         expanded={budgetExpanded}
@@ -1204,7 +1204,7 @@ function AppMain() {
                         <SubRow label={`給与${BM.salaryProvisional ? '（仮）' : ''}`} value={`＋¥${BM.salary.toLocaleString()}`} />
                         {BM.cashFromSavings > 0 && <SubRow label="貯金口座からおろした現金" value={`＋¥${BM.cashFromSavings.toLocaleString()}`} />}
                         <SubRow label="先取り（貯金へ）" value={`−¥${BM.savings.toLocaleString()}`} />
-                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">今月引き落とされる先月のカード分は、先月の「使った分」として計算済みなので、ここでは引きません。口座からの引落は「現金＋口座の合計」で確認できます</p>
+                        <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">今月引き落とされる先月のカード分は、先月の「使った分」として計算済みなので、ここでは引きません。口座からの引落は下の「資産」で確認できます</p>
                       </ExpandableRow>
                     ) : (
                       <>
@@ -1227,6 +1227,8 @@ function AppMain() {
                           <SubRow label="月初のスタート現金" value={`−¥${S.cashBudget.toLocaleString()}`} />
                           {S.cashBudgetShiftTotal > 0 && <SubRow label="カード予算から現金へ" value={`−¥${S.cashBudgetShiftTotal.toLocaleString()}`} />}
                         </ExpandableRow>
+                        <Separator />
+                        <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
                         {balanceMode && !balanceMode.active && isCurrentMonth && (
                           <>
                             <Separator />
@@ -1243,10 +1245,17 @@ function AppMain() {
                 </div>
 
                 <div>
-                  <Label>残高・見通し</Label>
+                  <Label trailing={accountStats.rows.length ? '月末の見込み' : ''}>資産</Label>
                   <Card>
+                    {accountStats.rows.length > 0 && (
+                      <>
+                        <Row label="合計" value={`¥${(S.cashRemain + accountStats.total).toLocaleString()}`} accent />
+                        <Separator />
+                      </>
+                    )}
+                    {/* 財布（ATMの記録もここから） */}
                     <ExpandableRow
-                      label="現金残高"
+                      label="財布"
                       value={`¥${S.cashRemain.toLocaleString()}`}
                       danger={S.cashRemain < 0}
                       expanded={cashExpanded}
@@ -1256,7 +1265,7 @@ function AppMain() {
                       {(monthly.cashTopups || []).map((c, i) => (
                         <button key={c.id || i} type="button" onClick={() => openEdit('cashTopup', { value: c.amount, shiftCardBudget: c.shiftCardBudget !== false }, i)}
                           className="w-full flex items-center justify-between pl-3 gap-3 min-h-[32px] text-left active:opacity-60">
-                          <span className="text-[13px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした{c.shiftCardBudget !== false ? ' · 予算移動あり' : ''}</span>
+                          <span className="text-[13px] text-[#636366] truncate">{formatDateShort(`${c.date}T12:00:00Z`)} ATMでおろした{!BM && c.shiftCardBudget !== false ? ' · 予算移動あり' : ''}</span>
                           <span className="text-[13px] text-[#7C7C80] tabular-nums shrink-0">+¥{Number(c.amount || 0).toLocaleString()}</span>
                         </button>
                       ))}
@@ -1267,37 +1276,36 @@ function AppMain() {
                         <span className="text-[13px] text-[#0A84FF]">ATMで現金をおろした</span>
                       </button>
                     </ExpandableRow>
-                    {!BM && (
+                    {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
+                    {accountStats.rows.map(a => (
+                      <div key={a.id}>
+                        <Separator />
+                        <Row
+                          label={`${a.name}${a.id === config.savingsAccountId ? '（貯金）' : ''}`}
+                          value={`¥${a.projected.toLocaleString()}`}
+                          danger={a.projected < 0} />
+                      </div>
+                    ))}
+                    {(() => {
+                      // 生活用の口座が月末にマイナスになりそうなときだけ警告する
+                      const short = accountStats.rows.filter(a => a.id !== config.savingsAccountId && a.projected < 0);
+                      if (!short.length) return null;
+                      return (
+                        <>
+                          <Separator />
+                          <p className="px-4 py-3 text-[13px] text-[#FF453A] leading-relaxed">
+                            {short.map(a => a.name).join('・')}が月末に足りなくなりそうです。引落の前に残高を確認してください
+                          </p>
+                        </>
+                      );
+                    })()}
+                    {accountStats.rows.length === 0 && (
                       <>
                         <Separator />
-                        <Row label={`${nextMn}月の着地予想`} value={`¥${S.projCash.toLocaleString()}`} />
-                      </>
-                    )}
-                    {accountStats.rows.length > 0 && (
-                      <>
-                        <Separator />
-                        <ExpandableRow
-                          label="現金＋口座の合計（参考見込み）"
-                          value={`¥${(S.cashRemain + accountStats.total).toLocaleString()}`}
-                          expanded={accountsExpanded}
-                          onToggle={() => setAccountsExpanded(v => !v)}
-                        >
-                          <SubRow label="現金残高" value={`¥${S.cashRemain.toLocaleString()}`} danger={S.cashRemain < 0} />
-                          {accountStats.rows.map(a => (
-                            <div key={a.id}>
-                              <SubRow label={a.name} value={`¥${a.projected.toLocaleString()}`} danger={a.projected < 0} />
-                              <p className="pl-3 pb-1 text-[11px] text-[#636366] tabular-nums leading-relaxed">
-                                月初 ¥{a.start.toLocaleString()}
-                                {a.inSalary > 0 && ` ＋給与 ¥${a.inSalary.toLocaleString()}`}
-                                {a.inSavings > 0 && ` ＋先取り ¥${a.inSavings.toLocaleString()}`}
-                                {a.bills > 0 && ` −引落 ¥${a.bills.toLocaleString()}`}
-                                {a.outSavings > 0 && ` −先取り ¥${a.outSavings.toLocaleString()}`}
-                                {a.outAtm > 0 && ` −ATM ¥${a.outAtm.toLocaleString()}`}
-                              </p>
-                            </div>
-                          ))}
-                          <p className="pl-3 pt-1 text-[11px] text-[#636366] leading-relaxed">口座は登録済みの給与・引落などからの試算です。未記録の入出金は含まず、銀行の実残高ではありません。</p>
-                        </ExpandableRow>
+                        <button type="button" onClick={() => { setActiveTab('settings'); setSettingTab('accounts'); }}
+                          className="w-full px-4 py-3 min-h-[44px] text-left active:bg-white/[0.04] transition-colors">
+                          <p className="text-[13px] text-[#0A84FF]">口座を登録すると、銀行を含めた資産の合計を表示します</p>
+                        </button>
                       </>
                     )}
                   </Card>
@@ -1645,7 +1653,7 @@ function AppMain() {
                 <Card>
                   {BM ? (
                     <>
-                      <Row label="使えるお金（口座＋財布）" value={`¥${BM.pool.toLocaleString()}`} />
+                      <Row label="今月の予算（口座＋財布）" value={`¥${BM.pool.toLocaleString()}`} />
                       <Separator />
                       <Row label="使った分（カード・現金など）" value={`¥${BM.spentBudget.toLocaleString()}`} />
                       <Separator />
