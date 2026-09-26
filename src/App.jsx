@@ -286,7 +286,7 @@ function AppMain() {
     ]},
     { category: '支出の記録', items: [
       { q: '「支出の種類」とは？', a: '通常か特別費かの分類です。冠婚葬祭や家電の買い替えなど臨時の支出を特別費にしておくと、分析タブで普段の支出と分けて確認できます。どちらも充当元が今月の予算なら、今月の残額から引かれます。' },
-      { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の残額から引かれ、「貯金」を選ぶと今月の予算には計上されません。貯金の実残高を自動で更新する記録ではありません。' },
+      { q: '「充当元」とは？', a: 'その支出をどこから出したかです。「今月の予算」を選ぶと今月の予算から引かれます。「貯金」を選ぶと今月の予算には影響せず、資産の見込みでは支払方法に関係なく貯金用の口座から出たものとして計算します（カードで払って、あとで貯金から補填する場合も同じ扱いです）。' },
       { q: '現金で払った場合はどうなる？', a: '口座の月初残高を入れた月は、充当元が今月の予算なら、カードと同じく今月の予算から引かれ、同時に財布の現金も減ります（月初残高が未入力の月は、予算から月初のスタート現金を先に差し引く従来の計算です）。予算は「計画」、財布は「実物」の数字なので、両方で減っても二重に数えているわけではありません。' },
       { q: 'カードの支払予定と予算残額の関係', a: '予算の残額は「今月の予算から充当したカード払い」を引いた金額です。一方カードの引落予定は、充当元を問わずそのカードで使った全額が対象になります。別の目的の数字なので一致しないことがあります。' },
       { q: '「未設定」と出る支出は何？', a: '旧バージョンで記録した支出です。当時は充当元を記録していなかったため、予算・貯金のどちらの残額からも引かず、過去の数字をそのまま保っています。分析タブの「充当元が未設定の支出」からまとめて確認し、1件ずつ開いて種類と充当元を選べば分類できます。' }
@@ -646,8 +646,12 @@ function AppMain() {
 
   // 今月の引落予定（支払方法ごと）: 前月の利用額から自動、手入力があればそちら
   const billRows = useMemo(() => {
+    // 貯金用の口座が設定されていれば、充当元が貯金の支出は貯金用の口座から出たものとして扱うので、
+    // 支払方法ごとの引落からは外す（二重に引かない）
+    const routeSavings = !!config.savingsAccountId;
     const byMethod = list => list.reduce((a, t) => {
       const m = t.paymentMethod || CASH;
+      if (routeSavings && getSource(t) === 'savings') return a;
       if (m !== CASH) a[m] = (a[m] || 0) + (Number(t.amount) || 0);
       return a;
     }, {});
@@ -671,7 +675,7 @@ function AppMain() {
       const auto = timing === 'same' ? (curByMethod[m] || 0) + pending : (prevByMethod[m] || 0);
       return { m, timing, manual, auto, pending, shown: manual > 0 ? manual : auto, due: monthly.cardDueDates?.[m] };
     });
-  }, [prevTxList, txList, methods, config.methodTimings, config.recurring, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month]);
+  }, [prevTxList, txList, methods, config.methodTimings, config.recurring, config.savingsAccountId, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month]);
   const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
 
   // 残高ベースの「今月あと使える」
@@ -716,20 +720,21 @@ function AppMain() {
     const salary = Number(monthly?.salary) || 0;
     const savTotal = getSavingsTotal(monthly);
     const atmTotal = (monthly?.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const savingsSpent = txList.filter(t => getSource(t) === 'savings').reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const rows = accounts.map(a => {
       const start = Number(monthly.accountBalances?.[a.id]) || 0;
       const bills = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.shown, 0);
       const forecast = forecastAccount({
         accountId: a.id, start, salary, savings: savTotal, bills, atm: atmTotal,
         salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,
-        cashAccountId: config.cashAccountId
+        cashAccountId: config.cashAccountId, savingsSpent
       });
       return {
         ...a, start, bills, ...forecast
       };
     });
     return { rows, total: rows.reduce((s, r) => s + r.projected, 0) };
-  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, monthly, billRows]);
+  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, monthly, billRows, txList]);
 
   // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
   const plannedByDay = useMemo(() => {
@@ -1959,6 +1964,7 @@ function AppMain() {
                                   {a.bills > 0 && ` −引落 ¥${a.bills.toLocaleString()}`}
                                   {a.outSavings > 0 && ` −先取り ¥${a.outSavings.toLocaleString()}`}
                                   {a.outAtm > 0 && ` −ATM ¥${a.outAtm.toLocaleString()}`}
+                                  {a.outSavingsSpent > 0 && ` −貯金から払った支出 ¥${a.outSavingsSpent.toLocaleString()}`}
                                 </p>
                               </div>
                               {idx < arr.length - 1 && <Separator />}

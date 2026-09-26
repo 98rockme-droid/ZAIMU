@@ -88,3 +88,17 @@ test('未記録の固定費は予定として差し引き、記録されたら�
   assert.equal(before.freeRemain, 220000);
   assert.equal(after.freeRemain, 220000);
 });
+
+test('貯金から払った支出は、支払方法に関係なく貯金用の口座から引かれる', () => {
+  const common = { salary: 0, savings: 0, atm: 0, salaryAccountId: 'smbc', savingsAccountId: 'smtb', savingsSpent: 78000 };
+  // 貯金から払った分は支払方法の引落（bills）には含めない前提
+  const smbc = forecastAccount({ ...common, accountId: 'smbc', start: 200000, bills: 0 });
+  const smtb = forecastAccount({ ...common, accountId: 'smtb', start: 664570, bills: 0 });
+  assert.equal(smbc.projected, 200000);        // 生活用の口座は減らない
+  assert.equal(smtb.projected, 664570 - 78000); // 貯金用の口座から出る
+});
+
+test('貯金用の口座が未設定なら、貯金からの支出をどの口座にも割り当てない', () => {
+  const r = forecastAccount({ accountId: 'smbc', start: 100000, salary: 0, savings: 0, bills: 0, atm: 0, salaryAccountId: 'smbc', savingsAccountId: '', savingsSpent: 50000 });
+  assert.equal(r.projected, 100000);
+});

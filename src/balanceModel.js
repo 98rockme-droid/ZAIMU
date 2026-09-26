@@ -15,7 +15,9 @@ export function remainingCashBudget(startCash, cardToCash, cashSpent) {
   return startCash + cardToCash - cashSpent;
 }
 
-export function forecastAccount({ accountId, start, salary, savings, bills, atm, salaryAccountId, savingsAccountId, cashAccountId }) {
+// savingsSpent: 充当元が「貯金」の支出。支払方法に関係なく貯金用の口座から出たものとして扱う
+//   （貯金から払う＝貯金用の口座のお金を使う、という利用者の感覚に合わせる）
+export function forecastAccount({ accountId, start, salary, savings, bills, atm, salaryAccountId, savingsAccountId, cashAccountId, savingsSpent = 0 }) {
   // A savings transfer changes account locations, not the total amount of money.
   // If both roles point to the same account (or either is missing), no transfer
   // can be inferred from the savings plan alone.
@@ -24,9 +26,10 @@ export function forecastAccount({ accountId, start, salary, savings, bills, atm,
   const inSavings = movesSavings && savingsAccountId === accountId ? savings : 0;
   const outSavings = movesSavings && salaryAccountId === accountId ? savings : 0;
   const outAtm = (cashAccountId || salaryAccountId) === accountId ? atm : 0;
+  const outSavingsSpent = savingsAccountId && savingsAccountId === accountId ? savingsSpent : 0;
   return {
-    inSalary, inSavings, outSavings, outAtm,
-    projected: start + inSalary + inSavings - bills - outSavings - outAtm
+    inSalary, inSavings, outSavings, outAtm, outSavingsSpent,
+    projected: start + inSalary + inSavings - bills - outSavings - outAtm - outSavingsSpent
   };
 }
 
