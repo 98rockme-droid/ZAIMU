@@ -536,6 +536,53 @@ export const EditFormAccountPicker = ({ editingItem, setEditingItem, accounts, n
   </div>
 );
 
+// 口座間の振替（毎月）
+export const EditFormTransfer = ({ editingItem, setEditingItem, accounts, openCalculator }) => {
+  const set = patch => setEditingItem({ ...editingItem, data: { ...editingItem.data, ...patch } });
+  const picker = (key, label) => (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-5 px-5">
+        {accounts.map(a => (
+          <button key={a.id} type="button" onClick={() => set({ [key]: a.id })}
+            className={`shrink-0 h-11 px-4 rounded-[14px] text-[13px] font-medium transition-colors ${editingItem.data[key] === a.id ? 'bg-[#0A84FF] text-white' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+            {a.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+  return (
+    <div className="space-y-3.5">
+      {picker('from', '振替元（お金が出る口座）')}
+      {picker('to', '振替先（お金が入る口座）')}
+      <div>
+        <FieldLabel>金額</FieldLabel>
+        <AmountInputSimple
+          value={editingItem.data.amount ? Number(editingItem.data.amount).toLocaleString() : ''}
+          onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) set({ amount: v }); }}
+          openCalculator={() => openCalculator(editingItem.data.amount ?? 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, amount: String(val) } })))}
+        />
+      </div>
+      <div>
+        <FieldLabel>毎月の振替日</FieldLabel>
+        <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
+          <input type="number" min="1" max="31" value={String(editingItem.data.day ?? '')} onChange={e => set({ day: e.target.value })}
+            className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
+          <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
+        </div>
+      </div>
+      <div>
+        <FieldLabel>メモ（任意）</FieldLabel>
+        <input value={editingItem.data.title || ''} onChange={e => set({ title: e.target.value })}
+          placeholder="例: 楽天カードのサブスク用"
+          className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
+      </div>
+      <p className="text-[11px] text-[#636366] ml-1 leading-relaxed">口座の見込みにだけ反映します。お金の置き場所が変わるだけなので、生活用の口座どうしの振替は「今月あと使える」には影響しません</p>
+    </div>
+  );
+};
+
 export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>

@@ -33,7 +33,7 @@ test('same or missing savings transfer role never creates money', () => {
   assert.equal(forecastAccount({ ...common, salaryAccountId: '', savingsAccountId: 'salary' }).projected, 10000);
 });
 
-import { methodTimingOf, spendableFromBalance } from './balanceModel.js';
+import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving } from './balanceModel.js';
 
 test('口座振替は当月払い、カードは翌月払い、設定があれば設定を優先', () => {
   assert.equal(methodTimingOf('口座振替'), 'same');
@@ -101,4 +101,26 @@ test('貯金から払った支出は、支払方法に関係なく貯金用の�
 test('貯金用の口座が未設定なら、貯金からの支出をどの口座にも割り当てない', () => {
   const r = forecastAccount({ accountId: 'smbc', start: 100000, salary: 0, savings: 0, bills: 0, atm: 0, salaryAccountId: 'smbc', savingsAccountId: '', savingsSpent: 50000 });
   assert.equal(r.projected, 100000);
+});
+
+test('口座間の振替は、出す口座で減り受ける口座で増え、合計は変わらない', () => {
+  const transfers = [{ from: 'smbc', to: 'rakuten', amount: 594 }];
+  const common = { salary: 0, savings: 0, atm: 0, salaryAccountId: 'smbc', savingsAccountId: 'smtb', transfers };
+  // 楽天カードの594円は楽天銀行から引き落とされる（現実どおりの設定）
+  const smbc = forecastAccount({ ...common, accountId: 'smbc', start: 100000, bills: 0 });
+  const rakuten = forecastAccount({ ...common, accountId: 'rakuten', start: 594, bills: 594 });
+  assert.equal(smbc.projected, 100000 - 594);
+  assert.equal(rakuten.projected, 594);                       // 594入って594出る → 594のまま
+  assert.equal(smbc.projected + rakuten.projected, 100000);   // 合計は振替前と同じ
+});
+
+test('生活用の口座どうしの振替は予算に影響しない。貯金用との振替は影響する', () => {
+  const living = new Set(['smbc', 'rakuten']);
+  assert.equal(transferEffectOnLiving([{ from: 'smbc', to: 'rakuten', amount: 594 }], living), 0);
+  assert.equal(transferEffectOnLiving([{ from: 'smbc', to: 'smtb', amount: 10000 }], living), -10000);
+  assert.equal(transferEffectOnLiving([{ from: 'smtb', to: 'smbc', amount: 78000 }], living), 78000);
+});
+
+test('同じ口座どうし・金額が0の振替は無視する', () => {
+  assert.deepEqual(transferTotals('smbc', [{ from: 'smbc', to: 'smbc', amount: 1000 }, { from: 'smbc', to: 'rakuten', amount: 0 }]), { transferIn: 0, transferOut: 0 });
 });

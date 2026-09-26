@@ -17,7 +17,8 @@ export function remainingCashBudget(startCash, cardToCash, cashSpent) {
 
 // savingsSpent: 充当元が「貯金」の支出。支払方法に関係なく貯金用の口座から出たものとして扱う
 //   （貯金から払う＝貯金用の口座のお金を使う、という利用者の感覚に合わせる）
-export function forecastAccount({ accountId, start, salary, savings, bills, atm, salaryAccountId, savingsAccountId, cashAccountId, savingsSpent = 0 }) {
+// transfers: 口座間の振替 [{ from, to, amount }]。移動するだけなので口座の合計は変わらない
+export function forecastAccount({ accountId, start, salary, savings, bills, atm, salaryAccountId, savingsAccountId, cashAccountId, savingsSpent = 0, transfers = [] }) {
   // A savings transfer changes account locations, not the total amount of money.
   // If both roles point to the same account (or either is missing), no transfer
   // can be inferred from the savings plan alone.
@@ -27,9 +28,10 @@ export function forecastAccount({ accountId, start, salary, savings, bills, atm,
   const outSavings = movesSavings && salaryAccountId === accountId ? savings : 0;
   const outAtm = (cashAccountId || salaryAccountId) === accountId ? atm : 0;
   const outSavingsSpent = savingsAccountId && savingsAccountId === accountId ? savingsSpent : 0;
+  const { transferIn, transferOut } = transferTotals(accountId, transfers);
   return {
-    inSalary, inSavings, outSavings, outAtm, outSavingsSpent,
-    projected: start + inSalary + inSavings - bills - outSavings - outAtm - outSavingsSpent
+    inSalary, inSavings, outSavings, outAtm, outSavingsSpent, transferIn, transferOut,
+    projected: start + inSalary + inSavings + transferIn - bills - outSavings - outAtm - outSavingsSpent - transferOut
   };
 }
 
@@ -63,4 +65,30 @@ export function spendableFromBalance({
     freeSpent: spentBudget - fixedRecorded,   // 固定費以外で使った額
     freeRemain: pool - spentBudget - pendingFixed
   };
+}
+
+// 口座間の振替の入出金を集計する（同じ口座どうし・金額0以下は無視）
+export function transferTotals(accountId, transfers = []) {
+  let transferIn = 0, transferOut = 0;
+  for (const t of transfers) {
+    const amount = Number(t.amount) || 0;
+    if (!t.from || !t.to || t.from === t.to || amount <= 0) continue;
+    if (t.to === accountId) transferIn += amount;
+    if (t.from === accountId) transferOut += amount;
+  }
+  return { transferIn, transferOut };
+}
+
+// 予算（今月あと使える）への影響: 生活用の口座どうしの振替は0。
+// 生活用→貯金用は使えるお金が減り、貯金用→生活用は増える
+export function transferEffectOnLiving(transfers = [], livingIds) {
+  let effect = 0;
+  for (const t of transfers) {
+    const amount = Number(t.amount) || 0;
+    if (!t.from || !t.to || t.from === t.to || amount <= 0) continue;
+    const fromLiving = livingIds.has(t.from), toLiving = livingIds.has(t.to);
+    if (fromLiving && !toLiving) effect -= amount;
+    if (!fromLiving && toLiving) effect += amount;
+  }
+  return effect;
 }
