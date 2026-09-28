@@ -119,3 +119,34 @@ export function walletMoveTotal(moves = []) {
   }
   return net;
 }
+
+// 毎月の振替（ひな形）を、その月の振替に展開する。
+//   templates: 設定の「毎月の振替」[{ id, from, to, amount, day, title, startMonth }]
+//   moves:     その月に記録済みの振替（ひな形から作られた記録は templateId を持つ）
+//   skipped:   その月にスキップしたひな形のID
+// ・登録した月（startMonth）より前の月には適用しない（過去の数字を変えない）
+// ・その月の記録がすでにあれば記録の方を使う（月ごとに金額を編集できる）
+// ・まだ記録されていなければ、ひな形の金額を予定として使う
+export function transfersForMonth(templates = [], month, moves = [], skipped = []) {
+  const recorded = new Set(moves.filter(m => m.templateId).map(m => m.templateId));
+  const pending = templates.filter(t =>
+    t.id && (!t.startMonth || t.startMonth <= month) && !skipped.includes(t.id) && !recorded.has(t.id)
+  );
+  return [...moves, ...pending];
+}
+
+// その月に自動で記録すべき振替（振替日を過ぎていて、まだ記録もスキップもされていないもの）
+export function dueTransferRecords(templates = [], month, moves = [], skipped = [], todayD, lastDay) {
+  const recorded = new Set(moves.filter(m => m.templateId).map(m => m.templateId));
+  return templates
+    .filter(t => t.id && (!t.startMonth || t.startMonth <= month) && !skipped.includes(t.id) && !recorded.has(t.id))
+    .filter(t => Math.min(Number(t.day) || 1, lastDay) <= todayD)
+    .map(t => {
+      const d = Math.min(Number(t.day) || 1, lastDay);
+      return {
+        id: `tr_${t.id}_${month}`, templateId: t.id,
+        date: `${month}-${String(d).padStart(2, '0')}`,
+        from: t.from, to: t.to, amount: Number(t.amount) || 0, memo: t.title || ''
+      };
+    });
+}

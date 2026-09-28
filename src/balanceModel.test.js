@@ -33,7 +33,7 @@ test('same or missing savings transfer role never creates money', () => {
   assert.equal(forecastAccount({ ...common, salaryAccountId: '', savingsAccountId: 'salary' }).projected, 10000);
 });
 
-import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod, walletMoveTotal } from './balanceModel.js';
+import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords } from './balanceModel.js';
 
 test('口座振替は当月払い、カードは翌月払い、設定があれば設定を優先', () => {
   assert.equal(methodTimingOf('口座振替'), 'same');
@@ -165,4 +165,36 @@ test('貯金用の口座から財布へおろすと、使えるお金が増え�
 
 test('財布から口座へ入金すると財布が減る', () => {
   assert.equal(walletMoveTotal([{ from: 'wallet', to: 'smbc', amount: 3000 }]), -3000);
+});
+
+const tplPayPay = { id: 'pp', from: 'smbc', to: 'paypay', amount: 3773, day: 25, title: 'PayPay銀行支払用', startMonth: '2026-09' };
+
+test('毎月の振替は、登録した月より前には適用しない（過去の数字を変えない）', () => {
+  assert.deepEqual(transfersForMonth([tplPayPay], '2026-08', [], []), []);
+  assert.equal(transfersForMonth([tplPayPay], '2026-09', [], []).length, 1);
+});
+
+test('その月の記録があれば、ひな形ではなく記録の金額を使う（月ごとに金額を変えられる）', () => {
+  const recorded = [{ id: 'tr_pp_2026-10', templateId: 'pp', from: 'smbc', to: 'paypay', amount: 5210, date: '2026-10-25' }];
+  const list = transfersForMonth([tplPayPay], '2026-10', recorded, []);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].amount, 5210);
+});
+
+test('スキップした月は振替しない', () => {
+  assert.deepEqual(transfersForMonth([tplPayPay], '2026-10', [], ['pp']), []);
+});
+
+test('振替日を過ぎたら、その月の記録として作る（二重には作らない）', () => {
+  assert.equal(dueTransferRecords([tplPayPay], '2026-10', [], [], 24, 31).length, 0);
+  const due = dueTransferRecords([tplPayPay], '2026-10', [], [], 25, 31);
+  assert.equal(due.length, 1);
+  assert.equal(due[0].date, '2026-10-25');
+  assert.equal(due[0].templateId, 'pp');
+  assert.equal(dueTransferRecords([tplPayPay], '2026-10', due, [], 28, 31).length, 0);
+});
+
+test('月末より後の日付は月末に寄せる', () => {
+  const t = { ...tplPayPay, day: 31 };
+  assert.equal(dueTransferRecords([t], '2026-11', [], [], 30, 30)[0].date, '2026-11-30');
 });

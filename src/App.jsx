@@ -22,7 +22,7 @@ import {
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
   EditFormAccount, EditFormAccountPicker, EditFormTransfer
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -99,7 +99,8 @@ const normalizeMonthly = (data) => {
     skippedRecurring: d.skippedRecurring || [],
     cashTopups: d.cashTopups || [],
     accountBalances: d.accountBalances || {},
-    moves: d.moves || [],   // 単発の振替（ATM含む）[{ id, date, from, to, amount, memo }]
+    moves: d.moves || [],   // 振替（ATM含む）[{ id, date, from, to, amount, memo, templateId? }]
+    skippedTransfers: d.skippedTransfers || [],   // この月だけスキップした「毎月の振替」のID
     salaryConfirmed: d.salaryConfirmed,   // false のときは先月の額で仮置き中
     inheritedFrom: d.inheritedFrom || ''
   };
@@ -289,7 +290,7 @@ function AppMain() {
       { q: '財布', a: '手元にあるはずの現金です。ホームの「資産」にある財布をタップすると内訳を確認でき、ATMの記録をタップすると編集できます。', formula: '月初のスタート現金 + ATMなどで財布に入れた現金 − 現金支出' },
       { q: '「今月の予算」と「資産」の違いは？', a: '今月の予算は「今月あといくら使っていいか」という計画の数字です。資産は「お金が今どこにいくらあるか」という実物の数字で、財布と各口座の月末の見込みを表示します。今月カードで使った分は来月引き落とされるため、予算からはすでに引かれていても、口座にはまだ残っています。そのため2つの数字は一致しません。' },
       { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与が月の後半まで分からないときは先月の額で仮計算し、振り込まれたら資金計画で上書きできます。今月引き落とされる先月のカード分は、先月の使った分として計算済みなので差し引きません。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月使った分 − 固定費予定' },
-      { q: '口座から口座へお金を移しているときは？', a: '毎月決まっている振替は、設定タブの「口座」→「毎月の振替」に登録してください（例: 楽天カードの引落用に三井住友から楽天銀行へ移す）。1回だけの振替は、＋ボタンの「振替・ATM」から記録できます。どちらも口座の見込みに反映され、生活用の口座どうしなら「今月あと使える」には影響しません。' },
+      { q: '口座から口座へお金を移しているときは？', a: '毎月決まっている振替は、設定タブの「口座」→「毎月の振替」に登録してください。振替日になると、その月の振替として履歴に記録されます。月によって金額が違うときは履歴からその月の記録を編集し、移さない月は削除するとその月だけスキップされます。登録した月より前の月には影響しません。1回だけの振替は、＋ボタンの「振替・ATM」から記録できます。' },
       { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
       { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
@@ -433,6 +434,35 @@ function AppMain() {
         .catch(e => { console.error(e); recProcessedRef.current.delete(key); });
     });
   }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring]);
+
+  /* 毎月の振替の自動記録: 振替日を過ぎたら、その月の振替として記録する（月ごとに金額を編集・スキップできる） */
+  const trProcessedRef = useRef(new Set());
+  useEffect(() => {
+    if (!user || mLoadedMonth !== month) return;
+    const now = new Date();
+    if (month !== getMonthString(now)) return;
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const due = dueTransferRecords(config.transfers || [], month, monthly.moves || [], monthly.skippedTransfers || [], now.getDate(), lastDay)
+      .filter(r => !trProcessedRef.current.has(r.id));
+    if (!due.length) return;
+    due.forEach(r => trProcessedRef.current.add(r.id));
+    // 同じ内容のオブジェクトは arrayUnion で重複しないので、複数の端末で同時に動いても1件になる
+    setDoc(doc(db, 'users', user.uid, 'months', month), { moves: arrayUnion(...due) }, { merge: true })
+      .catch(e => { console.error(e); due.forEach(r => trProcessedRef.current.delete(r.id)); });
+  }, [user, mLoadedMonth, month, config.transfers, monthly.moves, monthly.skippedTransfers]);
+
+  /* 登録した月が記録されていない古い「毎月の振替」は、今月から適用として補う（過去の月に遡って効かないように） */
+  const trStartRef = useRef(false);
+  useEffect(() => {
+    if (!user || trStartRef.current) return;
+    const list = config.transfers || [];
+    if (!list.length || list.every(t => t.startMonth)) return;
+    trStartRef.current = true;
+    const cur = getMonthString(new Date());
+    setDoc(doc(db, 'users', user.uid, 'settings', 'config'),
+      { transfers: list.map(t => (t.startMonth ? t : { ...t, startMonth: cur })) }, { merge: true })
+      .catch(e => { console.error(e); trStartRef.current = false; });
+  }, [user, config.transfers]);
 
   /* 月設定の自動引き継ぎ: 今月が未設定なら、直近の設定済みの月からコピー */
   useEffect(() => {
@@ -724,6 +754,12 @@ function AppMain() {
   // 残高ベースの「今月あと使える」
   // 貯金用以外の口座（生活用）と財布の月初残高がすべて入っている月だけ使う。
   // 1つでも未入力なら null を返し、従来の給与ベースの計算を使う（過去の月の数字を変えない）。
+  // 表示中の月に適用する振替: その月の記録（ATM・単発・毎月の振替の記録）＋ まだ記録されていない毎月の振替
+  const monthTransfers = useMemo(
+    () => transfersForMonth(config.transfers || [], month, monthly.moves || [], monthly.skippedTransfers || []),
+    [config.transfers, month, monthly.moves, monthly.skippedTransfers]
+  );
+
   const balanceMode = useMemo(() => {
     const living = (config.accounts || []).filter(a => a.id !== config.savingsAccountId);
     if (!living.length) return null;
@@ -741,7 +777,7 @@ function AppMain() {
     const atmTotal = (monthly.cashTopups || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
     const cashFromSavings = atmAcc && !livingIds.has(atmAcc) ? atmTotal : 0;
     // 振替: 生活用どうしは0、貯金用→生活用は増える、生活用→貯金用は減る
-    const transferEffect = transferEffectOnLiving([...(config.transfers || []), ...(monthly.moves || [])], new Set([...livingIds, 'wallet']));
+    const transferEffect = transferEffectOnLiving(monthTransfers, new Set([...livingIds, 'wallet']));
     const budgetTx = txList.filter(t => getSource(t) === 'budget');
     const spentBudget = sum(budgetTx);
     const due = (config.recurring || []).filter(r => isRecurringDueIn(r, month) && !(monthly.skippedRecurring || []).includes(r.id));
@@ -756,7 +792,7 @@ function AppMain() {
       // 見込みで計算している部分（実額が分かったら上書きしてもらう）
       salaryProvisional: monthly.salaryConfirmed === false
     };
-  }, [config.accounts, config.savingsAccountId, config.cashAccountId, config.salaryAccountId, config.recurring, config.transfers, monthly, txList, month]);
+  }, [config.accounts, config.savingsAccountId, config.cashAccountId, config.salaryAccountId, config.recurring, monthTransfers, monthly, txList, month]);
   const BM = balanceMode?.active ? balanceMode : null;
 
   // 口座ごとの今月の見込み（月初残高 ＋ 入金 − 出ていくお金）
@@ -776,14 +812,14 @@ function AppMain() {
       const forecast = forecastAccount({
         accountId: a.id, start, salary, savings: savTotal, bills, atm: atmTotal,
         salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,
-        cashAccountId: config.cashAccountId, savingsSpent, transfers: [...(config.transfers || []), ...(monthly.moves || [])]
+        cashAccountId: config.cashAccountId, savingsSpent, transfers: monthTransfers
       });
       return {
         ...a, start, bills, ...forecast
       };
     });
     return { rows, total: rows.reduce((s, r) => s + r.projected, 0) };
-  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, config.transfers, monthly, billRows, txList]);
+  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, monthTransfers, monthly, billRows, txList]);
 
   // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
   const plannedByDay = useMemo(() => {
@@ -895,7 +931,8 @@ function AppMain() {
     if (!mv.date) return showToast('日付を選んでください');
     const item = {
       id: editingMove && !editingMove._legacy ? editingMove.id : `mv_${Date.now()}`,
-      date: mv.date, from: mv.from, to: mv.to, amount, memo: (mv.memo || '').trim()
+      date: mv.date, from: mv.from, to: mv.to, amount, memo: (mv.memo || '').trim(),
+      ...(editingMove?.templateId ? { templateId: editingMove.templateId } : {})
     };
     const monthRef = m => doc(db, 'users', user.uid, 'months', m);
     setIsSaving(true);
@@ -919,15 +956,25 @@ function AppMain() {
     const target = editingMove;
     const monthRef = doc(db, 'users', user.uid, 'months', target._month);
     const field = target._legacy ? 'cashTopups' : 'moves';
+    // 毎月の振替から作られた記録は、消すとその月だけスキップ（翌月からはまた記録される）
+    const tplId = target._original?.templateId;
     try {
-      await setDoc(monthRef, { [field]: arrayRemove(target._original) }, { merge: true });
+      await setDoc(monthRef, {
+        [field]: arrayRemove(target._original),
+        ...(tplId ? { skippedTransfers: arrayUnion(tplId) } : {})
+      }, { merge: true });
       closeTx();
-      showToast('削除しました', {
+      showToast(tplId ? '今月の振替をスキップしました' : '削除しました', {
         label: '元に戻す',
         onClick: async () => {
           hideToast();
-          try { await setDoc(monthRef, { [field]: arrayUnion(target._original) }, { merge: true }); showToast('元に戻しました'); }
-          catch (err) { console.error(err); showToast('復元できませんでした'); }
+          try {
+            await setDoc(monthRef, {
+              [field]: arrayUnion(target._original),
+              ...(tplId ? { skippedTransfers: arrayRemove(tplId) } : {})
+            }, { merge: true });
+            showToast('元に戻しました');
+          } catch (err) { console.error(err); showToast('復元できませんでした'); }
         }
       });
     } catch (err) { console.error(err); showToast('エラー'); }
@@ -1044,7 +1091,8 @@ function AppMain() {
         if (data.from === data.to) return showToast('振替元と振替先が同じです');
         if (amount <= 0) return showToast('金額を入力してください');
         const list = [...(config.transfers || [])];
-        const item = { id: data.id || `tr_${Date.now()}`, from: data.from, to: data.to, amount, day: Math.min(31, Math.max(1, toNumber(data.day) || 1)), title: (data.title || '').trim() };
+        const item = { id: data.id || `tr_${Date.now()}`, from: data.from, to: data.to, amount, day: Math.min(31, Math.max(1, toNumber(data.day) || 1)), title: (data.title || '').trim(),
+          startMonth: data.startMonth || getMonthString(new Date()) };
         if (index === -1) list.push(item); else list[index] = item;
         await setDoc(cRef, { ...config, transfers: list }, { merge: true });
       } else if (type === 'methodAccount') {
@@ -2198,7 +2246,21 @@ function AppMain() {
                                       <p className="text-[14px] text-white truncate">{nameOf(t.from)} → {nameOf(t.to)}</p>
                                       {t.title && <p className="text-[11px] text-[#636366] truncate">{t.title}</p>}
                                     </div>
-                                    <span className="text-[14px] font-medium text-white tabular-nums shrink-0 whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</span>
+                                    {(() => {
+                                      // 表示中の月の状況
+                                      const vm = Number(month.split('-')[1]);
+                                      const rec = (monthly.moves || []).find(m => m.templateId === t.id);
+                                      const st = t.startMonth && t.startMonth > month ? { text: `${Number(t.startMonth.split('-')[1])}月から`, cls: 'text-[#636366]' }
+                                        : (monthly.skippedTransfers || []).includes(t.id) ? { text: `${vm}月はスキップ`, cls: 'text-[#636366]' }
+                                        : rec ? { text: `✓ ${vm}月 ¥${Number(rec.amount || 0).toLocaleString()}`, cls: 'text-[#30D158]' }
+                                        : { text: `${vm}/${t.day} 予定`, cls: 'text-[#98989D]' };
+                                      return (
+                                        <div className="shrink-0 text-right">
+                                          <p className="text-[14px] font-medium text-white tabular-nums whitespace-nowrap">¥{Number(t.amount || 0).toLocaleString()}</p>
+                                          <p className={`text-[11px] whitespace-nowrap tabular-nums ${st.cls}`}>{st.text}</p>
+                                        </div>
+                                      );
+                                    })()}
                                   </button>
                                   <Separator />
                                 </div>
@@ -2206,6 +2268,7 @@ function AppMain() {
                             })}
                           <AddRow label="振替を追加" onClick={() => openEdit('transfer', { id: '', from: config.salaryAccountId || '', to: '', amount: '', day: 25, title: '' }, -1)} />
                         </Card>
+                        <p className="mt-2 px-1.5 text-[11px] text-[#636366] leading-relaxed">振替日になると履歴に記録されます。その月だけ金額を変えるときは履歴から編集、移さない月は削除してください</p>
                       </div>
 
                     </>
