@@ -208,6 +208,31 @@ function AppMain() {
   const [logView, setLogView] = useState('list');
   const [settingTab, setSettingTab] = useState('menu');
   const [month, setMonth] = useState(getMonthString(new Date()));
+  // 今日の日付。アプリに戻ったときと1分ごとに確認し、変わったら自動記録をやり直す
+  const [clock, setClock] = useState(() => getTodayString());
+  const realMonthRef = useRef(getMonthString(new Date()));
+  useEffect(() => {
+    const check = () => {
+      const today = getTodayString();
+      setClock(prev => (prev === today ? prev : today));
+      const cur = getMonthString(new Date());
+      if (cur !== realMonthRef.current) {
+        const prevMonth = realMonthRef.current;
+        realMonthRef.current = cur;
+        // 「今月」を見ていた状態で月をまたいだら、新しい今月に切り替える（ほかの月を見ていたら動かさない）
+        setMonth(m => (m === prevMonth ? cur : m));
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
+    const timer = setInterval(check, 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
+      clearInterval(timer);
+    };
+  }, []);
   const [isTxOpen, setIsTxOpen] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const [calcInit, setCalcInit] = useState(0);
@@ -349,7 +374,9 @@ function AppMain() {
     const start = new Date(`${month}-01T00:00:00Z`).toISOString();
     const nd = new Date(`${month}-01T00:00:00Z`); nd.setUTCMonth(nd.getUTCMonth() + 1);
     const q = query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', start), where('date', '<', nd.toISOString()));
-    return onSnapshot(q,
+    // includeMetadataChanges: キャッシュとサーバーの内容が同じでも「サーバーで確認済み」の通知を受け取る
+    // （これがないと fromCache のまま止まり、定期支出などの自動記録が動かない）
+    return onSnapshot(q, { includeMetadataChanges: true },
       s => {
         const l = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => new Date(b.date) - new Date(a.date));
         setTxList(l);
@@ -375,7 +402,7 @@ function AppMain() {
     if (!user) return;
     const fm = month;
     setMLoadedMonth(null);
-    return onSnapshot(doc(db, 'users', user.uid, 'months', month),
+    return onSnapshot(doc(db, 'users', user.uid, 'months', month), { includeMetadataChanges: true },
       s => {
         const raw = s.exists() ? s.data() : {};
         setMonthly(normalizeMonthly(raw));
@@ -433,7 +460,7 @@ function AppMain() {
         .then(created => { if (created) showToast(`定期支出「${r.title}」を記録しました`); })
         .catch(e => { console.error(e); recProcessedRef.current.delete(key); });
     });
-  }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring]);
+  }, [user, txLoadedMonth, mLoadedMonth, txList, config.recurring, month, monthly.skippedRecurring, clock]);
 
   /* 毎月の振替の自動記録: 振替日を過ぎたら、その月の振替として記録する（月ごとに金額を編集・スキップできる） */
   const trProcessedRef = useRef(new Set());
@@ -449,7 +476,7 @@ function AppMain() {
     // 同じ内容のオブジェクトは arrayUnion で重複しないので、複数の端末で同時に動いても1件になる
     setDoc(doc(db, 'users', user.uid, 'months', month), { moves: arrayUnion(...due) }, { merge: true })
       .catch(e => { console.error(e); due.forEach(r => trProcessedRef.current.delete(r.id)); });
-  }, [user, mLoadedMonth, month, config.transfers, monthly.moves, monthly.skippedTransfers]);
+  }, [user, mLoadedMonth, month, config.transfers, monthly.moves, monthly.skippedTransfers, clock]);
 
   /* 登録した月が記録されていない古い「毎月の振替」は、今月から適用として補う（過去の月に遡って効かないように） */
   const trStartRef = useRef(false);
@@ -488,7 +515,7 @@ function AppMain() {
         showToast(`${formatMonthJP(src.id)}の設定を引き継ぎました`);
       } catch (e) { console.error(e); }
     })();
-  }, [user, mLoadedMonth, mEmpty, month]);
+  }, [user, mLoadedMonth, mEmpty, month, clock]);
 
   /* 全期間検索: 500件ずつ最後まで取得（初回のみ） */
   useEffect(() => {
