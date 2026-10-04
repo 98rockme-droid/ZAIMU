@@ -1614,11 +1614,25 @@ function AppMain() {
                 })()}
               </div>
 
-              {isSearching && (
-                <p className="flex-none px-5 pb-1 text-[11px] text-[#636366]">
-                  {allTxLoading ? '全期間から検索中...' : `${allTxTruncated ? `直近${(allTx || []).length.toLocaleString()}件から` : '全期間から'} ${filteredTx.length}件`}
-                </p>
-              )}
+              {(() => {
+                // 絞り込み・検索中だけ、結果の件数と合計を小さく表示する
+                const active = isSearching || filter.type !== 'ALL' || filter.cat.length > 0 || filter.method.length > 0 || filter.source.length > 0 || filter.rec.length > 0;
+                if (!active) return null;
+                if (isSearching && allTxLoading) return <p className="flex-none px-5 pb-1 text-[11px] text-[#636366]">全期間から検索中...</p>;
+                const items = logGroups.flatMap(g => g.items);
+                const exp = items.filter(t => !t._move);
+                const mvs = items.filter(t => t._move);
+                const sum = list => list.reduce((a, t) => a + (Number(t.amount) || 0), 0);
+                const scope = isSearching ? (allTxTruncated ? `直近${(allTx || []).length.toLocaleString()}件から ` : '全期間から ') : '';
+                return (
+                  <p className="flex-none px-5 pb-1 text-[11px] text-[#636366] tabular-nums">
+                    {scope}{exp.length > 0 && <>{exp.length}件 · 合計 <span className="text-[#EBEBF5]/80 font-medium">¥{sum(exp).toLocaleString()}</span></>}
+                    {exp.length > 0 && mvs.length > 0 && '　'}
+                    {mvs.length > 0 && <>振替 {mvs.length}件 · <span className="text-[#EBEBF5]/80 font-medium">¥{sum(mvs).toLocaleString()}</span></>}
+                    {!exp.length && !mvs.length && '0件'}
+                  </p>
+                );
+              })()}
               <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   logGroups.length === 0 ? (
