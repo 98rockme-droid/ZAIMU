@@ -131,7 +131,7 @@ const SEARCH_MAX_PAGES = 20;
 // 履歴の絞り込み用のボタン。見た目とタップ領域を同じ44pxにそろえる
 const FilterPill = ({ active, onClick, children, label, grow = true }) => (
   <button type="button" onClick={onClick} aria-label={label}
-    className={`h-11 px-3 rounded-[14px] flex items-center justify-center gap-1 text-[13px] font-medium whitespace-nowrap transition-colors min-w-0 ${grow ? 'flex-1' : 'w-11 shrink-0'} ${active ? 'bg-[#0A84FF]/20 text-[#0A84FF]' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
+    className={`h-11 px-2 rounded-[14px] flex items-center justify-center gap-0.5 text-[13px] font-medium whitespace-nowrap transition-colors min-w-0 ${grow ? 'flex-1' : 'w-11 shrink-0'} ${active ? 'bg-[#0A84FF]/20 text-[#0A84FF]' : 'bg-[#2C2C2E] text-[#98989D]'}`}>
     {children}
   </button>
 );
@@ -282,7 +282,7 @@ function AppMain() {
   const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
   const [searchText, setSearchText] = useState('');
   // cat / method / source は複数選択。空の配列は「すべて」
-  const [filter, setFilter] = useState({ type: 'ALL', cat: [], method: [], source: [] });
+  const [filter, setFilter] = useState({ type: 'ALL', cat: [], method: [], source: [], rec: [] });
   const [filterSheet, setFilterSheet] = useState(null); // 'cat' | 'method' | 'source'
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
@@ -684,7 +684,8 @@ function AppMain() {
     const mc = !filter.cat.length || filter.cat.includes(t.category);
     const mm = !filter.method.length || filter.method.includes(t.paymentMethod);
     const msr = !filter.source.length || filter.source.some(v => (v === 'UNSET' ? getSource(t) === null : getSource(t) === v));
-    return filter.type !== 'move' && ms && mc && mm && msr;
+    const mrc = !filter.rec.length || filter.rec.some(v => (v === 'rec' ? !!t.recurringId : !t.recurringId));
+    return filter.type !== 'move' && ms && mc && mm && msr && mrc;
   }), [searchPool, searchText, filter]);
 
   // 履歴を日付ごとにグループ化（新しい日付順）
@@ -712,7 +713,7 @@ function AppMain() {
     });
     // 振替はカテゴリ・支払方法・充当元を持たないので、それらで絞り込んでいるときは出さない
     const q = searchText.trim();
-    const showMoves = filter.type !== 'expense' && !filter.cat.length && !filter.method.length && !filter.source.length;
+    const showMoves = filter.type !== 'expense' && !filter.cat.length && !filter.method.length && !filter.source.length && !filter.rec.length;
     if (showMoves) {
       moveItems.filter(m => !q || `${placeName(m.from)} ${placeName(m.to)} ${m.memo || ''}`.includes(q)).forEach(m => {
         const key = m.date;
@@ -896,7 +897,7 @@ function AppMain() {
   // 分析 → 指定カテゴリで絞り込んだ履歴へ移動
   const jumpToCat = name => {
     setSearchText('');
-    setFilter({ type: 'expense', cat: [name], method: [], source: ['budget'] });
+    setFilter({ type: 'expense', cat: [name], method: [], source: ['budget'], rec: [] });
     setLogView('list');
     setActiveTab('log');
   };
@@ -1581,32 +1582,31 @@ function AppMain() {
                 </div>
                 {(() => {
                   // 見た目は小さいピル（高さ32px・13px）にして、タップ領域は44pxを確保する
-                  const isActive = filter.type !== 'ALL' || filter.cat.length > 0 || filter.method.length > 0 || filter.source.length > 0;
-                  const labelOf = v => (v === 'UNSET' ? '未設定' : SOURCE_LABELS[v] || v);
+                  const isActive = filter.type !== 'ALL' || filter.cat.length > 0 || filter.method.length > 0 || filter.source.length > 0 || filter.rec.length > 0;
+                  const labelOf = v => (v === 'UNSET' ? '未設定' : v === 'rec' ? '定期のみ' : v === 'nonrec' ? '定期以外' : SOURCE_LABELS[v] || v);
                   const pillText = (list, name) => !list.length ? name : list.length === 1 ? labelOf(list[0]) : `${labelOf(list[0])} +${list.length - 1}`;
                   return (
                     // 横スクロールにすると月のスワイプと取り合うので、2段に分ける
                     <div className="space-y-2">
-                      <div className="h-11 p-1 bg-[#2C2C2E] rounded-[14px] flex">
-                        {[['ALL', 'すべて'], ['expense', '支出'], ['move', '振替']].map(([v, l]) => (
-                          <button key={v} type="button" onClick={() => setFilter(p => ({ ...p, type: v }))}
-                            className={`flex-1 rounded-[10px] text-[13px] font-medium transition-colors ${filter.type === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
-                            {l}
-                          </button>
-                        ))}
+                      <div className="flex gap-1.5">
+                        <div className="flex-1 h-11 p-1 bg-[#2C2C2E] rounded-[14px] flex">
+                          {[['ALL', 'すべて'], ['expense', '支出'], ['move', '振替']].map(([v, l]) => (
+                            <button key={v} type="button" onClick={() => setFilter(p => ({ ...p, type: v }))}
+                              className={`flex-1 rounded-[10px] text-[13px] font-medium transition-colors ${filter.type === v ? 'bg-[#3A3A3C] text-white' : 'text-[#98989D]'}`}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                        {isActive && (
+                          <FilterPill grow={false} onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: [], method: [], source: [], rec: [] }); }} label="絞り込みをクリア"><X size={14} /></FilterPill>
+                        )}
                       </div>
-                      {(filter.type !== 'move' || isActive) && (
-                        <div className="flex gap-2">
-                          {filter.type !== 'move' && (
-                            <>
-                              <FilterPill active={filter.cat.length > 0} onClick={() => setFilterSheet('cat')}><span className="truncate">{pillText(filter.cat, 'カテゴリ')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
-                              <FilterPill active={filter.method.length > 0} onClick={() => setFilterSheet('method')}><span className="truncate">{pillText(filter.method, '支払方法')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
-                              <FilterPill active={filter.source.length > 0} onClick={() => setFilterSheet('source')}><span className="truncate">{pillText(filter.source, '充当元')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
-                            </>
-                          )}
-                          {isActive && (
-                            <FilterPill grow={false} onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: [], method: [], source: [] }); }} label="絞り込みをクリア"><X size={14} /></FilterPill>
-                          )}
+                      {filter.type !== 'move' && (
+                        <div className="flex gap-1.5">
+                          <FilterPill active={filter.cat.length > 0} onClick={() => setFilterSheet('cat')}><span className="truncate">{pillText(filter.cat, 'カテゴリ')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                          <FilterPill active={filter.method.length > 0} onClick={() => setFilterSheet('method')}><span className="truncate">{pillText(filter.method, '支払方法')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                          <FilterPill active={filter.source.length > 0} onClick={() => setFilterSheet('source')}><span className="truncate">{pillText(filter.source, '充当元')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                          <FilterPill active={filter.rec.length > 0} onClick={() => setFilterSheet('rec')}><span className="truncate">{pillText(filter.rec, '定期')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
                         </div>
                       )}
                     </div>
@@ -1988,7 +1988,7 @@ function AppMain() {
               {S.spUnsetCount > 0 && (
                 <Card>
                   <button type="button"
-                    onClick={() => { setSearchText(''); setFilter({ type: 'expense', cat: [], method: [], source: ['UNSET'] }); setLogView('list'); setActiveTab('log'); }}
+                    onClick={() => { setSearchText(''); setFilter({ type: 'expense', cat: [], method: [], source: ['UNSET'], rec: [] }); setLogView('list'); setActiveTab('log'); }}
                     className="w-full px-5 py-4 text-left active:bg-white/[0.04] transition-colors">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-[#FF453A]">充当元が未設定の支出</p>
@@ -2497,6 +2497,7 @@ function AppMain() {
           cat: { title: 'カテゴリ', all: 'すべてのカテゴリ', opts: catNames.map(c => ({ value: c, label: c })) },
           method: { title: '支払方法', all: 'すべての支払方法', opts: methods.map(m => ({ value: m, label: m })) },
           source: { title: '充当元', all: 'すべての充当元', opts: [...SOURCES, { value: 'UNSET', label: '未設定' }] },
+          rec: { title: '定期支出', all: 'すべて', opts: [{ value: 'rec', label: '定期支出のみ' }, { value: 'nonrec', label: '定期支出以外' }] },
         }[filterSheet];
         const current = filter[filterSheet];
         // 複数選択: タップで選択・解除を切り替え（シートは閉じない）。「すべて」は選択をクリア
