@@ -281,7 +281,8 @@ function AppMain() {
   const [config, setConfig] = useState(normalizeConfig({}));
   const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
   const [searchText, setSearchText] = useState('');
-  const [filter, setFilter] = useState({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' });
+  // cat / method / source は複数選択。空の配列は「すべて」
+  const [filter, setFilter] = useState({ type: 'ALL', cat: [], method: [], source: [] });
   const [filterSheet, setFilterSheet] = useState(null); // 'cat' | 'method' | 'source'
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
@@ -680,9 +681,9 @@ function AppMain() {
   const searchPool = isSearching ? (allTx || txList) : txList;
   const filteredTx = useMemo(() => searchPool.filter(t => {
     const ms = searchText === '' || String(t.title || '').includes(searchText);
-    const mc = filter.cat === 'ALL' || t.category === filter.cat;
-    const mm = filter.method === 'ALL' || t.paymentMethod === filter.method;
-    const msr = filter.source === 'ALL' || (filter.source === 'UNSET' ? getSource(t) === null : getSource(t) === filter.source);
+    const mc = !filter.cat.length || filter.cat.includes(t.category);
+    const mm = !filter.method.length || filter.method.includes(t.paymentMethod);
+    const msr = !filter.source.length || filter.source.some(v => (v === 'UNSET' ? getSource(t) === null : getSource(t) === v));
     return filter.type !== 'move' && ms && mc && mm && msr;
   }), [searchPool, searchText, filter]);
 
@@ -711,7 +712,7 @@ function AppMain() {
     });
     // 振替はカテゴリ・支払方法・充当元を持たないので、それらで絞り込んでいるときは出さない
     const q = searchText.trim();
-    const showMoves = filter.type !== 'expense' && filter.cat === 'ALL' && filter.method === 'ALL' && filter.source === 'ALL';
+    const showMoves = filter.type !== 'expense' && !filter.cat.length && !filter.method.length && !filter.source.length;
     if (showMoves) {
       moveItems.filter(m => !q || `${placeName(m.from)} ${placeName(m.to)} ${m.memo || ''}`.includes(q)).forEach(m => {
         const key = m.date;
@@ -895,7 +896,7 @@ function AppMain() {
   // 分析 → 指定カテゴリで絞り込んだ履歴へ移動
   const jumpToCat = name => {
     setSearchText('');
-    setFilter({ type: 'expense', cat: name, method: 'ALL', source: 'budget' });
+    setFilter({ type: 'expense', cat: [name], method: [], source: ['budget'] });
     setLogView('list');
     setActiveTab('log');
   };
@@ -1580,8 +1581,9 @@ function AppMain() {
                 </div>
                 {(() => {
                   // 見た目は小さいピル（高さ32px・13px）にして、タップ領域は44pxを確保する
-                  const isActive = filter.type !== 'ALL' || filter.cat !== 'ALL' || filter.method !== 'ALL' || filter.source !== 'ALL';
-                  const sourceLabel = filter.source === 'UNSET' ? '未設定' : SOURCE_LABELS[filter.source];
+                  const isActive = filter.type !== 'ALL' || filter.cat.length > 0 || filter.method.length > 0 || filter.source.length > 0;
+                  const labelOf = v => (v === 'UNSET' ? '未設定' : SOURCE_LABELS[v] || v);
+                  const pillText = (list, name) => !list.length ? name : list.length === 1 ? labelOf(list[0]) : `${labelOf(list[0])} +${list.length - 1}`;
                   return (
                     // 横スクロールにすると月のスワイプと取り合うので、2段に分ける
                     <div className="space-y-2">
@@ -1597,13 +1599,13 @@ function AppMain() {
                         <div className="flex gap-2">
                           {filter.type !== 'move' && (
                             <>
-                              <FilterPill active={filter.cat !== 'ALL'} onClick={() => setFilterSheet('cat')}><span className="truncate">{filter.cat !== 'ALL' ? filter.cat : 'カテゴリ'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
-                              <FilterPill active={filter.method !== 'ALL'} onClick={() => setFilterSheet('method')}><span className="truncate">{filter.method !== 'ALL' ? filter.method : '支払方法'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
-                              <FilterPill active={filter.source !== 'ALL'} onClick={() => setFilterSheet('source')}><span className="truncate">{filter.source !== 'ALL' ? sourceLabel : '充当元'}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                              <FilterPill active={filter.cat.length > 0} onClick={() => setFilterSheet('cat')}><span className="truncate">{pillText(filter.cat, 'カテゴリ')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                              <FilterPill active={filter.method.length > 0} onClick={() => setFilterSheet('method')}><span className="truncate">{pillText(filter.method, '支払方法')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
+                              <FilterPill active={filter.source.length > 0} onClick={() => setFilterSheet('source')}><span className="truncate">{pillText(filter.source, '充当元')}</span><ChevronDown size={12} className="shrink-0" /></FilterPill>
                             </>
                           )}
                           {isActive && (
-                            <FilterPill grow={false} onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: 'ALL', method: 'ALL', source: 'ALL' }); }} label="絞り込みをクリア"><X size={14} /></FilterPill>
+                            <FilterPill grow={false} onClick={() => { setSearchText(''); setFilter({ type: 'ALL', cat: [], method: [], source: [] }); }} label="絞り込みをクリア"><X size={14} /></FilterPill>
                           )}
                         </div>
                       )}
@@ -1986,7 +1988,7 @@ function AppMain() {
               {S.spUnsetCount > 0 && (
                 <Card>
                   <button type="button"
-                    onClick={() => { setSearchText(''); setFilter({ type: 'expense', cat: 'ALL', method: 'ALL', source: 'UNSET' }); setLogView('list'); setActiveTab('log'); }}
+                    onClick={() => { setSearchText(''); setFilter({ type: 'expense', cat: [], method: [], source: ['UNSET'] }); setLogView('list'); setActiveTab('log'); }}
                     className="w-full px-5 py-4 text-left active:bg-white/[0.04] transition-colors">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[13px] text-[#FF453A]">充当元が未設定の支出</p>
@@ -2497,23 +2499,32 @@ function AppMain() {
           source: { title: '充当元', all: 'すべての充当元', opts: [...SOURCES, { value: 'UNSET', label: '未設定' }] },
         }[filterSheet];
         const current = filter[filterSheet];
-        const pick = v => { setFilter(p => ({ ...p, [filterSheet]: v })); setFilterSheet(null); };
+        // 複数選択: タップで選択・解除を切り替え（シートは閉じない）。「すべて」は選択をクリア
+        const pick = v => setFilter(p => {
+          if (v === 'ALL') return { ...p, [filterSheet]: [] };
+          const list = p[filterSheet];
+          return { ...p, [filterSheet]: list.includes(v) ? list.filter(x => x !== v) : [...list, v] };
+        });
+        const isOn = v => (v === 'ALL' ? current.length === 0 : current.includes(v));
         return (
           <Modal onClose={() => setFilterSheet(null)}>
             <ModalHeader title={conf.title} onClose={() => setFilterSheet(null)} />
-            <div className="flex-1 overflow-y-auto px-4 pt-3 pb-8">
+            <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4">
               <Card>
                 {[{ value: 'ALL', label: conf.all }, ...conf.opts].map((o, i, arr) => (
                   <div key={o.value}>
-                    <button type="button" onClick={() => pick(o.value)}
+                    <button type="button" onClick={() => pick(o.value)} aria-pressed={isOn(o.value)}
                       className="w-full flex items-center justify-between px-4 min-h-[44px] text-left active:bg-white/[0.04] transition-colors">
-                      <span className={`text-[14px] ${current === o.value ? 'text-[#0A84FF] font-medium' : 'text-white'}`}>{o.label}</span>
-                      {current === o.value && <Check size={15} className="text-[#0A84FF] shrink-0" />}
+                      <span className={`text-[14px] ${isOn(o.value) ? 'text-[#0A84FF] font-medium' : 'text-white'}`}>{o.label}</span>
+                      {isOn(o.value) && <Check size={15} className="text-[#0A84FF] shrink-0" />}
                     </button>
                     {i < arr.length - 1 && <Separator />}
                   </div>
                 ))}
               </Card>
+            </div>
+            <div className="flex-none px-5 pt-3 pb-3 border-t border-white/[0.06]">
+              <PrimaryButton onClick={() => setFilterSheet(null)}>{current.length ? `${current.length}件で絞り込む` : '完了'}</PrimaryButton>
             </div>
           </Modal>
         );
