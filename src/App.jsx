@@ -1627,6 +1627,16 @@ function AppMain() {
                 return (
                   <p className="flex-none px-5 pb-1 text-[11px] text-[#636366] tabular-nums">
                     {scope}{exp.length > 0 && <>{exp.length}件 · 合計 <span className="text-[#EBEBF5]/80 font-medium">¥{sum(exp).toLocaleString()}</span></>}
+                    {exp.length > 0 && (() => {
+                      // 充当元が混ざっているときだけ、予算から／貯金から（／未設定）の内訳をかっこ書きで出す
+                      const parts = [
+                        ['予算から', sum(exp.filter(t => getSource(t) === 'budget'))],
+                        ['貯金から', sum(exp.filter(t => getSource(t) === 'savings'))],
+                        ['未設定', sum(exp.filter(t => getSource(t) === null))],
+                      ].filter(([, v]) => v > 0);
+                      if (parts.length < 2) return null;
+                      return <>（{parts.map(([l, v]) => `${l} ¥${v.toLocaleString()}`).join('・')}）</>;
+                    })()}
                     {exp.length > 0 && mvs.length > 0 && '　'}
                     {mvs.length > 0 && <>振替 {mvs.length}件 · <span className="text-[#EBEBF5]/80 font-medium">¥{sum(mvs).toLocaleString()}</span></>}
                     {!exp.length && !mvs.length && '0件'}
