@@ -33,7 +33,7 @@ test('same or missing savings transfer role never creates money', () => {
   assert.equal(forecastAccount({ ...common, salaryAccountId: '', savingsAccountId: 'salary' }).projected, 10000);
 });
 
-import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords } from './balanceModel.js';
+import { methodTimingOf, spendableFromBalance, transferTotals, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords, happenedBy, salaryArrived, billPaidByToday } from './balanceModel.js';
 
 test('口座振替は当月払い、カードは翌月払い、設定があれば設定を優先', () => {
   assert.equal(methodTimingOf('口座振替'), 'same');
@@ -197,4 +197,48 @@ test('振替日を過ぎたら、その月の記録として作る（二重に�
 test('月末より後の日付は月末に寄せる', () => {
   const t = { ...tplPayPay, day: 31 };
   assert.equal(dueTransferRecords([t], '2026-11', [], [], 30, 30)[0].date, '2026-11-30');
+});
+
+test('現在の残高: 今日以前の日付だけ数え、日付のない予定は数えない', () => {
+  assert.equal(happenedBy('2026-10-14', '2026-10-14'), true);
+  assert.equal(happenedBy('2026-10-15', '2026-10-14'), false);
+  assert.equal(happenedBy(undefined, '2026-10-14'), false);
+});
+
+test('現在の残高: 給料日（月末に寄せる）になったら給与が入る', () => {
+  assert.equal(salaryArrived(25, 24, 31), false);
+  assert.equal(salaryArrived(25, 25, 31), true);
+  assert.equal(salaryArrived(31, 30, 30), true);   // 30日までの月は30日に入る
+  assert.equal(salaryArrived(undefined, 25, 31), true); // 未設定は25日
+});
+
+test('現在の残高: カードは引落日を過ぎるまで口座から引かない（未設定も引かない）', () => {
+  const prev = { living: 50000, savings: 10000 };
+  const before = billPaidByToday({ timing: 'next', due: 26, todayD: 14, prev, cur: { living: 0, savings: 0 } });
+  assert.equal(before.fromLinked, 0); assert.equal(before.savingsPortion, 0);
+  const after = billPaidByToday({ timing: 'next', due: 26, todayD: 26, prev, cur: { living: 0, savings: 0 } });
+  assert.equal(after.fromLinked, 50000); assert.equal(after.savingsPortion, 10000);
+  assert.equal(billPaidByToday({ timing: 'next', todayD: 31, prev }).fromLinked, 0);
+  // 手入力の明細額は引落日を過ぎてから
+  assert.equal(billPaidByToday({ timing: 'next', manual: 70000, due: 10, todayD: 14, prev }).fromLinked, 60000);
+});
+
+test('現在の残高: 当月払いは今日までに記録した分だけ引く', () => {
+  const r = billPaidByToday({ timing: 'same', due: 27, todayD: 14, cur: { living: 9000, savings: 0 }, curToDate: { living: 3000, savings: 0 } });
+  assert.equal(r.fromLinked, 3000);
+});
+
+test('現在の残高と月末の見込みは、月末には一致する', () => {
+  const base = { accountId: 'smbc', start: 100000, salaryAccountId: 'smbc', savingsAccountId: 'smtb', atm: 0 };
+  const prev = { living: 40000, savings: 0 };
+  const proj = forecastAccount({ ...base, salary: 250000, savings: 30000, bills: billForMethod({ timing: 'next', prev }).fromLinked });
+  const lastDay = 31;
+  const arrived = salaryArrived(25, lastDay, lastDay);
+  const now = forecastAccount({ ...base, salary: arrived ? 250000 : 0, savings: arrived ? 30000 : 0,
+    bills: billPaidByToday({ timing: 'next', due: 26, todayD: lastDay, prev }).fromLinked });
+  assert.equal(now.projected, proj.projected);
+  // 月の途中（14日）は給与も引落もまだ
+  const mid = forecastAccount({ ...base, salary: 0, savings: 0,
+    bills: billPaidByToday({ timing: 'next', due: 26, todayD: 14, prev }).fromLinked });
+  assert.equal(mid.projected, 100000);
 });

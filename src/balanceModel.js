@@ -150,3 +150,32 @@ export function dueTransferRecords(templates = [], month, moves = [], skipped = 
       };
     });
 }
+
+// ---- 現在の残高（今日時点） ----
+// 月末の見込みは「今月これから起きること」も含む。現在の残高は、今日までに実際に起きたことだけを数える。
+
+// 日付（YYYY-MM-DD）が今日以前か。日付のない予定（まだ記録されていない毎月の振替など）は含めない
+export function happenedBy(date, today) {
+  return typeof date === 'string' && date.length >= 10 && date.slice(0, 10) <= today;
+}
+
+// 給料日になったか（月末より後の日付は月末に寄せる）。給与の入金と先取りの移動はこの日に起きたものとして扱う
+export function salaryArrived(salaryDay, todayD, lastDay) {
+  const d = Math.min(Number(salaryDay) || 25, lastDay);
+  return todayD >= d;
+}
+
+// 支払方法1つ分の、今日までに実際に引き落とされた額。
+//   翌月払い（カード）: 引落日を過ぎていれば先月分の全額。引落日が未設定ならまだ引かない
+//   当月払い（口座振替など）: 今日までの日付で記録した分。明細の手入力があり引落日を過ぎていればその額
+//   curToDate: 今月、今日までに使った分 { living, savings }
+export function billPaidByToday({ timing, manual = 0, due, todayD, cur, curToDate, prev }) {
+  const dueD = Number(due) || 0;
+  const passed = dueD > 0 && dueD <= todayD;
+  if (timing === 'same') {
+    if (manual > 0 && passed) return billForMethod({ timing, manual, cur, prev });
+    return billForMethod({ timing, cur: curToDate });
+  }
+  if (!passed) return { auto: 0, shown: 0, savingsPortion: 0, fromLinked: 0 };
+  return billForMethod({ timing, manual, cur, prev });
+}

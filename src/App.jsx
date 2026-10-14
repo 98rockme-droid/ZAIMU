@@ -20,9 +20,9 @@ import {
   PrimaryButton, SecondaryButton, DangerIconButton,
   EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
-  EditFormAccount, EditFormAccountPicker, EditFormTransfer
+  EditFormAccount, EditFormAccountPicker, EditFormTransfer, EditFormDay
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords, happenedBy, salaryArrived, billPaidByToday } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -117,7 +117,8 @@ const normalizeConfig = data => ({
   transfers: data?.transfers || [],             // 毎月の口座間の振替 [{ id, from, to, amount, day, title }]
   salaryAccountId: data?.salaryAccountId || '', // 給与の入金先
   savingsAccountId: data?.savingsAccountId || '', // 先取りの移動先
-  cashAccountId: data?.cashAccountId || ''      // ATMでおろす元の口座
+  cashAccountId: data?.cashAccountId || '',     // ATMでおろす元の口座
+  salaryDay: Number(data?.salaryDay) || 25      // 給料日（現在の残高に給与・先取りを反映する日）
 });
 
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
@@ -262,6 +263,7 @@ function AppMain() {
   const [faqQ, setFaqQ] = useState('');
   const [budgetExpanded, setBudgetExpanded] = useState(false);
   const [cashExpanded, setCashExpanded] = useState(false);
+  const [accExpanded, setAccExpanded] = useState(null); // ホームの資産で開いている口座
   const [histTx, setHistTx] = useState(null); // 入力候補用の過去の支出
   const [allTx, setAllTx] = useState(null); // 全期間検索用
   const [allTxLoading, setAllTxLoading] = useState(false);
@@ -314,11 +316,11 @@ function AppMain() {
       { q: '今月の予算（カード）', a: '先取り後の残りから月初のスタート現金と、ATM記録で明示的にカード予算から現金へ回した額を引いた上限です。単に銀行から現金をおろすだけならカード予算は減りません。', formula: '先取り後の残り − 月初のスタート現金 − カード予算から現金へ回した額' },
       { q: '固定費予定とは？', a: '定期支出のうち、今月まだ記録されていないものの合計です。記録された時点で予定から実績（カード支出）へ自動的に移ります。' },
       { q: '財布', a: '手元にあるはずの現金です。ホームの「資産」にある財布をタップすると内訳を確認でき、ATMの記録をタップすると編集できます。', formula: '月初のスタート現金 + ATMなどで財布に入れた現金 − 現金支出' },
-      { q: '「今月の予算」と「資産」の違いは？', a: '今月の予算は「今月あといくら使っていいか」という計画の数字です。資産は「お金が今どこにいくらあるか」という実物の数字で、財布と各口座の月末の見込みを表示します。今月カードで使った分は来月引き落とされるため、予算からはすでに引かれていても、口座にはまだ残っています。そのため2つの数字は一致しません。' },
+      { q: '「今月の予算」と「資産」の違いは？', a: '今月の予算は「今月あといくら使っていいか」という計画の数字です。資産は「お金が今どこにいくらあるか」という実物の数字で、今月は財布と各口座の今日時点の残高を表示します（口座をタップすると月末の見込みも見られます）。今月カードで使った分は来月引き落とされるため、予算からはすでに引かれていても、口座にはまだ残っています。そのため2つの数字は一致しません。' },
       { q: '「今月あと使える」はどう計算している？', a: '口座の月初残高を入力した月は、貯金用以外の口座と財布にあるお金を起点に計算します。三井住友などの生活用の口座に余っているお金も含まれます。給与が月の後半まで分からないときは先月の額で仮計算し、振り込まれたら資金計画で上書きできます。今月引き落とされる先月のカード分は、先月の使った分として計算済みなので差し引きません。月初残高が未入力の月は、従来どおり給与をもとに計算します。', formula: '生活用の口座と財布の月初残高 ＋ 給与 − 先取り − 今月使った分 − 固定費予定' },
       { q: '口座から口座へお金を移しているときは？', a: '毎月決まっている振替は、設定タブの「口座」→「毎月の振替」に登録してください。振替日になると、その月の振替として履歴に記録されます。月によって金額が違うときは履歴からその月の記録を編集し、移さない月は削除するとその月だけスキップされます。登録した月より前の月には影響しません。1回だけの振替は、＋ボタンの「振替・ATM」から記録できます。' },
       { q: '当月払いと翌月払いの違いは？', a: 'クレジットカードは使った翌月に引き落とされる翌月払い、口座振替やデビットは使った月に引き落とされる当月払いです。設定タブの「口座」で支払方法ごとに変更できます。当月払いの分は使った時点で差し引くので、引落予定と二重に引かれることはありません。' },
-      { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。銀行との自動連携はないので、月初に残高を1回入力してください。' },
+      { q: '銀行口座の残高も管理できる？', a: '設定タブの「口座」で銀行を登録し、月初残高を入力すると管理できます。給与の入金・カードの引落・ATMでの出金・先取りの移動を差し引いた、今月末の見込み残高を計算します。ホームでは、今日までに起きた入出金だけを反映した今日時点の残高を表示します（給与と先取りは設定の給料日から、カードの引落は引落日から反映）。銀行との自動連携はないので、月初に残高を1回入力してください。' },
       { q: '口座の見込みと今月の予算の関係は？', a: 'カードは使った月の翌月に引き落とされるため、口座の見込みは「今月出ていくお金」で計算しています。一方で今月の予算は「今月使った分」で計算します。時間のずれがあるので別々の数字として見てください。' },
       { q: 'ATMで現金をおろしたら？', a: '＋ボタンを押して「振替・ATM」に切り替え、振替元をおろした口座、振替先を財布にして記録します。口座から財布へお金の置き場所が変わるだけなので、「今月あと使える」は変わりません。記録は履歴にも表示され、タップすると金額・日付・口座を編集したり削除したりできます。' },
       { q: `${nextMn}月の着地予想`, a: `カードをこれ以上使わなかった場合に月末残る予算のシミュレーションです。銀行から現金をおろしただけでは増えません。`, formula: '実質あと使える（カード） + 予算として確保した現金の残り' },
@@ -758,6 +760,8 @@ function AppMain() {
     }, {});
     const prevByMethod = byMethod(prevTxList);
     const curByMethod = byMethod(txList);
+    // 現在の残高用: 今日までの日付の支出だけ
+    const curToDateByMethod = byMethod(txList.filter(t => happenedBy(t.date, clock)));
     // 今月まだ記録されていない定期支出（月末までに確実に出ていく分）を支払方法ごとに集計
     const recordedIds = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
     const skipped = monthly.skippedRecurring || [];
@@ -775,9 +779,12 @@ function AppMain() {
       const pending = timing === 'same' ? (pendingByMethod[m] || 0) : 0;
       const bill = billForMethod({ timing, manual, cur: curByMethod[m], prev: prevByMethod[m], pending });
       // shown: 明細の請求額 / fromLinked: 引落口座から出る額 / savingsPortion: 貯金用の口座から補填する額
-      return { m, timing, manual, pending, ...bill, due: monthly.cardDueDates?.[m] };
+      const due = monthly.cardDueDates?.[m];
+      // 今日までに実際に引き落とされた分（現在の残高用）
+      const paid = billPaidByToday({ timing, manual, due, todayD: Number(clock.slice(8, 10)), cur: curByMethod[m], curToDate: curToDateByMethod[m], prev: prevByMethod[m] });
+      return { m, timing, manual, pending, ...bill, due, paid };
     });
-  }, [prevTxList, txList, methods, config.methodTimings, config.recurring, config.savingsAccountId, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month]);
+  }, [prevTxList, txList, methods, config.methodTimings, config.recurring, config.savingsAccountId, monthly.cardBills, monthly.cardDueDates, monthly.skippedRecurring, month, clock]);
   const billTotal = useMemo(() => billRows.reduce((s, r) => s + r.shown, 0), [billRows]);
 
   // 残高ベースの「今月あと使える」
@@ -835,6 +842,17 @@ function AppMain() {
     //   現金 → その月
     const savingsSpent = billRows.reduce((s, r) => s + (r.savingsPortion || 0), 0)
       + txList.filter(t => getSource(t) === 'savings' && (t.paymentMethod || CASH) === CASH).reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    // 現在の残高用（今日までに起きたことだけ）
+    const [yy, mm] = month.split('-').map(Number);
+    const lastDay = new Date(yy, mm, 0).getDate();
+    const salaryDay = Number(config.salaryDay) || 25;
+    const isCur = month === clock.slice(0, 7);
+    const todayD = isCur ? Number(clock.slice(8, 10)) : (month < clock.slice(0, 7) ? lastDay : 0);
+    const arrived = salaryArrived(salaryDay, todayD, lastDay);
+    const atmNow = (monthly?.cashTopups || []).filter(c => happenedBy(c.date, clock)).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const transfersNow = monthTransfers.filter(t => happenedBy(t.date, clock));
+    const savingsSpentNow = billRows.reduce((s, r) => s + (r.paid.savingsPortion || 0), 0)
+      + txList.filter(t => getSource(t) === 'savings' && (t.paymentMethod || CASH) === CASH && happenedBy(t.date, clock)).reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const rows = accounts.map(a => {
       const start = Number(monthly.accountBalances?.[a.id]) || 0;
       const bills = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.fromLinked, 0);
@@ -843,12 +861,33 @@ function AppMain() {
         salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,
         cashAccountId: config.cashAccountId, savingsSpent, transfers: monthTransfers
       });
+      // 現在の残高（今日時点）: 今日までに起きた入出金だけで計算する
+      const billsNow = billRows.filter(r => (config.methodAccounts || {})[r.m] === a.id).reduce((s, r) => s + r.paid.fromLinked, 0);
+      const now = forecastAccount({
+        accountId: a.id, start, salary: arrived ? salary : 0, savings: arrived ? savTotal : 0, bills: billsNow, atm: atmNow,
+        salaryAccountId: config.salaryAccountId, savingsAccountId: config.savingsAccountId,
+        cashAccountId: config.cashAccountId, savingsSpent: savingsSpentNow, transfers: transfersNow
+      });
       return {
-        ...a, start, bills, ...forecast
+        ...a, start, bills, ...forecast, billsNow, now
       };
     });
-    return { rows, total: rows.reduce((s, r) => s + r.projected, 0) };
-  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, monthTransfers, monthly, billRows, txList]);
+    return {
+      rows, total: rows.reduce((s, r) => s + r.projected, 0),
+      totalNow: rows.reduce((s, r) => s + r.now.projected, 0), arrived, salaryDay: Math.min(salaryDay, lastDay)
+    };
+  }, [config.accounts, config.methodAccounts, config.salaryAccountId, config.savingsAccountId, config.cashAccountId, config.salaryDay, monthTransfers, monthly, billRows, txList, month, clock]);
+
+  // 表示中の月が実際の今月なら「現在の残高」を出す（過去・未来の月は月末の見込みのまま）
+  const isThisMonth = month === clock.slice(0, 7);
+  // 財布の現在の残高: 今日までの振替・ATM・現金支出だけ
+  const walletNow = useMemo(() => {
+    const legacy = (monthly.cashTopups || []).filter(c => happenedBy(c.date, clock)).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    const moves = walletMoveTotal((monthly.moves || []).filter(m => happenedBy(m.date, clock)));
+    const spent = txList.filter(t => getSource(t) === 'budget' && t.paymentMethod === CASH && happenedBy(t.date, clock))
+      .reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    return (Number(monthly.cashBudget) || 0) + legacy + moves - spent;
+  }, [monthly.cashTopups, monthly.moves, monthly.cashBudget, txList, clock]);
 
   // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
   const plannedByDay = useMemo(() => {
@@ -1132,6 +1171,10 @@ function AppMain() {
         }, { merge: true });
       } else if (type === 'accountRole') {
         await setDoc(cRef, { ...config, [data.role]: data.accountId || '' }, { merge: true });
+      } else if (type === 'salaryDay') {
+        const day = Math.round(toNumber(data.day));
+        if (!(day >= 1 && day <= 31)) return showToast('1〜31の日付を入力してください');
+        await setDoc(cRef, { ...config, salaryDay: day }, { merge: true });
       } else if (type === 'cashTopup') {
         const amt = toNumber(data.value);
         if (amt <= 0) return showToast('金額を入力してください');
@@ -1498,19 +1541,19 @@ function AppMain() {
                 </div>
 
                 <div>
-                  <Label trailing={accountStats.rows.length ? '月末の見込み' : ''}>資産</Label>
+                  <Label trailing={accountStats.rows.length ? (isThisMonth ? '今日時点' : '月末の見込み') : ''}>資産</Label>
                   <Card>
                     {accountStats.rows.length > 0 && (
                       <>
-                        <Row label="合計" value={`¥${(S.cashRemain + accountStats.total).toLocaleString()}`} accent />
+                        <Row label="合計" value={`¥${(isThisMonth ? walletNow + accountStats.totalNow : S.cashRemain + accountStats.total).toLocaleString()}`} accent />
                         <Separator />
                       </>
                     )}
                     {/* 財布（ATMの記録もここから） */}
                     <ExpandableRow
                       label="財布"
-                      value={`¥${S.cashRemain.toLocaleString()}`}
-                      danger={S.cashRemain < 0}
+                      value={`¥${(isThisMonth ? walletNow : S.cashRemain).toLocaleString()}`}
+                      danger={(isThisMonth ? walletNow : S.cashRemain) < 0}
                       expanded={cashExpanded}
                       onToggle={() => setCashExpanded(v => !v)}
                     >
@@ -1527,15 +1570,42 @@ function AppMain() {
                       <SubRow label="今月の現金支出" value={`−¥${S.spCash.toLocaleString()}`} />
                     </ExpandableRow>
                     {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
-                    {accountStats.rows.map(a => (
-                      <div key={a.id}>
-                        <Separator />
-                        <Row
-                          label={a.name}
-                          value={`¥${a.projected.toLocaleString()}`}
-                          danger={a.projected < 0} />
-                      </div>
-                    ))}
+                    {accountStats.rows.map(a => {
+                      if (!isThisMonth) return (
+                        <div key={a.id}>
+                          <Separator />
+                          <Row label={a.name} value={`¥${a.projected.toLocaleString()}`} danger={a.projected < 0} />
+                        </div>
+                      );
+                      // 今月は今日時点の残高。タップで今日までの動きと月末の見込みを表示する
+                      const n = a.now, yen = v => `¥${v.toLocaleString()}`;
+                      const salaryLater = !accountStats.arrived && a.inSalary > 0;
+                      return (
+                        <div key={a.id}>
+                          <Separator />
+                          <ExpandableRow
+                            label={a.name}
+                            value={yen(n.projected)}
+                            danger={n.projected < 0}
+                            expanded={accExpanded === a.id}
+                            onToggle={() => setAccExpanded(v => v === a.id ? null : a.id)}
+                          >
+                            <SubRow label="月初残高" value={yen(a.start)} />
+                            {n.inSalary > 0 && <SubRow label="給与" value={`+${yen(n.inSalary)}`} />}
+                            {n.inSavings > 0 && <SubRow label="先取りの受取" value={`+${yen(n.inSavings)}`} />}
+                            {n.transferIn > 0 && <SubRow label="振替（入）" value={`+${yen(n.transferIn)}`} />}
+                            {a.billsNow > 0 && <SubRow label="引落済み" value={`−${yen(a.billsNow)}`} />}
+                            {n.outSavings > 0 && <SubRow label="先取りの移動" value={`−${yen(n.outSavings)}`} />}
+                            {n.outAtm > 0 && <SubRow label="ATM" value={`−${yen(n.outAtm)}`} />}
+                            {n.outSavingsSpent > 0 && <SubRow label="貯金から払った分" value={`−${yen(n.outSavingsSpent)}`} />}
+                            {n.transferOut > 0 && <SubRow label="振替（出）" value={`−${yen(n.transferOut)}`} />}
+                            {salaryLater && <SubRow label={`給与（${accountStats.salaryDay}日に入金予定）`} value={`+${yen(a.inSalary)}`} />}
+                            {a.bills - a.billsNow > 0 && <SubRow label="これからの引落" value={`−${yen(a.bills - a.billsNow)}`} />}
+                            <SubRow label="月末の見込み" value={yen(a.projected)} danger={a.projected < 0} />
+                          </ExpandableRow>
+                        </div>
+                      );
+                    })}
                     {(() => {
                       // 生活用の口座が月末にマイナスになりそうなときだけ警告する
                       const short = accountStats.rows.filter(a => a.id !== config.savingsAccountId && a.projected < 0);
@@ -2258,9 +2328,13 @@ function AppMain() {
                                 onClick={() => openEdit('accountRole', { role: r.role, accountId: config[r.role] || '', label: r.label }, 0)}
                                 left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{r.label}</span><span className="text-[11px] text-[#636366] truncate">{r.note}</span></div>}
                                 right={(config.accounts || []).find(a => a.id === config[r.role])?.name || '未設定'} />
-                              {i < arr.length - 1 && <Separator />}
+                              <Separator />
                             </div>
                           ))}
+                          <SettingsRow
+                            onClick={() => openEdit('salaryDay', { day: String(config.salaryDay || 25) }, 0)}
+                            left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">給料日</span><span className="text-[11px] text-[#636366] truncate">この日に給与と先取りを今日時点の残高に反映</span></div>}
+                            right={`${config.salaryDay || 25}日`} />
                         </Card>
                       </div>
 
@@ -2799,7 +2873,7 @@ function AppMain() {
       {/* 設定編集モーダル */}
       {editingItem && (() => {
         const TYPE_LABELS = {
-          salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ', account: '口座', accountBalance: '月初残高', methodAccount: '引落口座', accountRole: '口座の役割', transfer: '毎月の振替',
+          salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ', account: '口座', accountBalance: '月初残高', methodAccount: '引落口座', accountRole: '口座の役割', salaryDay: '給料日', transfer: '毎月の振替',
           bill: '引落予定', savingsBucket: '先取り項目', category: 'カテゴリ',
           template: 'テンプレート', recurring: '定期支出', payment: '支払方法'
         };
@@ -2822,9 +2896,11 @@ function AppMain() {
               <EditFormAccountPicker editingItem={editingItem} setEditingItem={setEditingItem} accounts={config.accounts || []} showTiming={editingItem.type === 'methodAccount'}
                 note={editingItem.type === 'methodAccount' ? 'この支払方法の引落が、選んだ口座から出ていくものとして計算します' : undefined} />
             )}
+            {editingItem.type === 'salaryDay' && <EditFormDay editingItem={editingItem} setEditingItem={setEditingItem} label="毎月の給料日"
+              note="ホームの資産（今日時点）に、この日から給与の入金と先取りの移動を反映します。月末より後の日付は月末として扱います" />}
             {editingItem.type === 'payment' && <EditFormPayment editingItem={editingItem} setEditingItem={setEditingItem} />}
             <div className="flex gap-2 pt-2">
-              {!isNew && !['salary', 'cashBudget', 'bill', 'memo', 'accountBalance', 'methodAccount', 'accountRole'].includes(editingItem.type) && (
+              {!isNew && !['salary', 'cashBudget', 'bill', 'memo', 'accountBalance', 'methodAccount', 'accountRole', 'salaryDay'].includes(editingItem.type) && (
                 <DangerIconButton onClick={deleteItem}><Trash2 size={17} /></DangerIconButton>
               )}
               <PrimaryButton onClick={saveSettings} disabled={isSaving}>{isSaving ? '保存中...' : isNew ? '追加する' : '保存する'}</PrimaryButton>

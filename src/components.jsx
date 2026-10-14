@@ -584,6 +584,20 @@ export const EditFormTransfer = ({ editingItem, setEditingItem, accounts, openCa
   );
 };
 
+// 毎月の日付（給料日など）を1つ入力するフォーム
+export const EditFormDay = ({ editingItem, setEditingItem, label, note }) => (
+  <div>
+    <FieldLabel>{label}</FieldLabel>
+    <div className="flex items-center bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] h-11 px-4 w-1/2">
+      <input type="number" inputMode="numeric" min="1" max="31" value={String(editingItem.data.day ?? '')}
+        onChange={e => setEditingItem({ ...editingItem, data: { ...editingItem.data, day: e.target.value } })}
+        className="w-full min-w-0 bg-transparent text-[16px] font-semibold text-white outline-none tabular-nums" />
+      <span className="text-[13px] text-[#98989D] ml-2 shrink-0">日</span>
+    </div>
+    {note && <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">{note}</p>}
+  </div>
+);
+
 export const EditFormPayment = ({ editingItem, setEditingItem }) => (
   <div>
     <FieldLabel>支払方法名</FieldLabel>
