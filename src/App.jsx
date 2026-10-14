@@ -1579,7 +1579,20 @@ function AppMain() {
                       );
                       // 今月は今日時点の残高。タップで今日までの動きと月末の見込みを表示する
                       const n = a.now, yen = v => `¥${v.toLocaleString()}`;
-                      const salaryLater = !accountStats.arrived && a.inSalary > 0;
+                      const sd = accountStats.salaryDay;
+                      // 内訳の項目: [ラベル, 符号, 今日までの額, 月末までの額]
+                      const items = [
+                        [`給与（${sd}日）`, '+', n.inSalary, a.inSalary],
+                        [`先取りの受取（${sd}日）`, '+', n.inSavings, a.inSavings],
+                        ['振替（入）', '+', n.transferIn, a.transferIn],
+                        ['カードなどの引落', '−', a.billsNow, a.bills],
+                        [`先取りの移動（${sd}日）`, '−', n.outSavings, a.outSavings],
+                        ['ATM', '−', n.outAtm, a.outAtm],
+                        ['貯金から払った分', '−', n.outSavingsSpent, a.outSavingsSpent],
+                        ['振替（出）', '−', n.transferOut, a.transferOut],
+                      ];
+                      const done = items.filter(i => i[2] > 0);
+                      const later = items.map(i => [i[0], i[1], i[3] - i[2]]).filter(i => i[2] > 0);
                       return (
                         <div key={a.id}>
                           <Separator />
@@ -1591,16 +1604,10 @@ function AppMain() {
                             onToggle={() => setAccExpanded(v => v === a.id ? null : a.id)}
                           >
                             <SubRow label="月初残高" value={yen(a.start)} />
-                            {n.inSalary > 0 && <SubRow label="給与" value={`+${yen(n.inSalary)}`} />}
-                            {n.inSavings > 0 && <SubRow label="先取りの受取" value={`+${yen(n.inSavings)}`} />}
-                            {n.transferIn > 0 && <SubRow label="振替（入）" value={`+${yen(n.transferIn)}`} />}
-                            {a.billsNow > 0 && <SubRow label="引落済み" value={`−${yen(a.billsNow)}`} />}
-                            {n.outSavings > 0 && <SubRow label="先取りの移動" value={`−${yen(n.outSavings)}`} />}
-                            {n.outAtm > 0 && <SubRow label="ATM" value={`−${yen(n.outAtm)}`} />}
-                            {n.outSavingsSpent > 0 && <SubRow label="貯金から払った分" value={`−${yen(n.outSavingsSpent)}`} />}
-                            {n.transferOut > 0 && <SubRow label="振替（出）" value={`−${yen(n.transferOut)}`} />}
-                            {salaryLater && <SubRow label={`給与（${accountStats.salaryDay}日に入金予定）`} value={`+${yen(a.inSalary)}`} />}
-                            {a.bills - a.billsNow > 0 && <SubRow label="これからの引落" value={`−${yen(a.bills - a.billsNow)}`} />}
+                            {done.map(([l, sign, v]) => <SubRow key={`d${l}`} label={l} value={`${sign}${yen(v)}`} />)}
+                            <SubRow label="今日時点" value={yen(n.projected)} danger={n.projected < 0} />
+                            {later.length > 0 && <p className="pt-1 text-[11px] text-[#636366]">これから</p>}
+                            {later.map(([l, sign, v]) => <SubRow key={`l${l}`} label={l} value={`${sign}${yen(v)}`} />)}
                             <SubRow label="月末の見込み" value={yen(a.projected)} danger={a.projected < 0} />
                           </ExpandableRow>
                         </div>
