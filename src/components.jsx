@@ -156,7 +156,7 @@ export const NavButton = ({ active, onClick, icon, label }) => (
 );
 
 export const Toast = ({ message, isVisible, action }) => (
-  <div className={`fixed bottom-32 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 ${isVisible && action ? 'pointer-events-auto' : 'pointer-events-none'} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+  <div className={`fixed bottom-32 md:bottom-10 left-1/2 -translate-x-1/2 z-[80] transition-all duration-300 ${isVisible && action ? 'pointer-events-auto' : 'pointer-events-none'} ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
     <div className="bg-[#3A3A3C] text-white pl-4 pr-1.5 py-1.5 min-h-[44px] rounded-full flex items-center gap-2 shadow-xl whitespace-nowrap">
       <CheckCircle2 size={13} className="text-[#30D158] shrink-0" />
       <span className="text-[13px] font-medium pr-2.5">{message}</span>

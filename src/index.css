@@ -35,3 +35,26 @@ body {
     display: none;
   }
 }
+
+/* ===== iPad・PC 向けレイアウト =====
+   page-x: 左右の余白。スマホは16px、画面が広いときは本文の幅を決めて真ん中に寄せる
+   （スクロールする箱自体は横幅いっぱいのままなので、余白の上でもスクロールできる） */
+@layer utilities {
+  .page-x {
+    --page-min: 1rem;
+    --page-w: 100%;
+    padding-left: max(var(--page-min), calc((100% - var(--page-w)) / 2));
+    padding-right: max(var(--page-min), calc((100% - var(--page-w)) / 2));
+  }
+  .page-x-5 {
+    --page-min: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .page-x { --page-min: 1.5rem; --page-w: 42rem; }
+    .page-x-5 { --page-min: 1.75rem; }
+  }
+  @media (min-width: 1024px) {
+    .page-x { --page-min: 2rem; }
+    .page-x.page-wide { --page-w: 64rem; }
+  }
+}

@@ -1403,7 +1403,31 @@ function AppMain() {
       <Toast message={toast.message} isVisible={toast.visible} action={toast.action} />
       <OfflineBanner isOffline={isOffline} />
 
-      <div className="w-full max-w-md h-full flex flex-col bg-[#1C1C1E] mx-auto relative">
+      <div className="w-full max-w-md md:max-w-none h-full flex flex-col md:flex-row bg-[#1C1C1E] mx-auto relative">
+
+        {/* SIDEBAR — iPad・PC（幅768px以上）だけ表示。スマホは下のフローティングバー */}
+        <aside className="hidden md:flex flex-col flex-none w-[208px] lg:w-[232px] h-full border-r border-white/[0.08] bg-[#1C1C1E] px-3 pb-5"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
+          <div className="h-11 px-3 flex items-center">
+            <span className="text-[16px] font-semibold tracking-[0.12em] text-white">ZAIMU</span>
+          </div>
+          <button onClick={openNew}
+            className="mt-4 h-11 w-full rounded-[14px] bg-[#0A84FF] text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-[#0A84FF]/90 active:scale-[0.98] transition shadow-lg shadow-[#0A84FF]/20">
+            <Plus size={18} />支出を入力
+          </button>
+          <nav className="mt-5 flex flex-col gap-1" aria-label="メニュー">
+            {[[<Home size={18} />, 'home', 'ホーム'], [<History size={18} />, 'log', '履歴'], [<BarChart3 size={18} />, 'analysis', '分析'], [<Settings size={18} />, 'settings', '設定']].map(([icon, tab, label]) => (
+              <button key={tab} onClick={() => { setActiveTab(tab); if (tab === 'settings') setSettingTab('menu'); }}
+                aria-current={activeTab === tab ? 'page' : undefined}
+                className={`h-11 px-3 rounded-[10px] flex items-center gap-3 text-[14px] transition-colors ${activeTab === tab ? 'bg-white/[0.10] text-white font-medium' : 'text-[#98989D] hover:bg-white/[0.05] hover:text-white'}`}>
+                {icon}{label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* 右側：ヘッダー＋本文 */}
+        <div className="flex-1 min-w-0 h-full flex flex-col">
 
         {/* HEADER */}
         <header className="flex-none px-4 flex items-center justify-between bg-[#1C1C1E]/75 backdrop-blur-2xl backdrop-saturate-150 border-b border-white/[0.08] z-50" style={{ paddingTop: 'env(safe-area-inset-top)', height: 'calc(3.5rem + env(safe-area-inset-top))' }}>
@@ -1437,15 +1461,15 @@ function AppMain() {
 
           {/* HOME */}
           {activeTab === 'home' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide pb-36">
+            <div className="flex-1 overflow-y-auto scrollbar-hide pb-36 md:pb-10">
               {monthly.memo && (
-                <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full px-4 py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#2C2C2E]/60">
+                <button onClick={() => setMemoExpanded(!memoExpanded)} className="w-full page-x page-wide py-3 flex items-start gap-3 text-left border-b border-white/[0.06] bg-[#2C2C2E]/60">
                   <span className="text-[13px] mt-0.5 shrink-0">📌</span>
                   <span className={`flex-1 text-[13px] text-[#98989D] leading-relaxed ${memoExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}>{monthly.memo}</span>
                   <ChevronDown size={13} className={`text-[#636366] shrink-0 mt-0.5 transition-transform ${memoExpanded ? 'rotate-180' : ''}`} />
                 </button>
               )}
-              <div className="px-4 pt-4 space-y-5">
+              <div className="page-x page-wide pt-4 space-y-5 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start">
                 <div>
                   <Label>今月の予算</Label>
                   <Card>
@@ -1644,7 +1668,7 @@ function AppMain() {
           {/* LOG */}
           {activeTab === 'log' && (
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-none px-4 pt-3 pb-2 space-y-1.5">
+              <div className="flex-none page-x pt-3 pb-2 space-y-1.5">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
                     <input value={searchText} onChange={e => setSearchText(e.target.value)} placeholder="検索..."
@@ -1695,14 +1719,14 @@ function AppMain() {
                 // 絞り込み・検索中だけ、結果の件数と合計を小さく表示する
                 const active = isSearching || filter.type !== 'ALL' || filter.cat.length > 0 || filter.method.length > 0 || filter.source.length > 0 || filter.rec.length > 0;
                 if (!active) return null;
-                if (isSearching && allTxLoading) return <p className="flex-none px-5 pb-1 text-[11px] text-[#636366]">全期間から検索中...</p>;
+                if (isSearching && allTxLoading) return <p className="flex-none page-x page-x-5 pb-1 text-[11px] text-[#636366]">全期間から検索中...</p>;
                 const items = logGroups.flatMap(g => g.items);
                 const exp = items.filter(t => !t._move);
                 const mvs = items.filter(t => t._move);
                 const sum = list => list.reduce((a, t) => a + (Number(t.amount) || 0), 0);
                 const scope = isSearching ? (allTxTruncated ? `直近${(allTx || []).length.toLocaleString()}件から ` : '全期間から ') : '';
                 return (
-                  <p className="flex-none px-5 pb-1 text-[11px] text-[#636366] tabular-nums">
+                  <p className="flex-none page-x page-x-5 pb-1 text-[11px] text-[#636366] tabular-nums">
                     {scope}{exp.length > 0 && <>{exp.length}件 · 合計 <span className="text-[#EBEBF5]/80 font-medium">¥{sum(exp).toLocaleString()}</span></>}
                     {exp.length > 0 && (() => {
                       // 充当元が混ざっているときだけ、予算から／貯金から（／未設定）の内訳をかっこ書きで出す
@@ -1720,7 +1744,7 @@ function AppMain() {
                   </p>
                 );
               })()}
-              <div className="flex-1 px-4 pt-1 pb-36 overflow-y-auto scrollbar-hide">
+              <div className="flex-1 page-x pt-1 pb-36 md:pb-10 overflow-y-auto scrollbar-hide">
                 {logView === 'list' ? (
                   logGroups.length === 0 ? (
                     <Card><EmptyState>履歴がありません</EmptyState></Card>
@@ -1870,7 +1894,7 @@ function AppMain() {
 
           {/* ANALYSIS */}
           {activeTab === 'analysis' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
+            <div className="flex-1 overflow-y-auto scrollbar-hide page-x page-wide pt-4 pb-36 md:pb-10 space-y-4">
               {/* 月間/年間 切替 */}
               <div className="flex bg-[#2C2C2E] rounded-[14px] p-1 gap-1">
                 {[['month', '月間'], ['year', '年間']].map(([v, l]) => (
@@ -1965,7 +1989,7 @@ function AppMain() {
                 })()
               )}
 
-              {analysisView === 'month' && (<>
+              {analysisView === 'month' && (<div className="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-4 lg:items-start">
               <div>
                 <Label>カテゴリ別の支出（予算から）</Label>
                 <Card>
@@ -2116,13 +2140,13 @@ function AppMain() {
                   </div>
                 </Card>
               )}
-              </>)}
+              </div>)}
             </div>
           )}
 
           {/* SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="flex-1 overflow-y-auto scrollbar-hide px-4 pt-4 pb-36 space-y-4">
+            <div className="flex-1 overflow-y-auto scrollbar-hide page-x pt-4 pb-36 md:pb-10 space-y-4">
               {settingTab === 'menu' && (
                 <>
                   <div className="flex items-center gap-3 p-3.5 bg-[#2C2C2E] rounded-[20px]">
@@ -2548,10 +2572,11 @@ function AppMain() {
             </div>
           )}
         </main>
+        </div>
 
         {/* FOOTER — Liquid Glass風フローティングバー */}
         <footer
-          className="fixed left-5 right-5 z-50 max-w-[400px] mx-auto rounded-[30px] bg-white/[0.08] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.12] shadow-2xl shadow-black/40 flex items-center justify-around px-3 py-2"
+          className="md:hidden fixed left-5 right-5 z-50 max-w-[400px] mx-auto rounded-[30px] bg-white/[0.08] backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.12] shadow-2xl shadow-black/40 flex items-center justify-around px-3 py-2"
           style={{ bottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
         >
           {[[<Home size={20} />, 'home', 'ホーム'], [<History size={20} />, 'log', '履歴']].map(([icon, tab, label]) => (
