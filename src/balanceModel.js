@@ -179,3 +179,40 @@ export function billPaidByToday({ timing, manual = 0, due, todayD, cur, curToDat
   if (!passed) return { auto: 0, shown: 0, savingsPortion: 0, fromLinked: 0 };
   return billForMethod({ timing, manual, cur, prev });
 }
+
+// ---- 積立グループ（ライブ用など「使う予定のお金」） ----
+// 貯金用の口座のうち、目的が決まっているお金。スタート時の残りに毎月の先取りを積み上げ、
+// そのグループから払った支出を引く。使わなかった分は翌月以降に繰り越される。
+//   startMonth:     計算を始める月（YYYY-MM）。startBalance はその月の初めの残り
+//   amountsByMonth: { 'YYYY-MM': その月の先取り額 }（先取り項目と名前でつなぐ）
+//   currentArrived: 表示月の先取りがもう入ったか（今月は給料日から。過去・未来の月は true）
+//   spent:          そのグループから払った額（スタート月の初め〜表示の時点。使った日に減らす）
+// 表示月がスタート月より前なら null（まだ始まっていない）
+export function fundBalance({ startBalance = 0, startMonth, month, amountsByMonth = {}, currentArrived = true, spent = 0 }) {
+  if (!startMonth || !month || month < startMonth) return null;
+  let added = 0;
+  for (const [m, amount] of Object.entries(amountsByMonth)) {
+    if (m < startMonth || m > month) continue;
+    if (m === month && !currentArrived) continue;
+    added += Number(amount) || 0;
+  }
+  return (Number(startBalance) || 0) + added - (Number(spent) || 0);
+}
+
+// 貯金から払ったけれど、まだ貯金用の口座から出ていないお金（カードの引落待ち）。
+// 支出の時点で積立・貯金からは「もう使ったお金」なので、口座の残高からも除いて考える。
+//   rows: 支払方法ごとの { timing, savingsPortion, paidSavings }
+//         翌月払いは先月分が今月の引落日に出る → 引落前なら未払い
+//   curNextSavings: 今月、翌月払いの支払方法で貯金から払った分（来月の引落で出る）
+export function savingsPendingOut({ rows = [], curNextSavings = 0 }) {
+  const prevUnpaid = rows
+    .filter(r => r.timing !== 'same')
+    .reduce((s, r) => s + Math.max(0, (Number(r.savingsPortion) || 0) - (Number(r.paidSavings) || 0)), 0);
+  return prevUnpaid + (Number(curNextSavings) || 0);
+}
+
+// 純粋な貯金 ＝ 貯金用の口座の残高 − 積立グループの残り − 引落待ちの貯金払い
+export function pureSavings({ accountBalance = 0, fundRemains = [], pendingOut = 0 }) {
+  const funds = fundRemains.reduce((s, v) => s + (Number(v) || 0), 0);
+  return (Number(accountBalance) || 0) - funds - (Number(pendingOut) || 0);
+}

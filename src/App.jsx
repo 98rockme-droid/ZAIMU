@@ -18,11 +18,11 @@ import {
   SettingsRow, CalculatorPad, useConfirm, toNumber,
   ExpandableRow, SubRow, EmptyState, AddRow,
   PrimaryButton, SecondaryButton, DangerIconButton,
-  EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket,
+  EditFormSalaryLike, EditFormMemo, EditFormBill, EditFormSavingsBucket, EditFormFund,
   EditFormCategory, EditFormTemplate, EditFormPayment, EditFormRecurring,
   EditFormAccount, EditFormAccountPicker, EditFormTransfer, EditFormDay
 } from './components.jsx';
-import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords, happenedBy, salaryArrived, billPaidByToday } from './balanceModel.js';
+import { cashTopupTotals, forecastAccount, remainingCashBudget, methodTimingOf, spendableFromBalance, transferEffectOnLiving, billForMethod, walletMoveTotal, transfersForMonth, dueTransferRecords, happenedBy, salaryArrived, billPaidByToday, fundBalance, savingsPendingOut, pureSavings } from './balanceModel.js';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_GOOGLE_API_KEY,
@@ -118,7 +118,10 @@ const normalizeConfig = data => ({
   salaryAccountId: data?.salaryAccountId || '', // 給与の入金先
   savingsAccountId: data?.savingsAccountId || '', // 先取りの移動先
   cashAccountId: data?.cashAccountId || '',     // ATMでおろす元の口座
-  salaryDay: Number(data?.salaryDay) || 25      // 給料日（現在の残高に給与・先取りを反映する日）
+  salaryDay: Number(data?.salaryDay) || 25,     // 給料日（現在の残高に給与・先取りを反映する日）
+  // 積立グループ（ライブ用など使う予定のお金）[{ id, name, startMonth, startBalance }]
+  // 先取り項目・貯金からの支出とは名前でつなぐ
+  funds: data?.funds || []
 });
 
 const GRAYS = ['#F4F4F5', '#D4D4D8', '#A1A1AA', '#71717A', '#52525B', '#3F3F46', '#27272A'];
@@ -282,6 +285,7 @@ function AppMain() {
   const inheritRef = useRef(new Set());
   const [config, setConfig] = useState(normalizeConfig({}));
   const [pastSavingsBucketNames, setPastSavingsBucketNames] = useState([]);
+  const [fundHistory, setFundHistory] = useState({ key: '', months: {}, tx: [] }); // 積立グループの計算用（表示月より前の先取り・貯金払い）
   const [searchText, setSearchText] = useState('');
   // cat / method / source は複数選択。空の配列は「すべて」
   const [filter, setFilter] = useState({ type: 'ALL', cat: [], method: [], source: [], rec: [] });
@@ -298,9 +302,10 @@ function AppMain() {
   const buckets = useMemo(() => getSavingsBuckets(monthly), [monthly]);
   // 貯金からの支出で選べる項目（過去と今月の設定名）
   const bucketOptions = useMemo(() => {
-    const set = new Set([...pastSavingsBucketNames, ...buckets.map(b => b.name)]);
+    // 積立グループ（マスタ）の名前を先頭に並べる
+    const set = new Set([...(config.funds || []).map(f => f.name), ...pastSavingsBucketNames, ...buckets.map(b => b.name)]);
     return [...set].filter(Boolean);
-  }, [pastSavingsBucketNames, buckets]);
+  }, [config.funds, pastSavingsBucketNames, buckets]);
 
   const FAQ = useMemo(() => [
     { category: '設定タブの金額', items: [
@@ -436,6 +441,31 @@ function AppMain() {
       }).catch(console.error);
     return () => { cancelled = true; };
   }, [user, month, monthly.savingsBuckets, monthly.savings]);
+
+  /* 積立グループの計算用: スタート月〜表示月の前月までの先取りと、貯金からの支出 */
+  const fundStartMin = useMemo(() => {
+    const starts = (config.funds || []).map(f => f.startMonth).filter(Boolean).sort();
+    return starts[0] || '';
+  }, [config.funds]);
+  useEffect(() => {
+    if (!user || !fundStartMin || fundStartMin >= month) { setFundHistory({ key: '', months: {}, tx: [] }); return; }
+    let cancelled = false;
+    const key = `${fundStartMin}_${month}`;
+    const startIso = new Date(`${fundStartMin}-01T00:00:00Z`).toISOString();
+    const endIso = new Date(`${month}-01T00:00:00Z`).toISOString();
+    Promise.all([
+      getDocs(query(collection(db, 'users', user.uid, 'months'), where(documentId(), '>=', fundStartMin), where(documentId(), '<', month))),
+      getDocs(query(collection(db, 'users', user.uid, 'transactions'), where('date', '>=', startIso), where('date', '<', endIso)))
+    ]).then(([mSnap, tSnap]) => {
+      if (cancelled) return;
+      const months = {};
+      mSnap.forEach(d => { months[d.id] = getSavingsBuckets(normalizeMonthly(d.data())); });
+      const tx = tSnap.docs.map(d => d.data()).filter(t => getSource(t) === 'savings' && t.savingsBucket)
+        .map(t => ({ date: t.date, amount: Number(t.amount) || 0, savingsBucket: t.savingsBucket }));
+      setFundHistory({ key, months, tx });
+    }).catch(console.error);
+    return () => { cancelled = true; };
+  }, [user, month, fundStartMin]);
 
   useEffect(() => setMemoText(monthly?.memo || ''), [monthly?.memo]);
 
@@ -889,6 +919,44 @@ function AppMain() {
     return (Number(monthly.cashBudget) || 0) + legacy + moves - spent;
   }, [monthly.cashTopups, monthly.moves, monthly.cashBudget, txList, clock]);
 
+  // 積立グループ（ライブ用など）の残りと、貯金用の口座のうち「純粋な貯金」
+  //   今月は今日時点（先取りは給料日から・支出は今日までの日付）、過去・未来の月は月末の時点
+  const fundStats = useMemo(() => {
+    const funds = (config.funds || []).filter(f => f.name && f.startMonth);
+    if (!funds.length) return null;
+    // 表示月より前の分を読み込み中なら表示しない（途中の数字を出さない）
+    if (funds.some(f => f.startMonth < month) && fundHistory.key !== `${fundStartMin}_${month}`) return null;
+    const sumAmt = list => list.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+    const inCut = t => !isThisMonth || happenedBy(t.date, clock);
+    const curTx = txList.filter(t => getSource(t) === 'savings' && t.savingsBucket && inCut(t));
+    const rows = funds.map(f => {
+      const amountsByMonth = {};
+      Object.entries(fundHistory.months).forEach(([m, list]) => { amountsByMonth[m] = sumAmt(list.filter(b => b.name === f.name)); });
+      amountsByMonth[month] = sumAmt(buckets.filter(b => b.name === f.name));
+      const from = `${f.startMonth}-01`;
+      const spent = sumAmt([...fundHistory.tx, ...curTx].filter(t => t.savingsBucket === f.name && String(t.date).slice(0, 10) >= from));
+      const remain = fundBalance({
+        startBalance: f.startBalance, startMonth: f.startMonth, month, amountsByMonth,
+        currentArrived: isThisMonth ? accountStats.arrived : true, spent
+      });
+      return { ...f, remain };
+    }).filter(r => r.remain !== null);
+    // 貯金から払ったけれど、まだ貯金用の口座から出ていない分（カードの引落待ち）
+    const routeSavings = !!config.savingsAccountId;
+    const isNext = m => m !== CASH && methodTimingOf(m, config.methodTimings) !== 'same';
+    const curNextSavings = routeSavings
+      ? sumAmt(txList.filter(t => getSource(t) === 'savings' && isNext(t.paymentMethod || CASH) && inCut(t)))
+      : 0;
+    const pendingOut = savingsPendingOut({
+      rows: isThisMonth ? billRows.map(r => ({ timing: r.timing, savingsPortion: r.savingsPortion, paidSavings: r.paid.savingsPortion })) : [],
+      curNextSavings
+    });
+    const acc = accountStats.rows.find(a => a.id === config.savingsAccountId);
+    const balance = acc ? (isThisMonth ? acc.now.projected : acc.projected) : null;
+    const pure = balance === null ? null : pureSavings({ accountBalance: balance, fundRemains: rows.map(r => r.remain), pendingOut });
+    return { rows, pendingOut, pure, accountId: acc?.id || '' };
+  }, [config.funds, config.savingsAccountId, config.methodTimings, fundHistory, fundStartMin, month, isThisMonth, accountStats, txList, clock, buckets, billRows]);
+
   // カレンダー用: まだ記録されていない定期支出を「予定」として日別にまとめる
   const plannedByDay = useMemo(() => {
     const recorded = new Set(txList.filter(t => t.recurringId).map(t => t.recurringId));
@@ -1190,6 +1258,15 @@ function AppMain() {
         const list = [...buckets]; const item = { id: data.id || `sb_${Date.now()}`, name: data.name || '', amount: toNumber(data.amount) };
         if (index === -1) list.unshift(item); else list[index] = item;
         await setDoc(mRef, { savingsBuckets: list, savings: list.reduce((s, b) => s + (Number(b.amount) || 0), 0) }, { merge: true });
+      } else if (type === 'fund') {
+        const name = String(data.name || '').trim();
+        if (!name) return showToast('名前を入力してください');
+        if (!/^\d{4}-\d{2}$/.test(data.startMonth || '')) return showToast('スタートの月を選んでください');
+        const list = [...(config.funds || [])];
+        if (list.some((f, i) => f.name === name && i !== index)) return showToast('同じ名前のグループがあります');
+        const item = { id: data.id || `fund_${Date.now()}`, name, startMonth: data.startMonth, startBalance: toNumber(data.startBalance) };
+        if (index === -1) list.push(item); else list[index] = item;
+        await setDoc(cRef, { ...config, funds: list }, { merge: true });
       } else if (type === 'category') {
         const list = [...(config.categories || [])];
         if (index === -1) list.unshift({ name: data.name }); else list[index] = { name: data.name };
@@ -1240,6 +1317,7 @@ function AppMain() {
         await setDoc(cRef, { ...config, accounts: (config.accounts || []).filter((_, i) => i !== index), methodAccounts, ...roles, transfers }, { merge: true });
       }
       else if (type === 'cashTopup') await setDoc(mRef, { cashTopups: (monthly.cashTopups || []).filter((_, i) => i !== index) }, { merge: true });
+      else if (type === 'fund') await setDoc(cRef, { ...config, funds: (config.funds || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'category') await setDoc(cRef, { ...config, categories: (config.categories || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'template') await setDoc(cRef, { ...config, templates: (config.templates || []).filter((_, i) => i !== index) }, { merge: true });
       else if (type === 'recurring') await setDoc(cRef, { ...config, recurring: (config.recurring || []).filter((_, i) => i !== index) }, { merge: true });
@@ -1595,10 +1673,21 @@ function AppMain() {
                     </ExpandableRow>
                     {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
                     {accountStats.rows.map(a => {
+                      // 貯金用の口座の内訳: 積立グループの残りと純粋な貯金（いつも小さく表示）
+                      const fundLines = fundStats && fundStats.accountId === a.id && fundStats.pure !== null && (
+                        <div className="px-4 pb-2.5 -mt-1 space-y-1">
+                          {fundStats.rows.map(r => (
+                            <SubRow key={r.id} label={`うち ${r.name}`} value={`¥${r.remain.toLocaleString()}`} danger={r.remain < 0} />
+                          ))}
+                          {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={`¥${fundStats.pendingOut.toLocaleString()}`} />}
+                          <SubRow label="純粋な貯金" value={`¥${fundStats.pure.toLocaleString()}`} danger={fundStats.pure < 0} />
+                        </div>
+                      );
                       if (!isThisMonth) return (
                         <div key={a.id}>
                           <Separator />
                           <Row label={a.name} value={`¥${a.projected.toLocaleString()}`} danger={a.projected < 0} />
+                          {fundLines}
                         </div>
                       );
                       // 今月は今日時点の残高。タップで今日までの動きと月末の見込みを表示する
@@ -1634,6 +1723,7 @@ function AppMain() {
                             {later.map(([l, sign, v]) => <SubRow key={`l${l}`} label={l} value={`${sign}${yen(v)}`} />)}
                             <SubRow label="月末の見込み" value={yen(a.projected)} danger={a.projected < 0} />
                           </ExpandableRow>
+                          {fundLines}
                         </div>
                       );
                     })}
@@ -2267,6 +2357,25 @@ function AppMain() {
                       ))}
                       <AddRow label="先取り項目を追加" onClick={() => openEdit('savingsBucket', { id: '', name: '', amount: '' }, -1)} />
                     </Card>
+                  </div>
+                  <div>
+                    <Label>積立グループ</Label>
+                    <Card>
+                      {(config.funds || []).map((f, i) => {
+                        const st = fundStats?.rows.find(r => r.id === f.id);
+                        const [fy, fm] = String(f.startMonth || '').split('-').map(Number);
+                        return (
+                          <div key={f.id || i}>
+                            <SettingsRow onClick={() => openEdit('fund', { ...f, startBalance: f.startBalance ?? '' }, i)}
+                              left={<div className="flex flex-col min-w-0"><span className="text-[14px] text-white truncate">{f.name}</span><span className="text-[11px] text-[#636366] truncate">{fy ? `${fy}年${fm}月から` : 'スタートの月が未設定'}</span></div>}
+                              right={st ? `残り ¥${st.remain.toLocaleString()}` : ''} />
+                            <Separator />
+                          </div>
+                        );
+                      })}
+                      <AddRow label="積立グループを追加" onClick={() => openEdit('fund', { id: '', name: '', startMonth: month, startBalance: '' }, -1)} />
+                    </Card>
+                    <p className="text-[11px] text-[#636366] mt-1.5 mx-4 leading-relaxed">ライブ用など、使う予定が決まっている貯金です。先取り項目と同じ名前にすると毎月の先取りが積み上がり、貯金から払うときにグループを選ぶと減ります</p>
                   </div>
                   <div>
                     {(() => {
@@ -2906,7 +3015,7 @@ function AppMain() {
       {editingItem && (() => {
         const TYPE_LABELS = {
           salary: '手取り給与', cashBudget: '月初のスタート現金', cashTopup: 'ATMでおろした現金', memo: '今月のメモ', account: '口座', accountBalance: '月初残高', methodAccount: '引落口座', accountRole: '口座の役割', salaryDay: '給料日', transfer: '毎月の振替',
-          bill: '引落予定', savingsBucket: '先取り項目', category: 'カテゴリ',
+          bill: '引落予定', savingsBucket: '先取り項目', fund: '積立グループ', category: 'カテゴリ',
           template: 'テンプレート', recurring: '定期支出', payment: '支払方法'
         };
         const isNew = editingItem.index === -1;
@@ -2919,6 +3028,8 @@ function AppMain() {
             {editingItem.type === 'memo' && <EditFormMemo editingItem={editingItem} setEditingItem={setEditingItem} />}
             {editingItem.type === 'bill' && <EditFormBill editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'savingsBucket' && <EditFormSavingsBucket editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
+            {editingItem.type === 'fund' && <EditFormFund editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc}
+              suggestions={[...new Set([...pastSavingsBucketNames, ...buckets.map(b => b.name)])].filter(n => n && !(config.funds || []).some(f => f.name === n))} />}
             {editingItem.type === 'category' && <EditFormCategory editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} />}
             {editingItem.type === 'template' && <EditFormTemplate editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}
             {editingItem.type === 'recurring' && <EditFormRecurring editingItem={editingItem} setEditingItem={setEditingItem} openCalculator={openCalc} categoryNames={catNames} paymentMethods={config.paymentMethods} />}

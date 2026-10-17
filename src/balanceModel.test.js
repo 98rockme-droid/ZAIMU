@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cashTopupTotals, forecastAccount, remainingCashBudget } from './balanceModel.js';
+import { fundBalance, savingsPendingOut, pureSavings } from './balanceModel.js';
 
 test('ATM cash and card-budget transfers are independent; legacy records retain their effect', () => {
   assert.deepEqual(cashTopupTotals([
@@ -241,4 +242,39 @@ test('現在の残高と月末の見込みは、月末には一致する', () =>
   const mid = forecastAccount({ ...base, salary: 0, savings: 0,
     bills: billPaidByToday({ timing: 'next', due: 26, todayD: 14, prev }).fromLinked });
   assert.equal(mid.projected, 100000);
+});
+
+// ---- 積立グループ ----
+const live = { startBalance: 50000, startMonth: '2026-10', amountsByMonth: { '2026-09': 30000, '2026-10': 30000, '2026-11': 30000 } };
+
+test('積立: スタート月より前は null、スタート前の先取りは数えない', () => {
+  assert.equal(fundBalance({ ...live, month: '2026-09' }), null);
+  assert.equal(fundBalance({ ...live, month: '2026-10', currentArrived: false }), 50000);
+});
+
+test('積立: 給料日に先取りが積み上がり、使った分が減る', () => {
+  assert.equal(fundBalance({ ...live, month: '2026-10', currentArrived: true }), 80000);
+  assert.equal(fundBalance({ ...live, month: '2026-10', currentArrived: true, spent: 12000 }), 68000);
+});
+
+test('積立: 使わなかった分は翌月に繰り越す（10月末 ＝ 11月の給料日前）', () => {
+  const octEnd = fundBalance({ ...live, month: '2026-10', spent: 12000 });
+  const novBefore = fundBalance({ ...live, month: '2026-11', currentArrived: false, spent: 12000 });
+  assert.equal(octEnd, novBefore);
+  assert.equal(fundBalance({ ...live, month: '2026-11', spent: 12000 }), 98000);
+});
+
+test('引落待ちの貯金払い: 今月カードで払った分と、先月分の引落前', () => {
+  // 10/28 にチケット ¥12,000 をカードで（貯金から）→ 11月の引落で出る
+  assert.equal(savingsPendingOut({ rows: [], curNextSavings: 12000 }), 12000);
+  // 11月: 引落日前はまだ口座に残っている、引落後は0
+  assert.equal(savingsPendingOut({ rows: [{ timing: 'next', savingsPortion: 12000, paidSavings: 0 }] }), 12000);
+  assert.equal(savingsPendingOut({ rows: [{ timing: 'next', savingsPortion: 12000, paidSavings: 12000 }] }), 0);
+  // 当月払いは使った日に口座から出るので数えない
+  assert.equal(savingsPendingOut({ rows: [{ timing: 'same', savingsPortion: 5000, paidSavings: 0 }] }), 0);
+});
+
+test('純粋な貯金 ＝ 口座残高 − 積立の残り − 引落待ち', () => {
+  assert.equal(pureSavings({ accountBalance: 500000, fundRemains: [68000, 20000], pendingOut: 12000 }), 400000);
+  assert.equal(pureSavings({ accountBalance: 500000 }), 500000);
 });

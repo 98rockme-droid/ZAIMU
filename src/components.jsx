@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { CreditCard, ChevronDown, Calculator, Delete, CheckCircle2, AlertTriangle, WifiOff, X, Plus } from 'lucide-react';
+import { CreditCard, ChevronDown, Calculator, Delete, CheckCircle2, AlertTriangle, WifiOff, X, Plus, Calendar } from 'lucide-react';
 
 export const safeCalculate = (expression) => {
   if (!expression) return '0';
@@ -580,6 +580,53 @@ export const EditFormTransfer = ({ editingItem, setEditingItem, accounts, openCa
           className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none placeholder-[#636366] focus:border-white/20 transition-colors" />
       </div>
       <p className="text-[11px] text-[#636366] ml-1 leading-relaxed">口座の見込みにだけ反映します。お金の置き場所が変わるだけなので、生活用の口座どうしの振替は「今月あと使える」には影響しません</p>
+    </div>
+  );
+};
+// 積立グループ（ライブ用など使う予定の貯金）のマスタ
+//   suggestions: 先取り項目の名前（タップで入力。名前で先取りとつながる）
+export const EditFormFund = ({ editingItem, setEditingItem, openCalculator, suggestions = [] }) => {
+  const d = editingItem.data;
+  const set = patch => setEditingItem({ ...editingItem, data: { ...editingItem.data, ...patch } });
+  const [y, m] = String(d.startMonth || '').split('-').map(Number);
+  return (
+    <div className="space-y-4">
+      <div>
+        <FieldLabel>名前</FieldLabel>
+        <input value={d.name || ''} onChange={e => set({ name: e.target.value })} placeholder="例：音楽"
+          className="w-full h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] px-4 text-[16px] text-white outline-none focus:border-white/20 transition-colors placeholder-[#636366]" />
+        {suggestions.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide mt-2">
+            {suggestions.map(n => (
+              <button key={n} type="button" onClick={() => set({ name: n })}
+                className={`shrink-0 h-11 px-3.5 rounded-[14px] text-[13px] font-medium transition-colors ${d.name === n ? 'bg-[#4A7BA6] text-white' : 'bg-[#2C2C2E] text-[#98989D] border border-white/[0.06]'}`}>
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">先取り項目と同じ名前にすると、毎月の先取りがこのグループに積み上がります</p>
+      </div>
+      <div>
+        <FieldLabel>スタートの月</FieldLabel>
+        <div className="relative h-11 bg-[#2C2C2E] border border-white/[0.06] rounded-[14px] overflow-hidden w-1/2">
+          <div className="absolute inset-0 flex items-center gap-2 px-4 pointer-events-none">
+            <Calendar size={15} className="text-[#98989D] shrink-0" />
+            <span className="text-[16px] text-white truncate">{y ? `${y}年${m}月` : '月を選択'}</span>
+          </div>
+          <input type="month" aria-label="スタートの月" value={d.startMonth || ''} onChange={e => set({ startMonth: e.target.value })}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer text-[16px]" />
+        </div>
+      </div>
+      <div>
+        <FieldLabel>{y ? `${m}月の初めの残り` : 'その月の初めの残り'}</FieldLabel>
+        <AmountInputSimple
+          value={d.startBalance !== '' && d.startBalance != null ? Number(d.startBalance).toLocaleString() : ''}
+          onChange={e => { const v = e.target.value.replace(/,/g, ''); if (!isNaN(v)) set({ startBalance: v }); }}
+          openCalculator={() => openCalculator(d.startBalance || 0, val => setEditingItem(p => ({ ...p, data: { ...p.data, startBalance: String(val) } })))}
+        />
+        <p className="text-[11px] text-[#636366] mt-1.5 ml-1 leading-relaxed">この月の給料日の先取りより前に、グループに残っていた金額です。ここから先取りで増え、グループから払った支出で減ります</p>
+      </div>
     </div>
   );
 };
