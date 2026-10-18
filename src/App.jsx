@@ -1678,14 +1678,20 @@ function AppMain() {
                     {/* 各口座は金額だけ（計算の内訳は設定の口座ページで確認できる） */}
                     {accountStats.rows.map(a => {
                       // 貯金用の口座の内訳: 積立グループの残りと純粋な貯金（いつも小さく表示）
-                      const fundLines = fundStats && fundStats.accountId === a.id && fundStats.pure !== null && (
-                        <div className="px-4 pb-2.5 -mt-1 space-y-1">
+                      const hasFunds = fundStats && fundStats.accountId === a.id && fundStats.pure !== null;
+                      const fundItems = hasFunds && (
+                        <>
                           {fundStats.rows.map(r => (
                             <SubRow key={r.id} label={`うち ${r.name}`} value={yenMinus(r.remain)} />
                           ))}
                           {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={yenMinus(fundStats.pendingOut)} />}
                           <SubRow label="純粋な貯金" value={yenSigned(fundStats.pure)} />
-                        </div>
+                        </>
+                      );
+                      const fundLines = hasFunds && <div className="px-4 pb-2.5 -mt-1 space-y-1">{fundItems}</div>;
+                      // 閉じているときは純粋な貯金だけを小さく表示（内訳は開いたときに）
+                      const pureLine = hasFunds && (
+                        <div className="px-4 pb-2.5 -mt-1"><SubRow label="純粋な貯金" value={yenSigned(fundStats.pure)} /></div>
                       );
                       if (!isThisMonth) return (
                         <div key={a.id}>
@@ -1720,6 +1726,13 @@ function AppMain() {
                             expanded={accExpanded === a.id}
                             onToggle={() => setAccExpanded(v => v === a.id ? null : a.id)}
                           >
+                            {hasFunds && (
+                              <>
+                                <p className="text-[11px] text-[#636366]">今の残高の内訳</p>
+                                {fundItems}
+                                <p className="pt-2 text-[11px] text-[#636366]">今月の動き</p>
+                              </>
+                            )}
                             <SubRow label="月初残高" value={yen(a.start)} />
                             {done.map(([l, sign, v]) => <SubRow key={`d${l}`} label={l} value={`${sign}${yen(v)}`} />)}
                             <SubRow label="今日時点" value={yen(n.projected)} danger={n.projected < 0} />
@@ -1727,7 +1740,7 @@ function AppMain() {
                             {later.map(([l, sign, v]) => <SubRow key={`l${l}`} label={l} value={`${sign}${yen(v)}`} />)}
                             <SubRow label="月末の見込み" value={yen(a.projected)} danger={a.projected < 0} />
                           </ExpandableRow>
-                          {fundLines}
+                          {accExpanded !== a.id && pureLine}
                         </div>
                       );
                     })}
