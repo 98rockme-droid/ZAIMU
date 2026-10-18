@@ -64,6 +64,8 @@ const getSavingsBuckets = md => {
 const getSavingsTotal = md => getSavingsBuckets(md).reduce((s, b) => s + (Number(b.amount) || 0), 0);
 // マイナスは「−¥1,000」の形で表示する
 const yenSigned = n => `${n < 0 ? '−' : ''}¥${Math.abs(n).toLocaleString()}`;
+// 差し引く額の表示（−¥1,000）。マイナスの額を引くときは ＋ になる
+const yenMinus = n => `${n < 0 ? '+' : '−'}¥${Math.abs(n).toLocaleString()}`;
 const getPace = (spent, target) => (!target || target <= 0) ? 0 : Math.min(100, (spent / target) * 100);
 
 // 支出の種別判定: 'normal' | 'special' | 'savings'
@@ -1679,9 +1681,9 @@ function AppMain() {
                       const fundLines = fundStats && fundStats.accountId === a.id && fundStats.pure !== null && (
                         <div className="px-4 pb-2.5 -mt-1 space-y-1">
                           {fundStats.rows.map(r => (
-                            <SubRow key={r.id} label={`うち ${r.name}`} value={yenSigned(r.remain)} />
+                            <SubRow key={r.id} label={`うち ${r.name}`} value={yenMinus(r.remain)} />
                           ))}
-                          {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={yenSigned(fundStats.pendingOut)} />}
+                          {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={yenMinus(fundStats.pendingOut)} />}
                           <SubRow label="純粋な貯金" value={yenSigned(fundStats.pure)} />
                         </div>
                       );
