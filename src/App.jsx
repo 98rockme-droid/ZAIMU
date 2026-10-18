@@ -62,6 +62,8 @@ const getSavingsBuckets = md => {
   return n > 0 ? [{ id: 'legacy', name: '貯金', amount: n }] : [];
 };
 const getSavingsTotal = md => getSavingsBuckets(md).reduce((s, b) => s + (Number(b.amount) || 0), 0);
+// マイナスは「−¥1,000」の形で表示する
+const yenSigned = n => `${n < 0 ? '−' : ''}¥${Math.abs(n).toLocaleString()}`;
 const getPace = (spent, target) => (!target || target <= 0) ? 0 : Math.min(100, (spent / target) * 100);
 
 // 支出の種別判定: 'normal' | 'special' | 'savings'
@@ -1677,10 +1679,10 @@ function AppMain() {
                       const fundLines = fundStats && fundStats.accountId === a.id && fundStats.pure !== null && (
                         <div className="px-4 pb-2.5 -mt-1 space-y-1">
                           {fundStats.rows.map(r => (
-                            <SubRow key={r.id} label={`うち ${r.name}`} value={`¥${r.remain.toLocaleString()}`} danger={r.remain < 0} />
+                            <SubRow key={r.id} label={`うち ${r.name}`} value={yenSigned(r.remain)} />
                           ))}
-                          {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={`¥${fundStats.pendingOut.toLocaleString()}`} />}
-                          <SubRow label="純粋な貯金" value={`¥${fundStats.pure.toLocaleString()}`} danger={fundStats.pure < 0} />
+                          {fundStats.pendingOut > 0 && <SubRow label="うち 引落待ちの貯金払い" value={yenSigned(fundStats.pendingOut)} />}
+                          <SubRow label="純粋な貯金" value={yenSigned(fundStats.pure)} />
                         </div>
                       );
                       if (!isThisMonth) return (
